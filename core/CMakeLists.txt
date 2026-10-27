@@ -64,7 +64,7 @@ if(OMEGA_HOST_TOOLS)
     add_executable(mp4dump tools/mp4dump.cpp src/media/demuxer.cpp src/media/mp4.cpp src/media/webm.cpp)
     target_include_directories(mp4dump PRIVATE src)
     # Fetches a YouTube video's formats and downloads ranges with the same code the TV runs.
-    add_executable(ytcheck tools/ytcheck.cpp src/yt/innertube.cpp src/yt/auth.cpp src/yt/sponsorblock.cpp src/net/http.cpp src/util/log.cpp
+    add_executable(ytcheck tools/ytcheck.cpp src/media/demuxer.cpp src/media/mp4.cpp src/media/webm.cpp src/yt/innertube.cpp src/yt/auth.cpp src/yt/sponsorblock.cpp src/net/http.cpp src/util/log.cpp
                    src/util/remote_config.cpp ${CMAKE_CURRENT_BINARY_DIR}/cacert.cpp
                    ${CMAKE_CURRENT_BINARY_DIR}/remote_config_default.cpp)
     target_include_directories(ytcheck PRIVATE src ${OMEGA_DEPS})

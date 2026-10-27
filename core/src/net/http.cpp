@@ -562,4 +562,129 @@ size_t RangeReader::read(void* dst, size_t n) {
     return total;
 }
 
+LiveReader::LiveReader(std::string url, Headers headers, int64_t first_sequence)
+    : url_(std::move(url)), headers_(std::move(headers)), seq_(first_sequence) {}
+
+namespace {
+
+// GET with redirects followed on `conn`; the original URL is kept by the caller (Location carries the sq).
+bool send_following(Connection& conn, Request req, int& status) {
+    for (int redirects = 0;; ++redirects) {
+        status = 0;
+        if (!conn.send(req)) return false;
+        status = conn.status();
+        if (!is_redirect(status)) return true;
+        std::string location = conn.header("Location");
+        conn.read_all(1024 * 1024);
+        if (location.empty() || redirects == 5) return true;
+        req.url = location;
+    }
+}
+
+}  // namespace
+
+int64_t LiveReader::head_sequence(const std::string& url, const Headers& headers, std::string& error) {
+    Connection conn;
+    Request req;
+    req.url = url;
+    req.headers = headers;
+    req.headers.emplace_back("Range", "bytes=0-0");  // the head segment itself is not needed
+    int status = 0;
+    if (!send_following(conn, req, status)) {
+        error = conn.error();
+        return -1;
+    }
+    std::string head = conn.header("X-Head-Seqnum");
+    conn.close();
+    if (status / 100 != 2 || head.empty()) {
+        error = "live head: http " + std::to_string(status) + (head.empty() ? ", no X-Head-Seqnum" : "");
+        return -1;
+    }
+    return std::stoll(head);
+}
+
+bool LiveReader::open_segment() {
+    Request req;
+    req.url = url_ + (url_.find('?') == std::string::npos ? "?" : "&") + "sq=" + std::to_string(seq_);
+    req.headers = headers_;
+    // Resume a segment cut by a network error where it stopped.
+    if (segment_pos_ > 0) req.headers.emplace_back("Range", "bytes=" + std::to_string(segment_pos_) + "-");
+    if (!send_following(conn_, req, last_status_)) {
+        error_ = conn_.error();
+        return false;
+    }
+    if (last_status_ == 200 && segment_pos_ == 0) {
+        open_ = true;
+        return true;
+    }
+    if (last_status_ == 206 && segment_pos_ > 0) {
+        open_ = true;
+        return true;
+    }
+    error_ = "segment " + std::to_string(seq_) + ": http " + std::to_string(last_status_);
+    conn_.close();
+    return false;
+}
+
+bool LiveReader::retry(int max_failures) {
+    if (++failures_ > max_failures) return false;
+    if (hooks_.aborted && hooks_.aborted()) return false;
+    // A 404 at the live edge is the normal wait for the next segment: only report longer outages.
+    if (failures_ > 2 && hooks_.on_recovering) hooks_.on_recovering(true);
+    if (last_status_ != 404 || failures_ > 2)
+        OLOG("live: %s, retry %d", error_.c_str(), failures_);
+    conn_.close();
+    if ((last_status_ == 403 || last_status_ == 410) && hooks_.refresh_url) {
+        std::string fresh = hooks_.refresh_url();
+        if (!fresh.empty()) url_ = fresh;
+    }
+    // The server already held a 404 for several seconds; other errors back off.
+    int wait_ms = last_status_ == 404 ? 1000 : std::min(5000, 250 << std::min(failures_, 5));
+    for (int waited = 0; waited < wait_ms; waited += 100) {
+        if (hooks_.aborted && hooks_.aborted()) return false;
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    error_.clear();
+    return true;
+}
+
+size_t LiveReader::read(void* dst, size_t n) {
+    auto* out = static_cast<uint8_t*>(dst);
+    size_t total = 0;
+    while (total < n && !eof_) {
+        if (!open_ && !open_segment()) {
+            // ~8 s per 404: give up after ~1 min without a new segment (broadcast over), ~3 min of network errors.
+            if (!retry(last_status_ == 404 ? 7 : 40)) {
+                OLOG("live: stream ends at segment %lld (%s)", static_cast<long long>(seq_), error_.c_str());
+                eof_ = true;
+            }
+            continue;
+        }
+        size_t got = conn_.read_some(out + total, n - total);
+        if (got == 0) {
+            open_ = false;
+            if (conn_.body_done() && conn_.error().empty()) {
+                ++seq_;
+                segment_pos_ = 0;
+            } else {
+                error_ = "segment body ended early: " + conn_.error();
+                last_status_ = 0;
+                if (!retry(40)) eof_ = true;
+            }
+            continue;
+        }
+        if (failures_ > 0) {
+            if (failures_ > 2) {
+                OLOG("live: recovered at segment %lld after %d retries", static_cast<long long>(seq_), failures_);
+                if (hooks_.on_recovering) hooks_.on_recovering(false);
+            }
+            failures_ = 0;
+        }
+        total += got;
+        pos_ += got;
+        segment_pos_ += got;
+    }
+    return total;
+}
+
 }  // namespace omega::net

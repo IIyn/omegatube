@@ -1,6 +1,8 @@
 #include "player/player.h"
 
+#include <algorithm>
 #include <chrono>
+#include <climits>
 #include <cstring>
 #include <memory>
 #include <vector>
@@ -65,16 +67,30 @@ bool Player::start() {
     // Open the HTTP streams and parse their init segments first: ESPlayer needs codec info before prepare.
     struct Source {
         Track* track;
-        std::unique_ptr<net::RangeReader> http;
+        std::unique_ptr<net::StreamSource> http;
         std::unique_ptr<media::Demuxer> reader;
     };
     std::vector<Source> sources;
     if (cfg_.use_video) sources.push_back({&video_, nullptr, nullptr});
     if (cfg_.use_audio) sources.push_back({&audio_, nullptr, nullptr});
+    // Live: both tracks start at the same segment number, a few segments behind the newest one.
+    int64_t live_seq = -1;
+    if (cfg_.live) {
+        std::string err;
+        int64_t head = net::LiveReader::head_sequence(cfg_.use_video ? video_.url : audio_.url, cfg_.stream_headers, err);
+        if (head < 0) {
+            error_ = err;
+            return false;
+        }
+        live_seq = std::max<int64_t>(0, head - cfg_.live_behind_segments);
+        OLOG("live: head segment %lld, starting at %lld", static_cast<long long>(head), static_cast<long long>(live_seq));
+    }
+    std::deque<media::Sample> first_samples[2];  // live: first fragment of each source, read up front
     for (Source& src : sources) {
         Track& t = *src.track;
-        src.http = std::make_unique<net::RangeReader>(t.url, cfg_.stream_headers);
-        net::RangeReader* http = src.http.get();
+        if (cfg_.live) src.http = std::make_unique<net::LiveReader>(t.url, cfg_.stream_headers, live_seq);
+        else src.http = std::make_unique<net::RangeReader>(t.url, cfg_.stream_headers);
+        net::StreamSource* http = src.http.get();
         src.reader = media::open_demuxer([http, &t](void* dst, size_t n) {
             size_t got = http->read(dst, n);
             t.bytes += got;
@@ -87,6 +103,10 @@ bool Player::start() {
         }
         t.info = src.reader->track();
         t.segments = src.reader->segments();
+        if (cfg_.live && !src.reader->read_fragment(first_samples[&t == &video_ ? 0 : 1])) {
+            error_ = std::string(stream_name(t.type)) + " live: no first segment (" + src.reader->error() + ")";
+            return false;
+        }
         OLOG("%s: %s %s timescale=%u %ux%u ch=%u rate=%u codec_data=%zu bytes, media_time=%lld, %zu segments",
              stream_name(t.type), t.info.container == media::Container::WebM ? "webm" : "mp4",
              media::codec_name(t.info.codec), t.info.timescale, t.info.width, t.info.height,
@@ -167,6 +187,17 @@ bool Player::start() {
         }
     }
 
+    if (cfg_.live) {
+        // Broadcast timestamps are absolute (days into the stream): playback position 0 = the earliest
+        // video frame of the first segment. Audio a few ms earlier is dropped by the feeder.
+        std::deque<media::Sample>& ref = first_samples[cfg_.use_video ? 0 : 1];
+        live_base_ms_ = INT64_MAX;
+        for (const auto& s : ref) live_base_ms_ = std::min(live_base_ms_, s.pts_ms);
+        if (ref.empty()) live_base_ms_ = 0;
+        push_samples(video_, first_samples[0]);
+        push_samples(audio_, first_samples[1]);
+    }
+
     duration_ms_ = cfg_.duration_ms;
     if (duration_ms_ == 0 && !video_.segments.empty()) duration_ms_ = video_.segments.back().start_ms;
 
@@ -186,7 +217,7 @@ bool Player::start() {
             std::string url = src.http->url();
             t.url = url;
             src.http = std::make_unique<net::RangeReader>(url, cfg_.stream_headers, 4 * 1024 * 1024, seg.offset);
-            net::RangeReader* http = src.http.get();
+            net::StreamSource* http = src.http.get();
             src.reader = media::resume_demuxer(
                 [http, &t](void* dst, size_t n) {
                     size_t got = http->read(dst, n);
@@ -208,8 +239,8 @@ bool Player::start() {
     return true;
 }
 
-void Player::attach_hooks(Track& t, net::RangeReader& source) {
-    net::RangeReader::Hooks hooks;
+void Player::attach_hooks(Track& t, net::StreamSource& source) {
+    net::StreamSource::Hooks hooks;
     hooks.aborted = [this, &t] { return !running_ || !t.active; };
     hooks.refresh_url = [this, &t] { return fresh_url(t); };
     hooks.on_recovering = [&t](bool on) { t.reconnecting = on; };
@@ -236,7 +267,7 @@ std::string Player::fresh_url(Track& t) {
     return t.url;
 }
 
-void Player::start_track(Track& t, media::Demuxer* reader, net::RangeReader* source) {
+void Player::start_track(Track& t, media::Demuxer* reader, net::StreamSource* source) {
     attach_hooks(t, *source);
     t.active = true;
     t.demux_thread = std::thread([this, &t, reader, source] { demux_loop(t, reader, source); });
@@ -303,9 +334,25 @@ bool Player::seek(int64_t ms) {
     return rc == 0;
 }
 
-void Player::demux_loop(Track& t, media::Demuxer* reader_raw, net::RangeReader* source_raw) {
+// Rebases (live) and queues demuxed samples for the feeder.
+void Player::push_samples(Track& t, std::deque<media::Sample>& samples) {
+    int64_t ms = 0;
+    size_t bytes = 0;
+    for (auto& s : samples) {
+        s.pts_ms -= live_base_ms_;
+        ms += s.duration_ms;
+        bytes += s.data.size();
+    }
+    std::lock_guard<std::mutex> lock(t.mutex);
+    for (auto& s : samples) t.queue.push_back(std::move(s));
+    t.queued_ms += ms;
+    t.queued_bytes += bytes;
+    t.cv.notify_all();
+}
+
+void Player::demux_loop(Track& t, media::Demuxer* reader_raw, net::StreamSource* source_raw) {
     std::unique_ptr<media::Demuxer> reader(reader_raw);
-    std::unique_ptr<net::RangeReader> source(source_raw);
+    std::unique_ptr<net::StreamSource> source(source_raw);
     std::deque<media::Sample> fragment;
     while (running_) {
         {
@@ -323,14 +370,7 @@ void Player::demux_loop(Track& t, media::Demuxer* reader_raw, net::RangeReader* 
                  source->error().c_str());
             break;
         }
-        int64_t ms = 0;
-        size_t bytes = 0;
-        for (const auto& s : fragment) ms += s.duration_ms, bytes += s.data.size();
-        std::lock_guard<std::mutex> lock(t.mutex);
-        for (auto& s : fragment) t.queue.push_back(std::move(s));
-        t.queued_ms += ms;
-        t.queued_bytes += bytes;
-        t.cv.notify_all();
+        push_samples(t, fragment);
     }
     std::lock_guard<std::mutex> lock(t.mutex);
     t.url = source->url();  // keep the redirected edge URL for later seeks
@@ -364,8 +404,8 @@ void Player::feed_loop(Track& t) {
         // (keeps memory bounded and makes seeks / quality switches cheap). Paused => clock frozen => we wait.
         while (running_ && t.active && s.pts_ms > position_ms_ + cfg_.feed_ahead_ms) sleep_ms(20);
         if (!running_ || !t.active) break;
-        // After a seek the audio segment starts a bit before the (video keyframe) target.
-        if (t.type == esp::STREAM_AUDIO && s.pts_ms < feed_from_ms_) continue;
+        // After a seek (or a live start) the audio segment starts a bit before the video keyframe.
+        if (s.pts_ms < 0 || (t.type == esp::STREAM_AUDIO && s.pts_ms < feed_from_ms_)) continue;
 
         esp::EsPacket pkt{};
         pkt.type = t.type;

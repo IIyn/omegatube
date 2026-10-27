@@ -81,6 +81,10 @@ void parse_video_renderer(const json& v, Feed& out) {
     item.thumbnail = "https://i.ytimg.com/vi/" + item.video_id + "/mqdefault.jpg";
     for (const json& badge : v.value("badges", json::array()))
         if (badge.dump().find("LIVE") != std::string::npos) item.is_live = true;
+    // Broadcasts have no length and count viewers ("18 k spectateurs" / "1.2K watching") instead of views.
+    if (item.duration.empty() && (item.views.find("spectateur") != std::string::npos ||
+                                  item.views.find("watching") != std::string::npos))
+        item.is_live = true;
     item.watched_percent = watched_percent(v.value("thumbnailOverlays", json::array()));
     out.items.push_back(std::move(item));
 }
@@ -161,10 +165,16 @@ void parse_lockup(const json& l, Feed& out) {
 }
 
 // Walks the whole response: YouTube moves renderers around between layouts, so search by key.
-void collect(const json& j, Feed& out) {
+// highlights: where titled TV shelves go (subscriptions), instead of the main list.
+void collect(const json& j, Feed& out, Feed* highlights = nullptr) {
     if (j.is_object()) {
         for (auto it = j.begin(); it != j.end(); ++it) {
-            if (it.key() == "videoRenderer" || it.key() == "compactVideoRenderer") {
+            if (it.key() == "shelfRenderer" && it.value().is_object()) {
+                const json& shelf = it.value();
+                if (shelf.value("tvhtml5ShelfRendererType", "") == "TVHTML5_SHELF_RENDERER_TYPE_SHORTS") continue;
+                if (highlights && shelf.contains("headerRenderer")) collect(shelf, *highlights);
+                else collect(shelf, out, highlights);
+            } else if (it.key() == "videoRenderer" || it.key() == "compactVideoRenderer") {
                 parse_video_renderer(it.value(), out);
             } else if (it.key() == "lockupViewModel") {
                 parse_lockup(it.value(), out);
@@ -177,11 +187,11 @@ void collect(const json& j, Feed& out) {
             } else if (it.key() == "continuationCommand" && out.continuation.empty()) {
                 out.continuation = it.value().value("token", "");
             } else {
-                collect(it.value(), out);
+                collect(it.value(), out, highlights);
             }
         }
     } else if (j.is_array()) {
-        for (const json& e : j) collect(e, out);
+        for (const json& e : j) collect(e, out, highlights);
     }
 }
 
@@ -257,6 +267,7 @@ bool Client::player(const std::string& video_id, VideoInfo& out, std::string& er
         return false;
     }
 
+    last_response_ = res.body;
     json r = json::parse(res.body, nullptr, false);
     if (r.is_discarded()) {
         error = "player: invalid json";
@@ -273,6 +284,7 @@ bool Client::player(const std::string& video_id, VideoInfo& out, std::string& er
     out.title = details.value("title", "");
     out.author = details.value("author", "");
     out.length_s = to_int(details, "lengthSeconds");
+    out.is_live = details.value("isLive", false);
     out.formats.clear();
     for (const json& f : r["streamingData"].value("adaptiveFormats", json::array())) {
         if (!f.contains("url")) continue;  // ciphered formats are not supported with this client
@@ -376,15 +388,19 @@ bool Client::browse(const std::string& browse_id, const std::string& continuatio
         error = "browse " + browse_id + ": " + (res.error.empty() ? "http " + std::to_string(res.status) : res.error);
         return false;
     }
+    last_response_ = res.body;
     json r = json::parse(res.body, nullptr, false);
     if (r.is_discarded()) {
         error = "browse: invalid json";
         return false;
     }
     out = Feed{};
-    collect(r, out);
-    OLOG("yt: browse %s%s -> %zu items", browse_id.c_str(), continuation.empty() ? "" : " (next page)",
-         out.items.size());
+    // Subscriptions "Tous" tab: a titled "most relevant" shelf, then untitled shelves in date order.
+    Feed picked;
+    collect(r, out, browse_id == "FEsubscriptions" && continuation.empty() ? &picked : nullptr);
+    out.highlights = std::move(picked.items);
+    OLOG("yt: browse %s%s -> %zu items, %zu highlights", browse_id.c_str(), continuation.empty() ? "" : " (next page)",
+         out.items.size(), out.highlights.size());
     return true;
 }
 

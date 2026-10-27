@@ -29,24 +29,22 @@ namespace OmegaTube.Data
             {
                 return null;
             }
-            var page = new FeedPage();
-            foreach (object o in Json.Arr(root, "items") ?? new List<object>())
-            {
-                page.Items.Add(new VideoItem
-                {
-                    Id = Json.Str(o, "id"), Title = Json.Str(o, "title"), Channel = Json.Str(o, "channel"),
-                    Duration = Json.Str(o, "duration"), Views = Json.Str(o, "views"),
-                    Published = Json.Str(o, "published"), Thumbnail = Json.Str(o, "thumbnail"), Live = Json.Bool(o, "live"),
-                    WatchedPercent = (int)Json.Num(o, "watched"),
-                });
-            }
+            var page = new FeedPage { Items = YouTube.ToItems(root, "items"), Highlights = YouTube.ToItems(root, "highlights") };
             return page.Items.Count > 0 ? page : null;
         }
 
         public static void SaveFeed(string key, FeedPage page)
         {
+            WriteJson(FeedFile(key), new Dictionary<string, object>
+            {
+                ["items"] = ItemsJson(page.Items), ["highlights"] = ItemsJson(page.Highlights),
+            });
+        }
+
+        private static List<object> ItemsJson(List<VideoItem> list)
+        {
             var items = new List<object>();
-            foreach (VideoItem v in page.Items)
+            foreach (VideoItem v in list)
             {
                 items.Add(new Dictionary<string, object>
                 {
@@ -55,7 +53,7 @@ namespace OmegaTube.Data
                     ["watched"] = v.WatchedPercent,
                 });
             }
-            WriteJson(FeedFile(key), new Dictionary<string, object> { ["items"] = items });
+            return items;
         }
 
         private static string FeedFile(string key)

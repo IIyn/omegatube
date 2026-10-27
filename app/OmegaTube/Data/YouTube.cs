@@ -30,6 +30,7 @@ namespace OmegaTube.Data
     public class FeedPage
     {
         public List<VideoItem> Items = new List<VideoItem>();
+        public List<VideoItem> Highlights = new List<VideoItem>();  // subscriptions: YouTube's "most relevant" shelf
         public string Continuation = "";
         public string Error;
     }
@@ -59,24 +60,33 @@ namespace OmegaTube.Data
             {
                 var page = new FeedPage();
                 page.Error = Json.Str(root, "error", null);
-                foreach (object o in Json.Arr(root, "items") ?? new List<object>())
-                {
-                    page.Items.Add(new VideoItem
-                    {
-                        Id = Json.Str(o, "id"),
-                        Title = Json.Str(o, "title"),
-                        Channel = Json.Str(o, "channel"),
-                        Duration = Json.Str(o, "duration"),
-                        Views = Json.Str(o, "views"),
-                        Published = Json.Str(o, "published"),
-                        Thumbnail = Json.Str(o, "thumbnail"),
-                        Live = Json.Bool(o, "live"),
-                        WatchedPercent = (int)Json.Num(o, "watched"),
-                    });
-                }
+                page.Items = ToItems(root, "items");
+                page.Highlights = ToItems(root, "highlights");
                 page.Continuation = Json.Str(root, "continuation");
                 return page;
             }
+        }
+
+        // Feed items as the core's JSON (and the feed cache) writes them.
+        public static List<VideoItem> ToItems(object root, string key)
+        {
+            var items = new List<VideoItem>();
+            foreach (object o in Json.Arr(root, key) ?? new List<object>())
+            {
+                items.Add(new VideoItem
+                {
+                    Id = Json.Str(o, "id"),
+                    Title = Json.Str(o, "title"),
+                    Channel = Json.Str(o, "channel"),
+                    Duration = Json.Str(o, "duration"),
+                    Views = Json.Str(o, "views"),
+                    Published = Json.Str(o, "published"),
+                    Thumbnail = Json.Str(o, "thumbnail"),
+                    Live = Json.Bool(o, "live"),
+                    WatchedPercent = (int)Json.Num(o, "watched"),
+                });
+            }
+            return items;
         }
 
         public static Task<List<string>> Suggest(string query)
@@ -137,9 +147,10 @@ namespace OmegaTube.Data
         }
 
         // Qualities the core can play for this player (highest first) and the one playing. No network call.
-        public static List<VideoQuality> Qualities(IntPtr player, out VideoQuality current)
+        public static List<VideoQuality> Qualities(IntPtr player, out VideoQuality current, out bool live)
         {
             object root = Call(NativeCore.PlayerFormats(player));
+            live = Json.Bool(root, "live", false);
             object cur = Json.Obj(root, "current");
             current = cur != null ? ToQuality(cur) : null;
             var list = new List<VideoQuality>();

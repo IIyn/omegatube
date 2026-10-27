@@ -126,11 +126,6 @@ namespace OmegaTube
 
         public void Play(VideoItem item)
         {
-            if (item.Live)
-            {
-                // Live streams (HLS/DASH manifests) are not supported by the player yet.
-                return;
-            }
             Push(new PlayerScreen(this, item));
         }
 

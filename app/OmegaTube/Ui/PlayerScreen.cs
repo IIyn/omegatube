@@ -70,6 +70,7 @@ namespace OmegaTube.Ui
         private int maxHeight;
         private List<VideoQuality> qualities = new List<VideoQuality>();  // what this video offers (from the core)
         private VideoQuality playing;      // the format being played
+        private bool live;                 // broadcast: no timeline, no seeking
         private double speed = 1.0;
         private DateTime lastSave;
 
@@ -265,7 +266,7 @@ namespace OmegaTube.Ui
             player = created;
             if (player != IntPtr.Zero)
             {
-                qualities = YouTube.Qualities(player, out playing);
+                qualities = YouTube.Qualities(player, out playing, out live);
             }
             if (player == IntPtr.Zero)
             {
@@ -452,6 +453,15 @@ namespace OmegaTube.Ui
             }
             Widgets.SetVisible(clockLabel, App.Config.Player.ShowClock);
             clockLabel.Text = now.ToString("HH:mm");
+            playButton.Icon.ResourceUrl = Theme.Icon(stats.State == 4 ? "play" : "pause");
+            if (live)
+            {
+                progressFill.SizeWidth = ProgressWidth;
+                playhead.PositionX = ProgressX + ProgressWidth - 9;
+                timeLabel.Text = "EN DIRECT";
+                durationLabel.Text = "";
+                return;
+            }
             long pos = pendingSeekMs >= 0 ? pendingSeekMs : stats.PositionMs;
             long dur = Math.Max(stats.DurationMs, 1);
             float fill = (float)(ProgressWidth * Math.Min(1.0, pos / (double)dur));
@@ -459,7 +469,6 @@ namespace OmegaTube.Ui
             playhead.PositionX = ProgressX + fill - 9;
             timeLabel.Text = Format(pos);
             durationLabel.Text = Format(stats.DurationMs);
-            playButton.Icon.ResourceUrl = Theme.Icon(stats.State == 4 ? "play" : "pause");
         }
 
         // ---------------------------------------------------------------- SponsorBlock
@@ -846,6 +855,11 @@ namespace OmegaTube.Ui
         // Repeated presses accumulate; the seek is issued once the user stops.
         private void SeekBy(int direction)
         {
+            if (live)
+            {
+                Toast("Direct : pas d'avance ni de retour");
+                return;
+            }
             int step = App.Config.Player.SeekStepSeconds * 1000 * direction;
             long basePos = pendingSeekMs >= 0 ? pendingSeekMs : stats.PositionMs;
             pendingSeekMs = Math.Max(0, Math.Min(basePos + step, Math.Max(0, stats.DurationMs - 1000)));
@@ -862,6 +876,10 @@ namespace OmegaTube.Ui
 
         private void Seek(long target)
         {
+            if (live)
+            {
+                return;
+            }
             noSkipUntil = DateTime.Now.AddSeconds(1.5);
             IntPtr p = player;
             if (p != IntPtr.Zero)

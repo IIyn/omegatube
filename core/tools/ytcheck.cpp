@@ -15,6 +15,7 @@
 
 #include <thread>
 
+#include "media/demuxer.h"
 #include "net/http.h"
 #include "util/remote_config.h"
 #include "yt/auth.h"
@@ -91,6 +92,66 @@ int main(int argc, char** argv) {
         printf("%zu segments\n", segs.size());
         return 0;
     }
+    if (argc >= 4 && (strcmp(argv[1], "--dump-player") == 0 || strcmp(argv[1], "--dump-browse") == 0)) {
+        // Saves the raw InnerTube response, to study a layout (live player response, feed shelves).
+        // --dump-browse needs the token of a previous --signin (./omegatube-auth.json).
+        omega::yt::Client client;
+        std::string error;
+        bool ok;
+        if (argv[1][7] == 'p') {
+            omega::yt::VideoInfo info;
+            ok = client.player(argv[2], info, error);
+        } else {
+            omega::yt::Auth& auth = omega::yt::shared_auth();
+            auth.init("omegatube-auth.json");
+            std::string token = auth.access_token(error);
+            omega::yt::Feed feed;
+            ok = !token.empty() && client.browse(argv[2], "", token, feed, error);
+            if (ok) printf("%zu items parsed\n", feed.items.size());
+        }
+        if (!client.last_response().empty()) {
+            FILE* out = fopen(argv[3], "wb");
+            if (out) {
+                fwrite(client.last_response().data(), 1, client.last_response().size(), out);
+                fclose(out);
+            }
+            printf("%zu bytes -> %s\n", client.last_response().size(), argv[3]);
+        }
+        if (!ok) printf("failed: %s\n", error.c_str());
+        return ok ? 0 : 1;
+    }
+    if (argc >= 3 && strcmp(argv[1], "--live-url") == 0) {
+        // Reads a live format URL (from --dump-player) segment by segment like the TV: LiveReader + demuxer.
+        omega::net::Headers headers = omega::yt::Client().stream_headers();
+        std::string error;
+        int64_t head = omega::net::LiveReader::head_sequence(argv[2], headers, error);
+        if (head < 0) {
+            printf("head: %s\n", error.c_str());
+            return 1;
+        }
+        int count = argc > 3 ? atoi(argv[3]) : 5;
+        omega::net::LiveReader live(argv[2], headers, head - 2);
+        auto reader = omega::media::open_demuxer([&live](void* dst, size_t n) { return live.read(dst, n); });
+        if (!reader->read_header()) {
+            printf("header: %s\n", reader->error().c_str());
+            return 1;
+        }
+        printf("head %lld, %s %ux%u\n", static_cast<long long>(head), omega::media::codec_name(reader->track().codec),
+               reader->track().width, reader->track().height);
+        auto t0 = Clock::now();
+        for (int i = 0; i < count; ++i) {
+            std::deque<omega::media::Sample> samples;
+            if (!reader->read_fragment(samples)) {
+                printf("end: %s / %s\n", reader->error().c_str(), live.error().c_str());
+                break;
+            }
+            printf("segment %lld at %.1fs: %zu samples, pts %lld..%lld, key=%d\n", static_cast<long long>(live.sequence()),
+                   std::chrono::duration<double>(Clock::now() - t0).count(), samples.size(),
+                   static_cast<long long>(samples.front().pts_ms), static_cast<long long>(samples.back().pts_ms),
+                   samples.front().key);
+        }
+        return 0;
+    }
     if (argc >= 2 && strcmp(argv[1], "--signin") == 0) {
         // Device flow end to end, token kept in ./omegatube-auth.json; then lists the signed-in home feed.
         omega::yt::Auth& auth = omega::yt::shared_auth();
@@ -128,6 +189,9 @@ int main(int argc, char** argv) {
                 continue;
             }
             printf("== %s: %zu items, continuation %s\n", id, feed.items.size(), feed.continuation.empty() ? "none" : "yes");
+            for (size_t i = 0; i < feed.highlights.size() && i < 4; ++i)
+                printf(" * %s | %s | %s\n", feed.highlights[i].video_id.c_str(), feed.highlights[i].title.c_str(),
+                       feed.highlights[i].channel.c_str());
             for (size_t i = 0; i < feed.items.size() && i < 8; ++i)
                 printf("   %s | %s | %s | %s | %s\n", feed.items[i].video_id.c_str(), feed.items[i].title.c_str(),
                        feed.items[i].channel.c_str(), feed.items[i].duration.c_str(), feed.items[i].views.c_str());

@@ -33,12 +33,15 @@ struct FeedItem {
 
 struct Feed {
     std::vector<FeedItem> items;
+    // FEsubscriptions: YouTube's picked shelf ("Les plus pertinentes") kept apart from the chronological feed.
+    std::vector<FeedItem> highlights;
     std::string continuation;  // empty when there is no next page
 };
 
 struct VideoInfo {
     std::string id, title, author;
     int64_t length_s = 0;
+    bool is_live = false;  // broadcasting now: formats are numbered-segment streams (net::LiveReader)
     std::vector<Format> formats;  // directly playable adaptive formats only
 };
 
@@ -58,8 +61,12 @@ public:
     bool browse(const std::string& browse_id, const std::string& continuation, const std::string& access_token,
                 Feed& out, std::string& error);
 
+    // Raw JSON of the last player/browse response (dev tooling: ytcheck --dump).
+    const std::string& last_response() const { return last_response_; }
+
 private:
     bool ensure_visitor(std::string& error);
+    std::string last_response_;
     std::mutex mutex_;  // guards the lazily fetched session data below
     std::string visitor_data_;
     std::string web_client_version_;

@@ -25,6 +25,9 @@ struct PlayerConfig {
     int max_width = 1920, max_height = 1080;
     int64_t duration_ms = 0;          // 0: derive from the stream index
     int64_t start_ms = 0;             // resume position (set before prepare: no flash of the beginning)
+    // Live broadcast: the URLs are numbered-segment streams (net::LiveReader); no index, no seek.
+    bool live = false;
+    int live_behind_segments = 3;     // start this many segments (~5 s each) behind the live edge
     // Re-resolves expired stream URLs (YouTube URLs live ~6 h). Optional.
     std::function<bool(std::string& video_url, std::string& audio_url)> refresh_urls;
     std::string app_id, app_version;  // reported to the TV resource manager
@@ -88,10 +91,11 @@ private:
         std::thread demux_thread, feed_thread;
     };
 
-    void demux_loop(Track& t, media::Demuxer* reader, net::RangeReader* source);
-    void start_track(Track& t, media::Demuxer* reader, net::RangeReader* source);
+    void demux_loop(Track& t, media::Demuxer* reader, net::StreamSource* source);
+    void start_track(Track& t, media::Demuxer* reader, net::StreamSource* source);
     void stop_track(Track& t);
-    void attach_hooks(Track& t, net::RangeReader& source);
+    void attach_hooks(Track& t, net::StreamSource& source);
+    void push_samples(Track& t, std::deque<media::Sample>& samples);
     std::string fresh_url(Track& t);
     void feed_loop(Track& t);
     void control_loop();
@@ -119,6 +123,7 @@ private:
     std::mutex seek_mutex_;
     std::atomic<int64_t> feed_from_ms_{0};  // audio samples before this are dropped after a seek
     std::atomic<int64_t> duration_ms_{0};
+    int64_t live_base_ms_ = 0;  // live: absolute broadcast time of our playback position 0
     std::atomic<int64_t> stall_grace_until_ms_{0};
     std::atomic<bool> seek_pending_{false};
     std::mutex refresh_mutex_;

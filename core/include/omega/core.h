@@ -63,7 +63,7 @@ OMEGA_API omega_player* omega_player_create(void* ecore_wl2_window, int width, i
 OMEGA_API omega_player* omega_player_create_youtube(void* ecore_wl2_window, int width, int height, const char* video_id,
                                                     int max_height, const char* codecs, int64_t start_ms);
 // Video qualities of a YouTube player (best variant per height, same codec preference as at creation):
-// {"current":{"height","fps","codec"},"available":[{"height","fps","codec"}, ...]} (highest first),
+// {"current":{"height","fps","codec"},"available":[{"height","fps","codec"}, ...],"live":bool} (highest first),
 // codec = "avc1" | "vp9" | "av01". Release with omega_free(). {"available":[]} for a URL player.
 OMEGA_API char* omega_player_formats(omega_player* player);
 OMEGA_API void omega_player_toggle_pause(omega_player* player);
@@ -81,7 +81,8 @@ OMEGA_API void omega_player_destroy(omega_player* player);
 //   suggest: {"suggestions":["..."]} or {"error":"..."}
 OMEGA_API char* omega_yt_search(const char* query, const char* continuation);
 OMEGA_API char* omega_yt_suggest(const char* query);
-// Signed-in feed (TV client): browse_id FEwhat_to_watch | FEsubscriptions | FEhistory. Same JSON as search;
+// Signed-in feed (TV client): browse_id FEwhat_to_watch | FEsubscriptions | FEhistory. Same JSON as search
+// (FEsubscriptions first page adds "highlights": YouTube's "most relevant" shelf, same item format);
 // {"error":"signed out"} when no account is connected.
 OMEGA_API char* omega_yt_browse(const char* browse_id, const char* continuation);
 // Related videos of video_id (player suggestions). Same JSON as search.

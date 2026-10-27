@@ -109,7 +109,8 @@ omega_player* start_youtube(void* window, int width, int height, omega::yt::Clie
     cfg.max_width = video->width;
     cfg.max_height = video->height;
     cfg.duration_ms = info.length_s * 1000;
-    cfg.start_ms = start_ms;
+    cfg.live = info.is_live;
+    cfg.start_ms = info.is_live ? 0 : start_ms;
     // Expired URLs (403/410): ask InnerTube again and keep the same formats.
     std::string id = info.id;
     int video_itag = video->itag, audio_itag = audio->itag;
@@ -135,7 +136,7 @@ omega_player* start_youtube(void* window, int width, int height, omega::yt::Clie
         delete p;
         return nullptr;
     }
-    if (omega::yt::shared_auth().signed_in()) {
+    if (omega::yt::shared_auth().signed_in() && !info.is_live) {
         omega::Player* player = &p->impl;
         p->history = std::make_unique<omega::yt::WatchReporter>(id, info.length_s * 1000, [player] {
             omega::PlayerStats s = player->stats();
@@ -182,7 +183,7 @@ omega_player* omega_player_create_youtube(void* window, int width, int height, c
                 last_height = f->height;
                 available.push_back(entry(f));
             }
-            p->formats = {{"current", entry(video)}, {"available", available}};
+            p->formats = {{"current", entry(video)}, {"available", available}, {"live", info.is_live}};
             return p;
         }
         refused.push_back(video->video_codec());
@@ -238,9 +239,9 @@ char* to_c_json(const nlohmann::json& j) {
     return out;
 }
 
-nlohmann::json feed_json(const omega::yt::Feed& feed) {
+nlohmann::json items_json(const std::vector<omega::yt::FeedItem>& list) {
     nlohmann::json items = nlohmann::json::array();
-    for (const auto& it : feed.items)
+    for (const auto& it : list)
         items.push_back({{"id", it.video_id},
                          {"title", it.title},
                          {"channel", it.channel},
@@ -250,7 +251,13 @@ nlohmann::json feed_json(const omega::yt::Feed& feed) {
                          {"thumbnail", it.thumbnail},
                          {"live", it.is_live},
                          {"watched", it.watched_percent}});
-    return {{"items", items}, {"continuation", feed.continuation}};
+    return items;
+}
+
+nlohmann::json feed_json(const omega::yt::Feed& feed) {
+    nlohmann::json j = {{"items", items_json(feed.items)}, {"continuation", feed.continuation}};
+    if (!feed.highlights.empty()) j["highlights"] = items_json(feed.highlights);
+    return j;
 }
 
 }  // namespace
