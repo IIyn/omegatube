@@ -17,6 +17,7 @@ namespace OmegaTube.Ui
         public int Count => cards.Count;
         public int FocusIndex { get; private set; }
         public VideoItem FocusedItem => cards.Count > 0 ? cards[FocusIndex].Item : null;
+        public VideoItem FirstItem => cards.Count > 0 ? cards[0].Item : null;
 
         private readonly Func<string, Task<FeedPage>> loader;
         private readonly TextLabel status;
@@ -162,11 +163,18 @@ namespace OmegaTube.Ui
             }
         }
 
+        // Only cards near the focus are shown (and their images loaded): far ones would sit at x coordinates
+        // the TV's GPU renders unreliably.
         private void UpdateVisible()
         {
-            for (int i = Math.Max(0, FocusIndex - 1); i < Math.Min(cards.Count, FocusIndex + VisibleAhead); i++)
+            for (int i = 0; i < cards.Count; i++)
             {
-                cards[i].LoadImage();
+                bool near = i >= FocusIndex - 2 && i < FocusIndex + VisibleAhead + 2;
+                Widgets.SetVisible(cards[i], near);
+                if (near && i >= FocusIndex - 1 && i < FocusIndex + VisibleAhead)
+                {
+                    cards[i].LoadImage();
+                }
             }
         }
     }

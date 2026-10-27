@@ -122,6 +122,11 @@ namespace OmegaTube
 
         public static IntPtr QrEncode(string text) => QrEncodeRaw(Utf8z(text));
 
+        [DllImport(Lib, EntryPoint = "omega_yt_playlist")]
+        private static extern IntPtr YtPlaylistRaw(byte[] videoId, byte[] playlistId);
+
+        public static IntPtr YtPlaylist(string videoId, string playlistId) => YtPlaylistRaw(Utf8z(videoId), Utf8z(playlistId));
+
         [DllImport(Lib, EntryPoint = "omega_yt_related")]
         private static extern IntPtr YtRelatedRaw(byte[] videoId);
 

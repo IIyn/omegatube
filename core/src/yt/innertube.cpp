@@ -8,6 +8,7 @@
 
 #include "util/log.h"
 #include "util/remote_config.h"
+#include "yt/js_solver.h"
 
 namespace omega::yt {
 namespace {
@@ -54,6 +55,29 @@ std::string text_of(const json& j) {
     return out;
 }
 
+// First value of `key` anywhere under j (depth-first), or nullptr.
+const json* find_key(const json& j, const char* key) {
+    if (j.is_object()) {
+        auto it = j.find(key);
+        if (it != j.end()) return &*it;
+        for (const json& v : j)
+            if (const json* f = find_key(v, key)) return f;
+    } else if (j.is_array()) {
+        for (const json& v : j)
+            if (const json* f = find_key(v, key)) return f;
+    }
+    return nullptr;
+}
+
+// A playlist card and a video card of the same first video are different entries.
+bool already_listed(const Feed& out, const FeedItem& item) {
+    for (const FeedItem& existing : out.items)
+        if (existing.video_id == item.video_id && existing.playlist_id == item.playlist_id) return true;
+    return false;
+}
+
+std::string playlist_kind(const std::string& playlist_id) { return playlist_id.compare(0, 2, "RD") == 0 ? "mix" : "playlist"; }
+
 std::string last_thumbnail(const json& thumbs) {
     const json& list = thumbs.value("thumbnails", json::array());
     return list.empty() ? "" : list.back().value("url", "");
@@ -93,12 +117,16 @@ void parse_video_renderer(const json& v, Feed& out) {
 // metadata.tileMetadataRenderer, thumbnail and duration in header.tileHeaderRenderer.
 void parse_tile(const json& t, Feed& out) {
     const json& cmd = t.value("onSelectCommand", json::object());
-    if (!cmd.contains("watchEndpoint")) return;  // Shorts (reelWatchEndpoint), channels, playlists
+    if (!cmd.contains("watchEndpoint")) return;  // Shorts (reelWatchEndpoint), channels
     FeedItem item;
     item.video_id = cmd["watchEndpoint"].value("videoId", "");
     if (item.video_id.empty()) return;
-    for (const FeedItem& existing : out.items)
-        if (existing.video_id == item.video_id) return;
+    if (t.value("contentType", "") == "TILE_CONTENT_TYPE_PLAYLIST") {
+        item.playlist_id = cmd["watchEndpoint"].value("playlistId", "");
+        if (item.playlist_id.empty()) return;
+        item.kind = playlist_kind(item.playlist_id);
+    }
+    if (already_listed(out, item)) return;
     const json& meta = t.value("metadata", json::object()).value("tileMetadataRenderer", json::object());
     const json& header = t.value("header", json::object()).value("tileHeaderRenderer", json::object());
     item.title = text_of(meta.value("title", json::object()));
@@ -126,12 +154,22 @@ void parse_tile(const json& t, Feed& out) {
 
 // 2025+ layout: lockupViewModel (contentId, lockupMetadataViewModel; duration in a thumbnail badge).
 void parse_lockup(const json& l, Feed& out) {
-    if (l.value("contentType", "") != "LOCKUP_CONTENT_TYPE_VIDEO") return;
+    std::string type = l.value("contentType", "");
     FeedItem item;
-    item.video_id = l.value("contentId", "");
+    if (type == "LOCKUP_CONTENT_TYPE_PLAYLIST") {
+        // Playlist / mix: contentId is the list; play it from its first video (the card's watchEndpoint).
+        item.playlist_id = l.value("contentId", "");
+        const json* watch = find_key(l, "watchEndpoint");
+        if (item.playlist_id.empty() || !watch || !watch->is_object()) return;
+        item.video_id = watch->value("videoId", "");
+        item.kind = playlist_kind(item.playlist_id);
+    } else if (type == "LOCKUP_CONTENT_TYPE_VIDEO") {
+        item.video_id = l.value("contentId", "");
+    } else {
+        return;
+    }
     if (item.video_id.size() != 11) return;
-    for (const FeedItem& existing : out.items)
-        if (existing.video_id == item.video_id) return;
+    if (already_listed(out, item)) return;
     const json& meta = l.value("metadata", json::object()).value("lockupMetadataViewModel", json::object());
     item.title = text_of(meta.value("title", json::object()));
     if (item.title.empty()) return;
@@ -160,6 +198,8 @@ void parse_lockup(const json& l, Feed& out) {
             if (item.duration == "LIVE" || item.duration == "EN DIRECT") item.is_live = true;
         }
     }
+    if (item.kind == "mix") item.duration = "MIX";  // its badge is an icon
+    if (item.views == "Playlist") item.views.clear();  // the type label, already shown by the badge
     item.watched_percent = watched_percent(l.value("contentImage", json::object()));
     out.items.push_back(std::move(item));
 }
@@ -248,14 +288,40 @@ net::Headers Client::stream_headers() const { return {{"User-Agent", cfg::str({"
 
 bool Client::player(const std::string& video_id, VideoInfo& out, std::string& error) {
     if (!ensure_visitor(error)) return false;
+    if (player_with("player", video_id, out, error) && !out.formats.empty()) return true;
+    if (cfg::obj({"innertube", "playerFallback"}).value("clientName", "").empty()) return false;
+    std::string primary = error.empty() ? "no direct formats" : error;
+    error.clear();
+    if (player_fallback(video_id, out, error)) {
+        OLOG("yt: %s played through the fallback client (primary: %s)", video_id.c_str(), primary.c_str());
+        return true;
+    }
+    error = primary + "; fallback: " + error;
+    return false;
+}
 
-    ClientDef def = client_def("player", visitor_data_);
+// The TV client, whose URLs need the player JS (n throttling, signatureCipher).
+bool Client::player_fallback(const std::string& video_id, VideoInfo& out, std::string& error) {
+    if (!ensure_visitor(error)) return false;
+    if (!shared_decipher().ensure(error)) return false;
+    if (player_with("playerFallback", video_id, out, error) && !out.formats.empty()) return true;
+    if (error.empty()) error = "no playable formats";
+    return false;
+}
+
+bool Client::player_with(const char* role, const std::string& video_id, VideoInfo& out, std::string& error) {
+    bool fallback = std::string(role) == "playerFallback";
+    ClientDef def = client_def(role, visitor_data_);
     json body = {
         {"context", {{"client", def.client}}},
         {"videoId", video_id},
         {"contentCheckOk", true},
         {"racyCheckOk", true},
     };
+    if (fallback)
+        body["playbackContext"] = {{"contentPlaybackContext",
+                                    {{"html5Preference", "HTML5_PREF_WANTS"},
+                                     {"signatureTimestamp", shared_decipher().signature_timestamp()}}}};
     net::Request req;
     req.method = "POST";
     req.url = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false";
@@ -286,11 +352,21 @@ bool Client::player(const std::string& video_id, VideoInfo& out, std::string& er
     out.length_s = to_int(details, "lengthSeconds");
     out.is_live = details.value("isLive", false);
     out.formats.clear();
+    out.user_agent = def.user_agent;
+    size_t failed = 0;
     for (const json& f : r["streamingData"].value("adaptiveFormats", json::array())) {
-        if (!f.contains("url")) continue;  // ciphered formats are not supported with this client
         Format fmt;
+        if (fallback) {
+            std::string err;
+            if (!shared_decipher().stream_url(f.value("url", ""), f.value("signatureCipher", ""), fmt.url, err)) {
+                if (failed++ == 0) OLOG("yt: decipher itag %lld: %s", static_cast<long long>(to_int(f, "itag")), err.c_str());
+                continue;
+            }
+        } else {
+            if (!f.contains("url")) continue;  // ciphered formats: only through the fallback client
+            fmt.url = f.value("url", "");
+        }
         fmt.itag = static_cast<int>(to_int(f, "itag"));
-        fmt.url = f.value("url", "");
         split_mime(f.value("mimeType", ""), fmt.mime, fmt.codecs);
         fmt.width = static_cast<int>(to_int(f, "width"));
         fmt.height = static_cast<int>(to_int(f, "height"));
@@ -301,8 +377,9 @@ bool Client::player(const std::string& video_id, VideoInfo& out, std::string& er
         fmt.audio_channels = static_cast<int>(to_int(f, "audioChannels"));
         out.formats.push_back(std::move(fmt));
     }
-    OLOG("yt: '%s' by %s, %llds, %zu direct formats", out.title.c_str(), out.author.c_str(),
-         static_cast<long long>(out.length_s), out.formats.size());
+    OLOG("yt: '%s' by %s, %llds, %zu formats (%s client%s)", out.title.c_str(), out.author.c_str(),
+         static_cast<long long>(out.length_s), out.formats.size(), role,
+         failed ? (", " + std::to_string(failed) + " not deciphered").c_str() : "");
     return true;
 }
 
@@ -312,7 +389,6 @@ bool Client::search(const std::string& query, const std::string& continuation, F
     json body = {{"context", {{"client", def.client}}}};
     if (continuation.empty()) {
         body["query"] = query;
-        body["params"] = "EgIQAQ%3D%3D";  // filter: videos only
     } else {
         body["continuation"] = continuation;
     }
@@ -326,6 +402,7 @@ bool Client::search(const std::string& query, const std::string& continuation, F
         error = "search: " + (res.error.empty() ? "http " + std::to_string(res.status) : res.error);
         return false;
     }
+    last_response_ = res.body;
     json r = json::parse(res.body, nullptr, false);
     if (r.is_discarded()) {
         error = "search: invalid json";
@@ -334,6 +411,58 @@ bool Client::search(const std::string& query, const std::string& continuation, F
     out = Feed{};
     collect(r, out);
     OLOG("yt: search '%s'%s -> %zu items", query.c_str(), continuation.empty() ? "" : " (next page)", out.items.size());
+    return true;
+}
+
+bool Client::playlist(const std::string& video_id, const std::string& playlist_id, Feed& out, std::string& title,
+                      std::string& error) {
+    if (!ensure_visitor(error)) return false;
+    ClientDef def = client_def("search", visitor_data_, web_client_version_);
+    json body = {{"context", {{"client", def.client}}}, {"videoId", video_id}, {"playlistId", playlist_id}};
+    net::Request req;
+    req.method = "POST";
+    req.url = "https://www.youtube.com/youtubei/v1/next?prettyPrint=false";
+    req.headers = client_headers(def, visitor_data_);
+    req.body = body.dump();
+    net::Response res = net::fetch(req);
+    if (!res.ok()) {
+        error = "playlist: " + (res.error.empty() ? "http " + std::to_string(res.status) : res.error);
+        return false;
+    }
+    json r = json::parse(res.body, nullptr, false);
+    const json* panel = r.is_discarded() ? nullptr : find_key(r, "playlist");
+    if (panel && panel->is_object() && panel->contains("playlist")) panel = &(*panel)["playlist"];
+    if (!panel || !panel->is_object() || !panel->contains("contents")) {
+        error = "playlist: no playlist panel";
+        return false;
+    }
+    const json& t = panel->value("title", json());
+    title = t.is_string() ? t.get<std::string>() : text_of(t);
+    out = Feed{};
+    // The panel is a window of the list around the current video: keep what comes after it.
+    std::vector<FeedItem> all;
+    size_t after = 0;
+    for (const json& c : (*panel)["contents"]) {
+        const json& v = c.value("playlistPanelVideoRenderer", json::object());
+        FeedItem item;
+        item.video_id = v.value("videoId", "");
+        if (item.video_id.empty()) continue;  // unavailable entries
+        item.title = text_of(v.value("title", json::object()));
+        item.channel = text_of(v.value("shortBylineText", json::object()));
+        item.duration = text_of(v.value("lengthText", json::object()));
+        item.thumbnail = "https://i.ytimg.com/vi/" + item.video_id + "/mqdefault.jpg";
+        item.playlist_id = playlist_id;
+        if (v.value("selected", false) || item.video_id == video_id) after = all.size() + 1;
+        all.push_back(std::move(item));
+    }
+    // A window of what follows (each new video asks again, so it slides along the list): a row of hundreds of
+    // cards reaches coordinates the TV's GPU does not render reliably.
+    constexpr size_t kWindow = 25;
+    size_t first = std::min(after, all.size());
+    out.items.assign(all.begin() + static_cast<long>(first),
+                     all.begin() + static_cast<long>(std::min(all.size(), first + kWindow)));
+    OLOG("yt: playlist %s '%s' from %s -> %zu next items", playlist_id.c_str(), title.c_str(), video_id.c_str(),
+         out.items.size());
     return true;
 }
 

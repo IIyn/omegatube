@@ -16,6 +16,20 @@
         "osVersion": "26.5.23O471"
       }
     },
+    "playerFallback": {
+      "_comment": "Used when the player client fails or has no direct URLs. Its stream URLs carry the n throttling parameter (and sometimes signatureCipher): the core deciphers them by running the TV player JS (QuickJS + yt-dlp EJS). Empty clientName disables it.",
+      "clientName": "TVHTML5",
+      "clientVersion": "5.20260707",
+      "clientNameId": 7,
+      "userAgent": "Mozilla/5.0 (SMART-TV; Linux; Tizen 2.4.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/2.4.0 TV Safari/538.1",
+      "context": {
+        "userAgent": "Mozilla/5.0 (SMART-TV; Linux; Tizen 2.4.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/2.4.0 TV Safari/538.1",
+        "deviceMake": "Samsung",
+        "deviceModel": "UKS9800",
+        "osName": "Tizen",
+        "osVersion": "2.4.0"
+      }
+    },
     "browse": {
       "_comment": "Signed-in feeds (Bearer token): only the TV client accepts it.",
       "clientName": "TVHTML5",

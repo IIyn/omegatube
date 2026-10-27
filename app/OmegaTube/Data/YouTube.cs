@@ -11,6 +11,10 @@ namespace OmegaTube.Data
         public string Id, Title, Channel, Duration, Views, Published, Thumbnail;
         public bool Live;
         public int WatchedPercent;   // account progress reported by YouTube (0 when unknown)
+        // Playlist / mix card: plays Id within PlaylistId. Videos of a playlist keep Kind "video" + PlaylistId.
+        public string PlaylistId = "";
+        public string Kind = "video";   // video | playlist | mix
+        public bool IsList => Kind == "playlist" || Kind == "mix";
     }
 
     public class SkipSegment
@@ -23,7 +27,7 @@ namespace OmegaTube.Data
     // One entry of the quality panel: the format a height cap selects.
     public class VideoQuality
     {
-        public int Height, Fps;
+        public int Width, Height, Fps;
         public string Codec;   // avc1 | vp9 | av01
     }
 
@@ -32,6 +36,7 @@ namespace OmegaTube.Data
         public List<VideoItem> Items = new List<VideoItem>();
         public List<VideoItem> Highlights = new List<VideoItem>();  // subscriptions: YouTube's "most relevant" shelf
         public string Continuation = "";
+        public string Title = "";   // playlists
         public string Error;
     }
 
@@ -42,6 +47,12 @@ namespace OmegaTube.Data
         public static Task<FeedPage> Search(string query, string continuation = "")
         {
             return Task.Run(() => ToPage(Call(NativeCore.YtSearch(query, continuation ?? ""))));
+        }
+
+        // The videos after videoId in a playlist / mix (page.Title: the list's name).
+        public static Task<FeedPage> Playlist(string videoId, string playlistId)
+        {
+            return Task.Run(() => ToPage(Call(NativeCore.YtPlaylist(videoId, playlistId))));
         }
 
         public static Task<FeedPage> Related(string videoId)
@@ -63,6 +74,7 @@ namespace OmegaTube.Data
                 page.Items = ToItems(root, "items");
                 page.Highlights = ToItems(root, "highlights");
                 page.Continuation = Json.Str(root, "continuation");
+                page.Title = Json.Str(root, "title");
                 return page;
             }
         }
@@ -84,6 +96,8 @@ namespace OmegaTube.Data
                     Thumbnail = Json.Str(o, "thumbnail"),
                     Live = Json.Bool(o, "live"),
                     WatchedPercent = (int)Json.Num(o, "watched"),
+                    PlaylistId = Json.Str(o, "playlistId"),
+                    Kind = Json.Str(o, "kind", "video"),
                 });
             }
             return items;
@@ -147,10 +161,11 @@ namespace OmegaTube.Data
         }
 
         // Qualities the core can play for this player (highest first) and the one playing. No network call.
-        public static List<VideoQuality> Qualities(IntPtr player, out VideoQuality current, out bool live)
+        public static List<VideoQuality> Qualities(IntPtr player, out VideoQuality current, out bool live, out string title)
         {
             object root = Call(NativeCore.PlayerFormats(player));
             live = Json.Bool(root, "live", false);
+            title = Json.Str(root, "title");
             object cur = Json.Obj(root, "current");
             current = cur != null ? ToQuality(cur) : null;
             var list = new List<VideoQuality>();
@@ -163,7 +178,7 @@ namespace OmegaTube.Data
 
         private static VideoQuality ToQuality(object o)
         {
-            return new VideoQuality { Height = (int)Json.Num(o, "height"), Fps = (int)Json.Num(o, "fps"), Codec = Json.Str(o, "codec") };
+            return new VideoQuality { Width = (int)Json.Num(o, "width"), Height = (int)Json.Num(o, "height"), Fps = (int)Json.Num(o, "fps"), Codec = Json.Str(o, "codec") };
         }
 
         public static object Call(IntPtr json)

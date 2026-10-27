@@ -83,10 +83,13 @@ namespace OmegaTube.Ui
             sections.Clear();
             sections.Add(new Section
             {
-                Title = "Accueil", Icon = "home", CacheKey = "home",
+                Title = "Accueil",
+                Icon = "home",
+                CacheKey = "home",
                 Loader = signedIn ? (Func<string, Task<FeedPage>>)(c => YouTube.Browse("FEwhat_to_watch", c)) : null,
                 EmptyText = signIn + "tes recommandations, ou utilise la Recherche et les sections du menu.",
             });
+            sections.Add(new Section { Title = "Recherche", Icon = "search", Open = () => new SearchScreen(App) });
             sections.Add(new Section
             {
                 Title = "Abonnements", Icon = "subscriptions", CacheKey = "subscriptions",
@@ -112,7 +115,6 @@ namespace OmegaTube.Ui
                     Loader = c => YouTube.Search(query, c),
                 });
             }
-            sections.Add(new Section { Title = "Recherche", Icon = "search", Open = () => new SearchScreen(App) });
             sections.Add(new Section { Title = "Compte", Icon = "set_account", Open = () => new AccountScreen(App) });
             sections.Add(new Section { Title = "Réglages", Icon = "settings", Open = () => new SettingsScreen(App) });
 

@@ -10,17 +10,18 @@ namespace OmegaTube.Ui
 {
     // Full-screen video (ESPlayer plane under a transparent UI) with SmartTube-style controls
     // (layout as in SmartTube / ytps5's player chrome):
-    //  - hidden while playing; OK pauses and shows them, ◀ ▶ seek, any other key shows them;
+    //  - hidden while playing; OK pauses and shows them, ◀ ▶ seek (focus on the seek bar), any other key shows them;
     //  - title + channel, a full-width seek bar with the SponsorBlock segments, and a row of round
     //    buttons: restart, -N s, play/pause, +N s, next | skip segment, speed, quality, stats;
-    //  - Down from the buttons slides the block up and reveals the suggestions row.
+    //  - focus rows, top to bottom: seek bar (◀ ▶ seek) / buttons / suggestions (Up and Down move between them);
+    //    the suggestions row slides the whole block up.
     public class PlayerScreen : Screen
     {
         // Player teardown joins native threads: serialise create/destroy so two players never coexist
         // (the TV has one hardware decoder; a second player would get "resource conflicted").
         private static Task lastTeardown = Task.CompletedTask;
 
-        private enum Focus { Hidden, Buttons, Suggestions, Panel }
+        private enum Focus { Hidden, Timeline, Buttons, Suggestions, Panel }
         private enum Action { Restart, Rewind, PlayPause, Forward, Next, Skip, Speed, Quality, Stats }
 
         private class Button
@@ -34,12 +35,14 @@ namespace OmegaTube.Ui
         private static readonly double[] Speeds = { 0.5, 0.75, 1.0, 1.25, 1.5, 2.0 };
         private static readonly int[] DefaultHeights = { 2160, 1440, 1080, 720, 480, 360 };  // until the core answers
         private const int ProgressWidth = 1760, ProgressX = 80;
-        private const int ChromeLift = 330;   // how far the block slides up for the suggestions
+        private const int SuggestionsY = 1080 + 30;   // the suggestions row, below the screen until revealed
+        private const int ChromeLift = 30 + Theme.RowHeight + 40;   // how far the block slides up to show it whole
 
         private readonly VideoItem item;
         private readonly View chrome;          // everything at the bottom; slides up for suggestions
         private readonly TextLabel titleLabel, timeLabel, durationLabel, clockLabel, stateLabel, statsLabel, toast;
         private readonly View backdrop;        // opaque while loading: the TV picture must not show through
+        private readonly View barA, barB;      // black bars where the video does not cover the screen (4:3, 21:9)
         private readonly View spinner;
         private readonly Animation spin;
         private readonly View track, progressFill, playhead;
@@ -71,6 +74,7 @@ namespace OmegaTube.Ui
         private List<VideoQuality> qualities = new List<VideoQuality>();  // what this video offers (from the core)
         private VideoQuality playing;      // the format being played
         private bool live;                 // broadcast: no timeline, no seeking
+        private bool InList => !string.IsNullOrEmpty(item.PlaylistId);
         private double speed = 1.0;
         private DateTime lastSave;
 
@@ -100,6 +104,12 @@ namespace OmegaTube.Ui
             };
             backdrop.Add(poster);
             Root.Add(backdrop);
+            barA = new View { BackgroundColor = Color.Black };
+            barB = new View { BackgroundColor = Color.Black };
+            barA.Hide();
+            barB.Hide();
+            Root.Add(barA);
+            Root.Add(barB);
 
             spinner = Widgets.Spinner(96, Theme.Text, out spin);
             spinner.Position = new Position(960, 470);
@@ -266,7 +276,12 @@ namespace OmegaTube.Ui
             player = created;
             if (player != IntPtr.Zero)
             {
-                qualities = YouTube.Qualities(player, out playing, out live);
+                qualities = YouTube.Qualities(player, out playing, out live, out string playingTitle);
+                if (item.IsList && playingTitle.Length > 0)
+                {
+                    titleLabel.Text = playingTitle;   // the card showed the list's name
+                }
+                LayoutBars();
             }
             if (player == IntPtr.Zero)
             {
@@ -317,9 +332,13 @@ namespace OmegaTube.Ui
 
         private async Task LoadSuggestions()
         {
-            suggestions = new FeedRow("Vidéos suggérées", c => YouTube.Related(item.Id), 1920 - 40)
+            // In a playlist / mix the row is what comes next in it (and Next / the end of the video plays its first).
+            suggestions = InList
+                ? new FeedRow(item.Kind == "mix" || item.PlaylistId.StartsWith("RD") ? "À suivre dans le mix" : "À suivre dans la playlist",
+                              c => YouTube.Playlist(item.Id, item.PlaylistId), 1920 - 40)
+                : new FeedRow("Vidéos suggérées", c => YouTube.Related(item.Id), 1920 - 40)
             {
-                Position = new Position(40, 1080 + 30),
+                Position = new Position(40, SuggestionsY),
             };
             chrome.Add(suggestions);
             await suggestions.Load();
@@ -441,7 +460,14 @@ namespace OmegaTube.Ui
             }
             if (stats.Eos != 0 && !closing)
             {
-                App.Pop();
+                if (InList && suggestions?.FirstItem != null)
+                {
+                    App.Replace(new PlayerScreen(App, suggestions.FirstItem));
+                }
+                else
+                {
+                    App.Pop();
+                }
             }
         }
 
@@ -568,6 +594,11 @@ namespace OmegaTube.Ui
             slide = Widgets.Slide(chrome, 0, focus == Focus.Suggestions ? -ChromeLift : 0, slide, 220);
             RefreshButtons();
             suggestions?.SetFocused(focus == Focus.Suggestions);
+            // Focused seek bar: bigger playhead and a thicker track.
+            bool onTimeline = focus == Focus.Timeline;
+            playhead.Scale = onTimeline ? new Vector3(1.6f, 1.6f, 1f) : Vector3.One;
+            track.SizeHeight = onTimeline ? 10 : 6;
+            progressFill.SizeHeight = track.SizeHeight;
             UpdateChrome(DateTime.Now);
         }
 
@@ -629,11 +660,10 @@ namespace OmegaTube.Ui
                         buttonIndex = buttons.IndexOf(playButton);
                         ShowChrome(Focus.Buttons);
                     }
-                    else if (key == "Left" || key == "Right")
+                    else if ((key == "Left" || key == "Right") && !live)
                     {
                         SeekBy(key == "Left" ? -1 : 1);
-                        buttonIndex = buttons.IndexOf(playButton);
-                        ShowChrome(Focus.Buttons);
+                        ShowChrome(Focus.Timeline);
                     }
                     else if (key == "Down")
                     {
@@ -644,6 +674,36 @@ namespace OmegaTube.Ui
                         buttonIndex = buttons.IndexOf(playButton);
                         ShowChrome(Focus.Buttons);
                     }
+                    return true;
+
+                case Focus.Timeline:
+                    switch (key)
+                    {
+                        case "Left":
+                        case "Right":
+                            SeekBy(key == "Left" ? -1 : 1);
+                            break;
+                        case "Return":
+                            if (pendingSeekMs >= 0)
+                            {
+                                CommitSeek();
+                            }
+                            else
+                            {
+                                TogglePause();
+                            }
+                            break;
+                        case "Down":
+                            buttonIndex = buttons.IndexOf(playButton);
+                            focus = Focus.Buttons;
+                            break;
+                        case "Up":
+                        case "XF86Back":
+                        case "Escape":
+                            HideChrome();
+                            return true;
+                    }
+                    ShowChrome(Focus.Hidden);
                     return true;
 
                 case Focus.Buttons:
@@ -665,6 +725,13 @@ namespace OmegaTube.Ui
                             }
                             break;
                         case "Up":
+                            if (live)
+                            {
+                                HideChrome();
+                                return true;
+                            }
+                            focus = Focus.Timeline;
+                            break;
                         case "XF86Back":
                         case "Escape":
                             HideChrome();
@@ -723,7 +790,7 @@ namespace OmegaTube.Ui
                 case Action.Next:
                     if (suggestions != null && suggestions.Count > 0)
                     {
-                        App.Replace(new PlayerScreen(App, suggestions.FocusedItem));
+                        App.Replace(new PlayerScreen(App, InList ? suggestions.FirstItem : suggestions.FocusedItem));
                     }
                     break;
                 case Action.Skip:
@@ -893,6 +960,40 @@ namespace OmegaTube.Ui
             toast.Text = "  " + text + "  ";
             toast.Show();
             toastUntil = DateTime.Now.AddSeconds(1.5);
+        }
+
+        // The video plane is letterboxed and leaves the uncovered area empty: cover it in black.
+        private void LayoutBars()
+        {
+            barA.Hide();
+            barB.Hide();
+            if (playing == null || playing.Width <= 0 || playing.Height <= 0)
+            {
+                return;
+            }
+            double aspect = playing.Width / (double)playing.Height;
+            if (Math.Abs(aspect - 16.0 / 9.0) < 0.01)
+            {
+                return;
+            }
+            if (aspect < 16.0 / 9.0)
+            {
+                int side = (int)Math.Ceiling((1920 - 1080 * aspect) / 2);   // pillarbox: left / right
+                barA.Size = new Size(side, 1080);
+                barA.Position = new Position(0, 0);
+                barB.Size = new Size(side, 1080);
+                barB.Position = new Position(1920 - side, 0);
+            }
+            else
+            {
+                int band = (int)Math.Ceiling((1080 - 1920 / aspect) / 2);   // letterbox: top / bottom
+                barA.Size = new Size(1920, band);
+                barA.Position = new Position(0, 0);
+                barB.Size = new Size(1920, band);
+                barB.Position = new Position(0, 1080 - band);
+            }
+            barA.Show();
+            barB.Show();
         }
 
         private List<VideoQuality> PanelQualities()

@@ -21,6 +21,7 @@
 #include "yt/auth.h"
 #include "yt/sponsorblock.h"
 #include "yt/innertube.h"
+#include "yt/js_solver.h"
 
 using Clock = std::chrono::steady_clock;
 
@@ -59,8 +60,9 @@ int main(int argc, char** argv) {
             return 1;
         }
         for (const auto& it : feed.items)
-            printf("%s | %s | %s | %s | %s | %s\n", it.video_id.c_str(), it.title.c_str(), it.channel.c_str(),
-                   it.duration.c_str(), it.views.c_str(), it.published.c_str());
+            printf("%s | %s | %s | %s | %s | %s%s%s\n", it.video_id.c_str(), it.title.c_str(), it.channel.c_str(),
+                   it.duration.c_str(), it.views.c_str(), it.published.c_str(),
+                   it.playlist_id.empty() ? "" : (" | " + it.kind + " ").c_str(), it.playlist_id.c_str());
         printf("%zu items, continuation %s\n", feed.items.size(), feed.continuation.empty() ? "none" : "yes");
         std::vector<std::string> sugg;
         if (omega::yt::suggest(argv[2], sugg, error))
@@ -76,9 +78,23 @@ int main(int argc, char** argv) {
             return 1;
         }
         for (const auto& it : feed.items)
-            printf("%s | %s | %s | %s | %s | %s\n", it.video_id.c_str(), it.title.c_str(), it.channel.c_str(),
-                   it.duration.c_str(), it.views.c_str(), it.published.c_str());
+            printf("%s | %s | %s | %s | %s | %s%s%s\n", it.video_id.c_str(), it.title.c_str(), it.channel.c_str(),
+                   it.duration.c_str(), it.views.c_str(), it.published.c_str(),
+                   it.playlist_id.empty() ? "" : (" | " + it.kind + " ").c_str(), it.playlist_id.c_str());
         printf("%zu related\n", feed.items.size());
+        return 0;
+    }
+    if (argc >= 4 && strcmp(argv[1], "--playlist") == 0) {
+        omega::yt::Client client;
+        omega::yt::Feed feed;
+        std::string title, error;
+        if (!client.playlist(argv[2], argv[3], feed, title, error)) {
+            printf("playlist failed: %s\n", error.c_str());
+            return 1;
+        }
+        printf("'%s': %zu next items\n", title.c_str(), feed.items.size());
+        for (const auto& it : feed.items)
+            printf("  %s | %s | %s | %s\n", it.video_id.c_str(), it.title.c_str(), it.channel.c_str(), it.duration.c_str());
         return 0;
     }
     if (argc >= 3 && strcmp(argv[1], "--sb") == 0) {
@@ -92,13 +108,17 @@ int main(int argc, char** argv) {
         printf("%zu segments\n", segs.size());
         return 0;
     }
-    if (argc >= 4 && (strcmp(argv[1], "--dump-player") == 0 || strcmp(argv[1], "--dump-browse") == 0)) {
+    if (argc >= 4 && (strcmp(argv[1], "--dump-player") == 0 || strcmp(argv[1], "--dump-browse") == 0 ||
+                      strcmp(argv[1], "--dump-search") == 0)) {
         // Saves the raw InnerTube response, to study a layout (live player response, feed shelves).
         // --dump-browse needs the token of a previous --signin (./omegatube-auth.json).
         omega::yt::Client client;
         std::string error;
         bool ok;
-        if (argv[1][7] == 'p') {
+        if (argv[1][7] == 's') {
+            omega::yt::Feed feed;
+            ok = client.search(argv[2], "", feed, error);
+        } else if (argv[1][7] == 'p') {
             omega::yt::VideoInfo info;
             ok = client.player(argv[2], info, error);
         } else {
@@ -239,7 +259,10 @@ int main(int argc, char** argv) {
     omega::yt::Client client;
     omega::yt::VideoInfo info;
     std::string error;
-    if (!client.player(argv[1], info, error)) {
+    // FALLBACK=1: resolve through the fallback (TV) client with deciphering, as if the primary failed.
+    omega::yt::shared_decipher().set_cache_dir(".");
+    bool fallback = getenv("FALLBACK") != nullptr;
+    if (!(fallback ? client.player_fallback(argv[1], info, error) : client.player(argv[1], info, error))) {
         printf("player failed: %s\n", error.c_str());
         return 1;
     }
@@ -263,7 +286,8 @@ int main(int argc, char** argv) {
     }
     printf("video itag %d %dx%d@%d %s, audio itag %d %s\n", video->itag, video->width, video->height, video->fps,
            video->codecs.c_str(), audio->itag, audio->codecs.c_str());
-    bool ok = drain("audio", *audio, client.stream_headers(), UINT64_MAX);
-    ok &= drain("video", *video, client.stream_headers(), video_limit);
+    omega::net::Headers headers = {{"User-Agent", info.user_agent}};
+    bool ok = drain("audio", *audio, headers, UINT64_MAX);
+    ok &= drain("video", *video, headers, video_limit);
     return ok ? 0 : 1;
 }

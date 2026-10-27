@@ -27,6 +27,10 @@ struct Format {
 // One entry of a feed (search results, channel videos...).
 struct FeedItem {
     std::string video_id, title, channel, duration, views, published, thumbnail;
+    // Playlists and mixes: playlist_id + the first video to play (video_id). Videos inside a playlist
+    // (Client::playlist) keep kind "video" with the playlist_id they belong to.
+    std::string playlist_id;
+    std::string kind = "video";  // "video" | "playlist" | "mix"
     bool is_live = false;
     int watched_percent = 0;  // account's progress as YouTube reports it (signed-in feeds)
 };
@@ -42,6 +46,7 @@ struct VideoInfo {
     std::string id, title, author;
     int64_t length_s = 0;
     bool is_live = false;  // broadcasting now: formats are numbered-segment streams (net::LiveReader)
+    std::string user_agent;  // of the client that resolved the formats (stream requests must send it)
     std::vector<Format> formats;  // directly playable adaptive formats only
 };
 
@@ -49,12 +54,18 @@ struct VideoInfo {
 // non-throttled) stream URLs without PO token. See tools/yt-probe/probe.py to re-check.
 class Client {
 public:
+    // Tries the primary client, then (remote-config "playerFallback") the TV client with deciphering.
     bool player(const std::string& video_id, VideoInfo& out, std::string& error);
+    bool player_fallback(const std::string& video_id, VideoInfo& out, std::string& error);
     // HTTP headers the googlevideo stream requests must carry (same User-Agent as the player request).
     net::Headers stream_headers() const;
 
     // Video search (WEB client). Pass the previous Feed::continuation to get the next page.
     bool search(const std::string& query, const std::string& continuation, Feed& out, std::string& error);
+    // The videos after video_id in a playlist or mix (WEB "next" endpoint with playlistId). A mix is endless:
+    // asking again from a later video continues it.
+    bool playlist(const std::string& video_id, const std::string& playlist_id, Feed& out, std::string& title,
+                  std::string& error);
     // Related videos of a watch page (WEB client "next" endpoint), for the player's suggestions row.
     bool related(const std::string& video_id, Feed& out, std::string& error);
     // Signed-in feeds through the TV client: FEwhat_to_watch (home), FEsubscriptions, FEhistory.
@@ -65,6 +76,7 @@ public:
     const std::string& last_response() const { return last_response_; }
 
 private:
+    bool player_with(const char* role, const std::string& video_id, VideoInfo& out, std::string& error);
     bool ensure_visitor(std::string& error);
     std::string last_response_;
     std::mutex mutex_;  // guards the lazily fetched session data below

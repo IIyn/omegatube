@@ -50,7 +50,7 @@ namespace OmegaTube.Data
                 {
                     ["id"] = v.Id, ["title"] = v.Title, ["channel"] = v.Channel, ["duration"] = v.Duration,
                     ["views"] = v.Views, ["published"] = v.Published, ["thumbnail"] = v.Thumbnail, ["live"] = v.Live,
-                    ["watched"] = v.WatchedPercent,
+                    ["watched"] = v.WatchedPercent, ["playlistId"] = v.PlaylistId, ["kind"] = v.Kind,
                 });
             }
             return items;

@@ -14,6 +14,7 @@
 #include "player/player.h"
 #include "yt/auth.h"
 #include "yt/innertube.h"
+#include "yt/js_solver.h"
 #include "yt/sponsorblock.h"
 #include "yt/watch.h"
 
@@ -104,7 +105,9 @@ omega_player* start_youtube(void* window, int width, int height, omega::yt::Clie
     cfg.height = height;
     cfg.video_url = video->url;
     cfg.audio_url = audio->url;
-    cfg.stream_headers = client.stream_headers();
+    // Stream requests carry the User-Agent of the client that resolved them (primary or fallback).
+    cfg.stream_headers = info.user_agent.empty() ? client.stream_headers()
+                                                 : omega::net::Headers{{"User-Agent", info.user_agent}};
     cfg.fps = video->fps > 0 ? video->fps : 30;
     cfg.max_width = video->width;
     cfg.max_height = video->height;
@@ -172,7 +175,8 @@ omega_player* omega_player_create_youtube(void* window, int width, int height, c
         if (omega_player* p = start_youtube(window, width, height, client, info, video, audio, start_ms)) {
             // What the quality panel offers: the format each height cap would pick (codecs the TV refused aside).
             auto entry = [](const omega::yt::Format* f) {
-                return nlohmann::json{{"height", f->height}, {"fps", f->fps}, {"codec", f->video_codec()}};
+                return nlohmann::json{
+                    {"width", f->width}, {"height", f->height}, {"fps", f->fps}, {"codec", f->video_codec()}};
             };
             nlohmann::json available = nlohmann::json::array();
             int last_height = -1;
@@ -183,7 +187,8 @@ omega_player* omega_player_create_youtube(void* window, int width, int height, c
                 last_height = f->height;
                 available.push_back(entry(f));
             }
-            p->formats = {{"current", entry(video)}, {"available", available}, {"live", info.is_live}};
+            p->formats = {{"current", entry(video)},  {"available", available}, {"live", info.is_live},
+                          {"title", info.title}, {"author", info.author}};
             return p;
         }
         refused.push_back(video->video_codec());
@@ -250,7 +255,9 @@ nlohmann::json items_json(const std::vector<omega::yt::FeedItem>& list) {
                          {"published", it.published},
                          {"thumbnail", it.thumbnail},
                          {"live", it.is_live},
-                         {"watched", it.watched_percent}});
+                         {"watched", it.watched_percent},
+                         {"playlistId", it.playlist_id},
+                         {"kind", it.kind}});
     return items;
 }
 
@@ -287,6 +294,17 @@ char* omega_yt_browse(const char* browse_id, const char* continuation) {
     return to_c_json(feed_json(feed));
 }
 
+char* omega_yt_playlist(const char* video_id, const char* playlist_id) {
+    omega::yt::Feed feed;
+    std::string title, error;
+    if (!omega::yt::shared_client().playlist(video_id ? video_id : "", playlist_id ? playlist_id : "", feed, title,
+                                             error))
+        return to_c_json({{"error", error}});
+    nlohmann::json j = feed_json(feed);
+    j["title"] = title;
+    return to_c_json(j);
+}
+
 char* omega_yt_related(const char* video_id) {
     omega::yt::Feed feed;
     std::string error;
@@ -308,6 +326,7 @@ void omega_init(const char* data_dir) {
     if (!dir.empty() && dir.back() != '/') dir += '/';
     omega::cfg::init(dir + "remote-config.json");
     omega::yt::shared_auth().init(dir + "auth.json");
+    if (!dir.empty()) omega::yt::shared_decipher().set_cache_dir(dir.substr(0, dir.size() - 1));
 }
 
 char* omega_config_refresh(void) {
