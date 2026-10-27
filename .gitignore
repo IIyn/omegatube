@@ -1,0 +1,10 @@
+build/
+bin/
+obj/
+app/OmegaTube/lib/*.so
+app/OmegaTube/res/dev.json
+# never commit signing material or account tokens
+*.p12
+*.pri
+auth.json
+omegatube-auth.json

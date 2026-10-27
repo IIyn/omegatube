@@ -1,0 +1,13 @@
+<Project Sdk="Tizen.NET.Sdk/1.2.1">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>tizen80</TargetFramework>
+    <AssemblyName>OmegaTube</AssemblyName>
+    <RootNamespace>OmegaTube</RootNamespace>
+    <!-- UE65AU6905K runs Tizen 6.0 (API 8): never compile against a newer TizenFX. -->
+    <TizenNetPackageVersion>8.0.0.15631</TizenNetPackageVersion>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+</Project>

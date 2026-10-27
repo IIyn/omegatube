@@ -1,0 +1,51 @@
+{
+  "_comment": "Fetched by the app at startup from the main branch; also embedded at build time as the offline default. Edit it to adapt to YouTube changes without shipping a new build.",
+  "version": 1,
+  "innertube": {
+    "player": {
+      "_comment": "Stream URLs. VISIONOS gives direct, non-ciphered URLs without PO token (2026-10).",
+      "clientName": "VISIONOS",
+      "clientVersion": "1.02",
+      "clientNameId": 101,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+      "context": {
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+        "deviceMake": "Apple",
+        "deviceModel": "RealityDevice17,1",
+        "osName": "visionOS",
+        "osVersion": "26.5.23O471"
+      }
+    },
+    "browse": {
+      "_comment": "Signed-in feeds (Bearer token): only the TV client accepts it.",
+      "clientName": "TVHTML5",
+      "clientVersion": "7.20260707.07.00",
+      "clientNameId": 7,
+      "userAgent": "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/25.lts.30.1034943-gold (unlike Gecko), Unknown_TV_Unknown_0/Unknown (Unknown, Unknown)",
+      "context": {
+        "deviceMake": "Samsung",
+        "deviceModel": "SmartTV"
+      }
+    },
+    "search": {
+      "_comment": "Signed-out search. clientVersion is read from youtube.com when possible; this is the fallback.",
+      "clientName": "WEB",
+      "clientVersion": "2.20261024.01.00",
+      "clientNameId": 1,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
+    }
+  },
+  "oauth": {
+    "_comment": "Google device flow with the YouTube TV app's client. The pair is normally read from youtube.com/tv; the fallback is the public pair last seen in that bundle (2026-10-10).",
+    "scope": "https://www.googleapis.com/auth/youtube",
+    "userAgent": "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version",
+    "fallbackClientId": "861556708454-d6dlm3lh05idd8npek18k6be8ba3oc68.apps.googleusercontent.com",
+    "fallbackClientSecret": "SboVhoG9s0rNafixCSGGKXAT"
+  },
+  "sponsorblock": {
+    "api": "https://sponsor.ajay.app"
+  },
+  "updates": {
+    "repo": "IIyn/omegatube"
+  }
+}
