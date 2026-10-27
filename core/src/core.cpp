@@ -1,6 +1,8 @@
 #include "omega/core.h"
 
+#include <algorithm>
 #include <chrono>
+#include <climits>
 #include <cstdlib>
 #include <cstring>
 
@@ -28,6 +30,7 @@ constexpr const char* kVersion = OMEGA_VERSION;  // from the repo's VERSION file
 struct omega_player {
     omega::Player impl;
     std::unique_ptr<omega::yt::WatchReporter> history;  // signed-in YouTube playback only
+    nlohmann::json formats = {{"available", nlohmann::json::array()}};  // see omega_player_formats
     explicit omega_player(omega::PlayerConfig cfg) : impl(std::move(cfg)) {}
     ~omega_player() { history.reset(); }  // stop pinging before the player goes away
 };
@@ -86,21 +89,11 @@ omega_player* omega_player_create(void* window, int width, int height, const cha
     return p;
 }
 
-omega_player* omega_player_create_youtube(void* window, int width, int height, const char* video_id,
-                                          int max_height, int64_t start_ms) {
-    omega::yt::Client client;
-    omega::yt::VideoInfo info;
-    std::string error;
-    if (!client.player(video_id ? video_id : "", info, error)) {
-        OLOG("youtube %s: %s", video_id ? video_id : "-", error.c_str());
-        return nullptr;
-    }
-    const omega::yt::Format* video = omega::yt::pick_video(info, max_height > 0 ? max_height : 1080);
-    const omega::yt::Format* audio = omega::yt::pick_audio(info);
-    if (!video || !audio) {
-        OLOG("youtube %s: no H.264/AAC formats", video_id);
-        return nullptr;
-    }
+namespace {
+
+omega_player* start_youtube(void* window, int width, int height, omega::yt::Client& client,
+                            const omega::yt::VideoInfo& info, const omega::yt::Format* video,
+                            const omega::yt::Format* audio, int64_t start_ms) {
     OLOG("youtube: video itag %d %dx%d@%d %s %lld kb/s, audio itag %d %s %d Hz", video->itag, video->width,
          video->height, video->fps, video->codecs.c_str(), static_cast<long long>(video->bitrate / 1000), audio->itag,
          audio->codecs.c_str(), audio->audio_sample_rate);
@@ -118,7 +111,7 @@ omega_player* omega_player_create_youtube(void* window, int width, int height, c
     cfg.duration_ms = info.length_s * 1000;
     cfg.start_ms = start_ms;
     // Expired URLs (403/410): ask InnerTube again and keep the same formats.
-    std::string id = video_id;
+    std::string id = info.id;
     int video_itag = video->itag, audio_itag = audio->itag;
     cfg.refresh_urls = [id, video_itag, audio_itag](std::string& v, std::string& a) {
         omega::yt::Client fresh_client;
@@ -152,6 +145,51 @@ omega_player* omega_player_create_youtube(void* window, int width, int height, c
     return p;
 }
 
+}  // namespace
+
+omega_player* omega_player_create_youtube(void* window, int width, int height, const char* video_id,
+                                          int max_height, const char* codecs, int64_t start_ms) {
+    omega::yt::Client client;
+    omega::yt::VideoInfo info;
+    std::string error;
+    if (!client.player(video_id ? video_id : "", info, error)) {
+        OLOG("youtube %s: %s", video_id ? video_id : "-", error.c_str());
+        return nullptr;
+    }
+    std::vector<std::string> prefs = omega::yt::parse_codec_list(codecs && *codecs ? codecs : "avc1,vp9");
+    std::vector<const omega::yt::Format*> videos =
+        omega::yt::rank_videos(info, max_height > 0 ? max_height : 1080, prefs);
+    const omega::yt::Format* audio = omega::yt::pick_audio(info);
+    if (videos.empty() || !audio) {
+        OLOG("youtube %s: no playable video (%s) / AAC audio format", video_id, codecs ? codecs : "-");
+        return nullptr;
+    }
+    // A codec the TV refuses (ESPlayer rejects its stream info) is dropped and the next best format tried.
+    std::vector<std::string> refused;
+    for (const omega::yt::Format* video : videos) {
+        if (std::find(refused.begin(), refused.end(), video->video_codec()) != refused.end()) continue;
+        if (omega_player* p = start_youtube(window, width, height, client, info, video, audio, start_ms)) {
+            // What the quality panel offers: the format each height cap would pick (codecs the TV refused aside).
+            auto entry = [](const omega::yt::Format* f) {
+                return nlohmann::json{{"height", f->height}, {"fps", f->fps}, {"codec", f->video_codec()}};
+            };
+            nlohmann::json available = nlohmann::json::array();
+            int last_height = -1;
+            for (const omega::yt::Format* f : omega::yt::rank_videos(info, INT32_MAX, prefs)) {
+                if (f->height == last_height ||
+                    std::find(refused.begin(), refused.end(), f->video_codec()) != refused.end())
+                    continue;
+                last_height = f->height;
+                available.push_back(entry(f));
+            }
+            p->formats = {{"current", entry(video)}, {"available", available}};
+            return p;
+        }
+        refused.push_back(video->video_codec());
+    }
+    return nullptr;
+}
+
 void omega_player_toggle_pause(omega_player* p) {
     if (p) p->impl.toggle_pause();
 }
@@ -182,6 +220,14 @@ void omega_player_get_stats(omega_player* p, omega_player_stats* out) {
 }
 
 void omega_player_destroy(omega_player* p) { delete p; }
+
+namespace {
+char* to_c_json(const nlohmann::json& j);
+}
+
+char* omega_player_formats(omega_player* p) {
+    return to_c_json(p ? p->formats : nlohmann::json{{"available", nlohmann::json::array()}});
+}
 
 namespace {
 

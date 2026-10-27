@@ -55,11 +55,17 @@ typedef struct {
 // given Ecore_Wl2_Window. Returns NULL on failure; the reason is in the log.
 OMEGA_API omega_player* omega_player_create(void* ecore_wl2_window, int width, int height, const char* video_url,
                                             const char* audio_url);
-// Resolves a YouTube video id (InnerTube), picks H.264 <= max_height + AAC, and starts playing.
+// Resolves a YouTube video id (InnerTube), picks the best video <= max_height + AAC, and starts playing.
+// codecs: comma-separated preference among "avc1" (H.264), "vp9", "av01" (AV1); NULL/empty = "avc1,vp9".
+// At equal resolution and fps the first listed codec wins; if the TV refuses a codec the next one is tried.
 // Blocking (network): call it off the UI thread. Returns NULL on failure; the reason is in the log.
 // start_ms > 0 resumes at that position.
 OMEGA_API omega_player* omega_player_create_youtube(void* ecore_wl2_window, int width, int height, const char* video_id,
-                                                    int max_height, int64_t start_ms);
+                                                    int max_height, const char* codecs, int64_t start_ms);
+// Video qualities of a YouTube player (best variant per height, same codec preference as at creation):
+// {"current":{"height","fps","codec"},"available":[{"height","fps","codec"}, ...]} (highest first),
+// codec = "avc1" | "vp9" | "av01". Release with omega_free(). {"available":[]} for a URL player.
+OMEGA_API char* omega_player_formats(omega_player* player);
 OMEGA_API void omega_player_toggle_pause(omega_player* player);
 // Seeks to position_ms (video decoding restarts from the preceding keyframe). Blocking for a few hundred ms.
 OMEGA_API int omega_player_seek(omega_player* player, int64_t position_ms);

@@ -20,6 +20,13 @@ namespace OmegaTube.Data
         public bool Done;   // skipped once (or passed): never re-triggered
     }
 
+    // One entry of the quality panel: the format a height cap selects.
+    public class VideoQuality
+    {
+        public int Height, Fps;
+        public string Codec;   // avc1 | vp9 | av01
+    }
+
     public class FeedPage
     {
         public List<VideoItem> Items = new List<VideoItem>();
@@ -127,6 +134,25 @@ namespace OmegaTube.Data
                 rows.Add(o as string ?? "");
             }
             return rows;
+        }
+
+        // Qualities the core can play for this player (highest first) and the one playing. No network call.
+        public static List<VideoQuality> Qualities(IntPtr player, out VideoQuality current)
+        {
+            object root = Call(NativeCore.PlayerFormats(player));
+            object cur = Json.Obj(root, "current");
+            current = cur != null ? ToQuality(cur) : null;
+            var list = new List<VideoQuality>();
+            foreach (object o in Json.Arr(root, "available") ?? new List<object>())
+            {
+                list.Add(ToQuality(o));
+            }
+            return list;
+        }
+
+        private static VideoQuality ToQuality(object o)
+        {
+            return new VideoQuality { Height = (int)Json.Num(o, "height"), Fps = (int)Json.Num(o, "fps"), Codec = Json.Str(o, "codec") };
         }
 
         public static object Call(IntPtr json)

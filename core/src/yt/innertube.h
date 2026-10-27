@@ -20,6 +20,8 @@ struct Format {
     int audio_sample_rate = 0, audio_channels = 0;
     bool is_video() const { return mime.compare(0, 6, "video/") == 0; }
     bool is_audio() const { return mime.compare(0, 6, "audio/") == 0; }
+    // "avc1", "vp9" or "av01" for the video codecs we can play (8-bit SDR only), else "".
+    std::string video_codec() const;
 };
 
 // One entry of a feed (search results, channel videos...).
@@ -63,8 +65,12 @@ private:
     std::string web_client_version_;
 };
 
-// Best H.264 video at or below max_height (prefers higher fps), and the AAC audio track.
-const Format* pick_video(const VideoInfo& info, int max_height);
+// Playable video formats at or below max_height, best first: highest resolution, then fps, then the codec
+// order of `codecs` (e.g. {"avc1", "vp9", "av01"}; codecs not listed are excluded).
+std::vector<const Format*> rank_videos(const VideoInfo& info, int max_height, const std::vector<std::string>& codecs);
+// "avc1,vp9" -> {"avc1", "vp9"}
+std::vector<std::string> parse_codec_list(const std::string& list);
+// The AAC audio track with the highest bitrate.
 const Format* pick_audio(const VideoInfo& info);
 
 // Search-as-you-type suggestions (Google suggest service, YouTube dataset).

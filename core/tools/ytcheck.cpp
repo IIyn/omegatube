@@ -181,10 +181,20 @@ int main(int argc, char** argv) {
     }
     printf("'%s' by %s (%llds), %zu direct formats\n", info.title.c_str(), info.author.c_str(),
            static_cast<long long>(info.length_s), info.formats.size());
-    const omega::yt::Format* video = omega::yt::pick_video(info, 1080);
+    for (const auto& f : info.formats)
+        if (f.is_video())
+            printf("  itag %3d %-10s %-34s %4dx%-4d @%d %6lld kb/s %s\n", f.itag, f.mime.c_str(), f.codecs.c_str(), f.width,
+                   f.height, f.fps, static_cast<long long>(f.bitrate / 1000),
+                   f.video_codec().empty() ? "(skipped)" : f.video_codec().c_str());
+    // Same choice as the TV with "Qualité max" / "Codecs" from the environment (default 2160, avc1,vp9).
+    const char* max_env = getenv("MAX_HEIGHT");
+    const char* codecs_env = getenv("CODECS");
+    auto videos = omega::yt::rank_videos(info, max_env ? atoi(max_env) : 2160,
+                                         omega::yt::parse_codec_list(codecs_env ? codecs_env : "avc1,vp9"));
+    const omega::yt::Format* video = videos.empty() ? nullptr : videos.front();
     const omega::yt::Format* audio = omega::yt::pick_audio(info);
     if (!video || !audio) {
-        printf("no H.264/AAC formats\n");
+        printf("no playable video / AAC formats\n");
         return 1;
     }
     printf("video itag %d %dx%d@%d %s, audio itag %d %s\n", video->itag, video->width, video->height, video->fps,

@@ -21,6 +21,15 @@ int64_t ms_since(Clock::time_point t) {
 
 void sleep_ms(int ms) { std::this_thread::sleep_for(std::chrono::milliseconds(ms)); }
 
+bool video_mime(media::Codec c, esp::VideoMime& out) {
+    switch (c) {
+        case media::Codec::H264: out = esp::VIDEO_H264; return true;
+        case media::Codec::VP9: out = esp::VIDEO_VP9; return true;
+        case media::Codec::AV1: out = esp::VIDEO_AV1; return true;
+        default: return false;
+    }
+}
+
 }  // namespace
 
 Player::Player(PlayerConfig cfg) : cfg_(std::move(cfg)) {
@@ -57,7 +66,7 @@ bool Player::start() {
     struct Source {
         Track* track;
         std::unique_ptr<net::RangeReader> http;
-        std::unique_ptr<media::Fmp4Reader> reader;
+        std::unique_ptr<media::Demuxer> reader;
     };
     std::vector<Source> sources;
     if (cfg_.use_video) sources.push_back({&video_, nullptr, nullptr});
@@ -66,25 +75,28 @@ bool Player::start() {
         Track& t = *src.track;
         src.http = std::make_unique<net::RangeReader>(t.url, cfg_.stream_headers);
         net::RangeReader* http = src.http.get();
-        src.reader = std::make_unique<media::Fmp4Reader>([http, &t](void* dst, size_t n) {
+        src.reader = media::open_demuxer([http, &t](void* dst, size_t n) {
             size_t got = http->read(dst, n);
             t.bytes += got;
             return got;
         });
         if (!src.reader->read_header()) {
-            error_ = std::string(stream_name(t.type)) + " mp4: " + src.reader->error() +
+            error_ = std::string(stream_name(t.type)) + " demux: " + src.reader->error() +
                      (http->error().empty() ? "" : " / http: " + http->error());
             return false;
         }
         t.info = src.reader->track();
         t.segments = src.reader->segments();
-        OLOG("%s: codec=%d timescale=%u %ux%u ch=%u rate=%u codec_data=%zu bytes, media_time=%lld",
-             stream_name(t.type), static_cast<int>(t.info.codec), t.info.timescale, t.info.width, t.info.height,
-             t.info.channels, t.info.sample_rate, t.info.codec_data.size(), static_cast<long long>(t.info.media_time));
+        OLOG("%s: %s %s timescale=%u %ux%u ch=%u rate=%u codec_data=%zu bytes, media_time=%lld, %zu segments",
+             stream_name(t.type), t.info.container == media::Container::WebM ? "webm" : "mp4",
+             media::codec_name(t.info.codec), t.info.timescale, t.info.width, t.info.height,
+             t.info.channels, t.info.sample_rate, t.info.codec_data.size(), static_cast<long long>(t.info.media_time), t.segments.size());
     }
-    if ((cfg_.use_video && video_.info.codec != media::Codec::H264) ||
+    esp::VideoMime vmime = esp::VIDEO_H264;
+    if ((cfg_.use_video && !video_mime(video_.info.codec, vmime)) ||
         (cfg_.use_audio && audio_.info.codec != media::Codec::AAC)) {
-        error_ = "expected H.264 video + AAC audio";
+        error_ = std::string("unsupported codecs: video ") + media::codec_name(video_.info.codec) + ", audio " +
+                 media::codec_name(audio_.info.codec) + " (expected H.264/VP9/AV1 + AAC)";
         return false;
     }
 
@@ -134,9 +146,11 @@ bool Player::start() {
     }
     if (cfg_.use_video) {
         esp::VideoStreamInfo vi{};
-        vi.codec_data = reinterpret_cast<char*>(video_.info.codec_data.data());
-        vi.codec_data_length = static_cast<uint32_t>(video_.info.codec_data.size());
-        vi.mime_type = esp::VIDEO_H264;
+        if (!video_.info.codec_data.empty()) {
+            vi.codec_data = reinterpret_cast<char*>(video_.info.codec_data.data());
+            vi.codec_data_length = static_cast<uint32_t>(video_.info.codec_data.size());
+        }
+        vi.mime_type = vmime;
         vi.width = video_.info.width;
         vi.height = video_.info.height;
         vi.max_width = static_cast<uint32_t>(cfg_.max_width);
@@ -144,7 +158,13 @@ bool Player::start() {
         vi.framerate_num = static_cast<uint32_t>(cfg_.fps);
         vi.framerate_den = 1;
         rc = api_->set_video_stream_info(handle_, &vi);
-        OLOG("esp set_video_stream_info -> %d", rc);
+        OLOG("esp set_video_stream_info(%s %ux%u max %ux%u @%u) -> %d", media::codec_name(video_.info.codec), vi.width,
+             vi.height, vi.max_width, vi.max_height, vi.framerate_num, rc);
+        if (rc != 0) {
+            error_ = std::string("TV refused ") + media::codec_name(video_.info.codec) + " " +
+                     std::to_string(vi.width) + "x" + std::to_string(vi.height) + " (" + std::to_string(rc) + ")";
+            return false;
+        }
     }
 
     duration_ms_ = cfg_.duration_ms;
@@ -167,7 +187,7 @@ bool Player::start() {
             t.url = url;
             src.http = std::make_unique<net::RangeReader>(url, cfg_.stream_headers, 4 * 1024 * 1024, seg.offset);
             net::RangeReader* http = src.http.get();
-            src.reader = std::make_unique<media::Fmp4Reader>(
+            src.reader = media::resume_demuxer(
                 [http, &t](void* dst, size_t n) {
                     size_t got = http->read(dst, n);
                     t.bytes += got;
@@ -216,7 +236,7 @@ std::string Player::fresh_url(Track& t) {
     return t.url;
 }
 
-void Player::start_track(Track& t, media::Fmp4Reader* reader, net::RangeReader* source) {
+void Player::start_track(Track& t, media::Demuxer* reader, net::RangeReader* source) {
     attach_hooks(t, *source);
     t.active = true;
     t.demux_thread = std::thread([this, &t, reader, source] { demux_loop(t, reader, source); });
@@ -231,6 +251,7 @@ void Player::stop_track(Track& t) {
     std::lock_guard<std::mutex> lock(t.mutex);
     t.queue.clear();
     t.queued_ms = 0;
+    t.queued_bytes = 0;
     t.demux_done = false;
 }
 
@@ -268,28 +289,30 @@ bool Player::seek(int64_t ms) {
             url = t.url;
         }
         auto* http = new net::RangeReader(url, cfg_.stream_headers, 4 * 1024 * 1024, seg.offset);
-        auto* reader = new media::Fmp4Reader(
+        auto reader = media::resume_demuxer(
             [http, &t](void* dst, size_t n) {
                 size_t got = http->read(dst, n);
                 t.bytes += got;
                 return got;
             },
             t.info, seg);
-        start_track(t, reader, http);
+        start_track(t, reader.release(), http);
     }
     OLOG("seek %lld -> %lld ms (esp %d), threads restarted in %lld ms", static_cast<long long>(ms),
          static_cast<long long>(target), rc, static_cast<long long>(ms_since(t0)));
     return rc == 0;
 }
 
-void Player::demux_loop(Track& t, media::Fmp4Reader* reader_raw, net::RangeReader* source_raw) {
-    std::unique_ptr<media::Fmp4Reader> reader(reader_raw);
+void Player::demux_loop(Track& t, media::Demuxer* reader_raw, net::RangeReader* source_raw) {
+    std::unique_ptr<media::Demuxer> reader(reader_raw);
     std::unique_ptr<net::RangeReader> source(source_raw);
     std::deque<media::Sample> fragment;
     while (running_) {
         {
             std::unique_lock<std::mutex> lock(t.mutex);
-            t.cv.wait(lock, [&] { return !running_ || !t.active || t.queued_ms < cfg_.max_queue_ms; });
+            t.cv.wait(lock, [&] {
+                return !running_ || !t.active || (t.queued_ms < cfg_.max_queue_ms && t.queued_bytes < cfg_.max_queue_bytes);
+            });
         }
         if (!running_ || !t.active) break;
         fragment.clear();
@@ -301,10 +324,12 @@ void Player::demux_loop(Track& t, media::Fmp4Reader* reader_raw, net::RangeReade
             break;
         }
         int64_t ms = 0;
-        for (const auto& s : fragment) ms += s.duration_ms;
+        size_t bytes = 0;
+        for (const auto& s : fragment) ms += s.duration_ms, bytes += s.data.size();
         std::lock_guard<std::mutex> lock(t.mutex);
         for (auto& s : fragment) t.queue.push_back(std::move(s));
         t.queued_ms += ms;
+        t.queued_bytes += bytes;
         t.cv.notify_all();
     }
     std::lock_guard<std::mutex> lock(t.mutex);
@@ -331,6 +356,7 @@ void Player::feed_loop(Track& t) {
             s = std::move(t.queue.front());
             t.queue.pop_front();
             t.queued_ms -= s.duration_ms;
+            t.queued_bytes -= s.data.size();
             t.cv.notify_all();
         }
 

@@ -419,14 +419,47 @@ Client& shared_client() {
     return client;
 }
 
-const Format* pick_video(const VideoInfo& info, int max_height) {
-    const Format* best = nullptr;
-    for (const Format& f : info.formats) {
-        if (!f.is_video() || f.mime != "video/mp4" || f.codecs.compare(0, 4, "avc1") != 0) continue;
-        if (f.height > max_height) continue;
-        if (!best || f.height > best->height || (f.height == best->height && f.fps > best->fps)) best = &f;
+std::string Format::video_codec() const {
+    if (!is_video()) return "";
+    if (mime == "video/mp4" && codecs.compare(0, 4, "avc1") == 0) return "avc1";
+    // VP9 profile 0 only: YouTube labels it "vp9"; "vp09.02..." is 10-bit HDR.
+    if (mime == "video/webm" && (codecs == "vp9" || codecs.compare(0, 8, "vp09.00.") == 0)) return "vp9";
+    // av01.<profile>.<level><tier>.<bitdepth>[...]: main profile, 8-bit (the 10-bit ones are HDR).
+    if (mime == "video/mp4" && codecs.compare(0, 7, "av01.0.") == 0) {
+        size_t dot = codecs.find('.', 7);
+        if (dot != std::string::npos && codecs.compare(dot + 1, 2, "08") == 0) return "av01";
     }
-    return best;
+    return "";
+}
+
+std::vector<const Format*> rank_videos(const VideoInfo& info, int max_height, const std::vector<std::string>& codecs) {
+    auto pref = [&codecs](const Format* f) {
+        return std::find(codecs.begin(), codecs.end(), f->video_codec()) - codecs.begin();
+    };
+    std::vector<const Format*> out;
+    for (const Format& f : info.formats)
+        if (f.height <= max_height && pref(&f) < static_cast<long>(codecs.size())) out.push_back(&f);
+    std::stable_sort(out.begin(), out.end(), [&](const Format* a, const Format* b) {
+        if (a->height != b->height) return a->height > b->height;
+        if (a->fps != b->fps) return a->fps > b->fps;
+        return pref(a) < pref(b);
+    });
+    return out;
+}
+
+std::vector<std::string> parse_codec_list(const std::string& list) {
+    std::vector<std::string> out;
+    size_t start = 0;
+    while (start <= list.size()) {
+        size_t comma = list.find(',', start);
+        if (comma == std::string::npos) comma = list.size();
+        std::string item = list.substr(start, comma - start);
+        item.erase(0, item.find_first_not_of(' '));
+        item.erase(item.find_last_not_of(' ') + 1);
+        if (!item.empty()) out.push_back(item);
+        start = comma + 1;
+    }
+    return out;
 }
 
 const Format* pick_audio(const VideoInfo& info) {

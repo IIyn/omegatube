@@ -35,6 +35,8 @@ namespace OmegaTube.Config
         public bool ShowClock = true;       // wall clock in the control bar
         public bool ShowStats = false;      // technical overlay (buffer, bitrate, stalls)
         public int MaxHeight = 1080;
+        // Video codec preference for the core ("avc1" H.264, "vp9", "av01" AV1). Above 1080p YouTube has no H.264.
+        public string Codecs = "avc1,vp9";
     }
 
     public enum SkipMode { Auto, Manual, Off }
@@ -182,6 +184,7 @@ namespace OmegaTube.Config
                 Player.ShowClock = Json.Bool(p, "showClock", Player.ShowClock);
                 Player.ShowStats = Json.Bool(p, "showStats", Player.ShowStats);
                 Player.MaxHeight = (int)Json.Num(p, "maxHeight", Player.MaxHeight);
+                Player.Codecs = Json.Str(p, "codecs", Player.Codecs);
             }
         }
 
@@ -214,6 +217,7 @@ namespace OmegaTube.Config
                     ["showClock"] = Player.ShowClock,
                     ["showStats"] = Player.ShowStats,
                     ["maxHeight"] = Player.MaxHeight,
+                    ["codecs"] = Player.Codecs,
                 },
             };
         }

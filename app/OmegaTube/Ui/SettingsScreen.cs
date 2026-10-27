@@ -18,7 +18,10 @@ namespace OmegaTube.Ui
         }
 
         private static readonly int[] SeekSteps = { 5, 10, 15, 30, 60 };
-        private static readonly int[] Heights = { 720, 1080 };
+        private static readonly int[] Heights = { 720, 1080, 1440, 2160 };
+        private static readonly string[] CodecSets = { "avc1,vp9", "vp9,avc1", "avc1,vp9,av01" };
+        private static readonly string[] CodecSetLabels = { "H.264, puis VP9 au-delà de 1080p", "VP9 en priorité",
+                                                            "H.264 / VP9 / AV1 (expérimental)" };
         private static readonly string[] Locales = { "fr-FR", "fr-BE", "fr-CA", "en-US", "en-GB", "de-DE", "es-ES", "it-IT" };
 
         private readonly List<Entry> entries = new List<Entry>();
@@ -86,6 +89,15 @@ namespace OmegaTube.Ui
             {
                 Text = () => $"Qualité maximale : {P.MaxHeight}p",
                 Change = d => P.MaxHeight = Cycle(Heights, P.MaxHeight, d),
+            });
+            AddEntry(new Entry
+            {
+                Text = () => "Codecs vidéo : " + CodecSetLabels[Math.Max(0, Array.IndexOf(CodecSets, P.Codecs))],
+                Change = d =>
+                {
+                    int i = Array.IndexOf(CodecSets, P.Codecs);
+                    P.Codecs = CodecSets[i < 0 ? 0 : (i + d + CodecSets.Length) % CodecSets.Length];
+                },
             });
 
             Header("Général");

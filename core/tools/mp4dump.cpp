@@ -1,30 +1,44 @@
-// Host tool: runs Fmp4Reader over a local file and prints track info + sample timeline stats.
+// Host tool: runs the demuxer (fMP4 or WebM, sniffed) over a local file and prints track info + sample timeline stats.
 #include <cstdio>
+#include <cstdlib>
 
-#include "media/mp4.h"
+#include "media/demuxer.h"
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        fprintf(stderr, "usage: mp4dump file.mp4\n");
+        fprintf(stderr, "usage: mp4dump file.mp4|file.webm [seek_ms]\n");
         return 2;
     }
     FILE* f = fopen(argv[1], "rb");
     if (!f) return 1;
-    omega::media::Fmp4Reader reader([f](void* dst, size_t n) { return fread(dst, 1, n, f); });
-    if (!reader.read_header()) {
-        fprintf(stderr, "header: %s\n", reader.error().c_str());
+    auto header = omega::media::open_demuxer([f](void* dst, size_t n) { return fread(dst, 1, n, f); });
+    if (!header->read_header()) {
+        fprintf(stderr, "header: %s\n", header->error().c_str());
         return 1;
     }
-    const auto& t = reader.track();
-    printf("codec=%d timescale=%u %ux%u ch=%u rate=%u codec_data=%zu media_time=%lld\n", static_cast<int>(t.codec),
+    const auto t = header->track();
+    const auto segs = header->segments();
+    printf("%s codec=%s timescale=%u %ux%u ch=%u rate=%u codec_data=%zu media_time=%lld\n", t.container == omega::media::Container::WebM ? "webm" : "mp4", omega::media::codec_name(t.codec),
            t.timescale, t.width, t.height, t.channels, t.sample_rate, t.codec_data.size(),
            static_cast<long long>(t.media_time));
-    const auto& segs = reader.segments();
-    printf("sidx: %zu segments", segs.size());
+    printf("index: %zu segments", segs.size());
     for (size_t i = 0; i < segs.size() && i < 3; ++i)
         printf("  [%zu] @%llu %lldms", i, static_cast<unsigned long long>(segs[i].offset),
                static_cast<long long>(segs[i].start_ms));
     printf("\n");
+    // Optional seek: resume at the last segment at or before seek_ms, like Player::seek does.
+    std::unique_ptr<omega::media::Demuxer> resumed;
+    if (argc > 2 && !segs.empty()) {
+        long long target = atoll(argv[2]);
+        omega::media::Segment seg = segs.front();
+        for (const auto& s : segs)
+            if (s.start_ms <= target) seg = s;
+        fseek(f, static_cast<long>(seg.offset), SEEK_SET);
+        printf("resume at segment @%llu %lldms\n", static_cast<unsigned long long>(seg.offset),
+               static_cast<long long>(seg.start_ms));
+        resumed = omega::media::resume_demuxer([f](void* dst, size_t n) { return fread(dst, 1, n, f); }, t, seg);
+    }
+    omega::media::Demuxer& reader = resumed ? *resumed : *header;
     std::deque<omega::media::Sample> samples;
     size_t fragments = 0, count = 0, keys = 0;
     long long first_pts = -1, last_pts = 0, total_dur = 0;

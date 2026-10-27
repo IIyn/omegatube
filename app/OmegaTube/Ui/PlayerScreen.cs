@@ -32,7 +32,7 @@ namespace OmegaTube.Ui
         }
 
         private static readonly double[] Speeds = { 0.5, 0.75, 1.0, 1.25, 1.5, 2.0 };
-        private static readonly int[] Qualities = { 1080, 720, 480, 360 };
+        private static readonly int[] DefaultHeights = { 2160, 1440, 1080, 720, 480, 360 };  // until the core answers
         private const int ProgressWidth = 1760, ProgressX = 80;
         private const int ChromeLift = 330;   // how far the block slides up for the suggestions
 
@@ -68,6 +68,8 @@ namespace OmegaTube.Ui
         private DateTime noSkipUntil;      // let a just-issued seek settle before checking segments
         private long resumeMs;             // position to start at
         private int maxHeight;
+        private List<VideoQuality> qualities = new List<VideoQuality>();  // what this video offers (from the core)
+        private VideoQuality playing;      // the format being played
         private double speed = 1.0;
         private DateTime lastSave;
 
@@ -251,15 +253,20 @@ namespace OmegaTube.Ui
                 noSkipUntil = DateTime.Now.AddSeconds(3);
             }
             int height = maxHeight;
+            string codecs = App.Config.Player.Codecs;
             ShowLoading("Chargement…", opaque: true);
             await lastTeardown;
-            IntPtr created = await Task.Run(() => NativeCore.PlayerCreateYouTube(window, w, h, item.Id, height, start));
+            IntPtr created = await Task.Run(() => NativeCore.PlayerCreateYouTube(window, w, h, item.Id, height, codecs, start));
             if (closing)
             {
                 Release(created);
                 return;
             }
             player = created;
+            if (player != IntPtr.Zero)
+            {
+                qualities = YouTube.Qualities(player, out playing);
+            }
             if (player == IntPtr.Zero)
             {
                 ShowLoading("Lecture impossible\n" + LastError(), opaque: true);
@@ -424,7 +431,8 @@ namespace OmegaTube.Ui
                     $"buffer  vidéo {stats.VideoQueuedMs / 1000.0:F1}s  audio {stats.AudioQueuedMs / 1000.0:F1}s\n" +
                     $"débit  vidéo {stats.VideoKbps:F0} kb/s  audio {stats.AudioKbps:F0} kb/s\n" +
                     $"saccades {stats.Stalls} (max {stats.LongestStallMs} ms)  underruns v{stats.VideoUnderruns}/a{stats.AudioUnderruns}\n" +
-                    $"erreurs {stats.Errors}   vitesse {speed:0.##}x   max {maxHeight}p\n" + NativeCore.RecentLog(3);
+                    $"erreurs {stats.Errors}   vitesse {speed:0.##}x   max {maxHeight}p" +
+                    (playing != null ? "   lecture " + QualityLabel(playing) : "") + "\n" + NativeCore.RecentLog(3);
             }
             if (toast.Visibility && now > toastUntil)
             {
@@ -742,17 +750,22 @@ namespace OmegaTube.Ui
             title.VerticalAlignment = VerticalAlignment.Center;
             panel.Add(title);
             panelLabels.Add(title);
-            int count = kind == Action.Speed ? Speeds.Length : Qualities.Length;
+            List<VideoQuality> options = PanelQualities();
+            int count = kind == Action.Speed ? Speeds.Length : options.Count;
+            int width = kind == Action.Speed ? 400 : 640;
+            panel.SizeWidth = width;
+            panel.PositionX = 1860 - width;
             panelIndex = 0;
             for (int i = 0; i < count; i++)
             {
-                bool current = kind == Action.Speed ? Speeds[i] == speed : Qualities[i] == maxHeight;
+                bool current = kind == Action.Speed ? Speeds[i] == speed
+                                                    : options[i].Height == (playing != null ? playing.Height : maxHeight);
                 if (current)
                 {
                     panelIndex = i;
                 }
-                string text = kind == Action.Speed ? (Speeds[i] == 1.0 ? "Normale" : $"{Speeds[i]:0.##}x") : $"{Qualities[i]}p";
-                var l = Widgets.Label("  " + text + (current ? "  (actuelle)" : ""), Theme.BodySize + 2, Theme.Text, 352, 52);
+                string text = kind == Action.Speed ? (Speeds[i] == 1.0 ? "Normale" : $"{Speeds[i]:0.##}x") : QualityLabel(options[i]);
+                var l = Widgets.Label("  " + text + (current ? "  (actuelle)" : ""), Theme.BodySize + 2, Theme.Text, width - 48, 52);
                 l.VerticalAlignment = VerticalAlignment.Center;
                 l.CornerRadius = 8;
                 l.Position = new Position(24, 76 + i * 54);
@@ -794,10 +807,14 @@ namespace OmegaTube.Ui
                         }
                         Toast(speed == 1.0 ? "Vitesse normale" : $"Vitesse {speed:0.##}x");
                     }
-                    else if (Qualities[panelIndex] != maxHeight)
+                    else
                     {
-                        Toast($"Qualité {Qualities[panelIndex]}p");
-                        Restart(Qualities[panelIndex]);
+                        VideoQuality q = PanelQualities()[panelIndex];
+                        if (playing == null || q.Height != playing.Height)
+                        {
+                            Toast("Qualité " + QualityLabel(q));
+                            Restart(q.Height);
+                        }
                     }
                     ClosePanel();
                     return;
@@ -858,6 +875,32 @@ namespace OmegaTube.Ui
             toast.Text = "  " + text + "  ";
             toast.Show();
             toastUntil = DateTime.Now.AddSeconds(1.5);
+        }
+
+        private List<VideoQuality> PanelQualities()
+        {
+            if (qualities.Count > 0)
+            {
+                return qualities;
+            }
+            var list = new List<VideoQuality>();
+            foreach (int h in DefaultHeights)
+            {
+                list.Add(new VideoQuality { Height = h });
+            }
+            return list;
+        }
+
+        // "2160p (4K) · 60 fps · VP9"; fps and codec only once the core has listed the formats.
+        private static string QualityLabel(VideoQuality q)
+        {
+            string text = q.Height == 2160 ? "2160p (4K)" : q.Height == 1440 ? "1440p (2K)" : $"{q.Height}p";
+            if (q.Fps > 0)
+            {
+                text += $" · {q.Fps} fps";
+            }
+            string codec = q.Codec == "avc1" ? "H.264" : q.Codec == "vp9" ? "VP9" : q.Codec == "av01" ? "AV1" : "";
+            return codec.Length > 0 ? text + " · " + codec : text;
         }
 
         private static string Format(long ms)

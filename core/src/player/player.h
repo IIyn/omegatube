@@ -10,7 +10,7 @@
 #include <string>
 #include <thread>
 
-#include "media/mp4.h"
+#include "media/demuxer.h"
 #include "net/http.h"
 #include "player/esplayer_api.h"
 
@@ -31,6 +31,7 @@ struct PlayerConfig {
     std::string app_type = "MSE";     // empty: skip esplusplayer_set_app_info
     bool use_video = true, use_audio = true, use_display = true;
     int64_t max_queue_ms = 30000;   // demuxed read-ahead per stream (network side)
+    size_t max_queue_bytes = 48u << 20;  // ...and its memory cap (4K VP9 runs at 20-40 Mb/s)
     int64_t feed_ahead_ms = 15000;  // how far ahead of the playback clock we submit to ESPlayer
 };
 
@@ -49,7 +50,7 @@ struct PlayerStats {
     int reconnecting;  // a stream is retrying after a network error
 };
 
-// Plays one DASH video track + one audio track (fragmented MP4 over HTTP) with ESPlayer.
+// Plays one DASH video track + one audio track (fragmented MP4 or WebM over HTTP) with ESPlayer.
 class Player {
 public:
     using Clock = std::chrono::steady_clock;
@@ -75,6 +76,7 @@ private:
         std::condition_variable cv;
         std::deque<media::Sample> queue;
         int64_t queued_ms = 0;
+        size_t queued_bytes = 0;
         bool demux_done = false;
         std::atomic<bool> ready_to_feed{false};
         std::atomic<bool> active{true};  // cleared to stop this track's threads (seek)
@@ -86,8 +88,8 @@ private:
         std::thread demux_thread, feed_thread;
     };
 
-    void demux_loop(Track& t, media::Fmp4Reader* reader, net::RangeReader* source);
-    void start_track(Track& t, media::Fmp4Reader* reader, net::RangeReader* source);
+    void demux_loop(Track& t, media::Demuxer* reader, net::RangeReader* source);
+    void start_track(Track& t, media::Demuxer* reader, net::RangeReader* source);
     void stop_track(Track& t);
     void attach_hooks(Track& t, net::RangeReader& source);
     std::string fresh_url(Track& t);

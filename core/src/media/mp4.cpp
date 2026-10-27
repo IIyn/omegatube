@@ -221,14 +221,24 @@ bool Fmp4Reader::parse_moov(const std::vector<uint8_t>& moov) {
                                     if (st != fourcc("stsd")) return;
                                     stbl.skip(8);  // version/flags + entry_count
                                     for_each_box(stbl, [&](uint32_t entry, Cursor se) {
+                                        uint32_t config = 0;  // codec configuration box of a video entry
                                         if (entry == fourcc("avc1") || entry == fourcc("avc3")) {
                                             track_.codec = Codec::H264;
+                                            config = fourcc("avcC");
+                                        } else if (entry == fourcc("av01")) {
+                                            track_.codec = Codec::AV1;
+                                            config = fourcc("av1C");
+                                        } else if (entry == fourcc("vp09")) {
+                                            track_.codec = Codec::VP9;
+                                            config = fourcc("vpcC");
+                                        }
+                                        if (config) {
                                             se.skip(24);
                                             track_.width = se.u16();
                                             track_.height = se.u16();
                                             se.skip(50);
                                             for_each_box(se, [&](uint32_t ct, Cursor cc) {
-                                                if (ct == fourcc("avcC")) track_.codec_data.assign(cc.p, cc.end);
+                                                if (ct == config) track_.codec_data.assign(cc.p, cc.end);
                                             });
                                         } else if (entry == fourcc("mp4a")) {
                                             track_.codec = Codec::AAC;
@@ -249,7 +259,9 @@ bool Fmp4Reader::parse_moov(const std::vector<uint8_t>& moov) {
             });
         }
     });
-    if (track_.codec == Codec::Unknown || track_.timescale == 0 || track_.codec_data.empty()) {
+    // VP9 decoders need no configuration record (the frame headers carry everything).
+    if (track_.codec == Codec::Unknown || track_.timescale == 0 ||
+        (track_.codec_data.empty() && track_.codec != Codec::VP9)) {
         error_ = "unsupported or incomplete moov";
         return false;
     }

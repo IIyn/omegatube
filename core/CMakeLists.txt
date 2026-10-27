@@ -42,7 +42,9 @@ add_library(omegacore SHARED
     src/core.cpp
     src/util/log.cpp
     src/net/http.cpp
+    src/media/demuxer.cpp
     src/media/mp4.cpp
+    src/media/webm.cpp
     src/player/esplayer_api.cpp
     src/player/player.cpp
 )
@@ -59,7 +61,7 @@ target_link_libraries(omegacore PRIVATE -static-libstdc++ -static-libgcc -Wl,--n
 
 # Host-side tool to check the demuxer against local files (not shipped).
 if(OMEGA_HOST_TOOLS)
-    add_executable(mp4dump tools/mp4dump.cpp src/media/mp4.cpp)
+    add_executable(mp4dump tools/mp4dump.cpp src/media/demuxer.cpp src/media/mp4.cpp src/media/webm.cpp)
     target_include_directories(mp4dump PRIVATE src)
     # Fetches a YouTube video's formats and downloads ranges with the same code the TV runs.
     add_executable(ytcheck tools/ytcheck.cpp src/yt/innertube.cpp src/yt/auth.cpp src/yt/sponsorblock.cpp src/net/http.cpp src/util/log.cpp
