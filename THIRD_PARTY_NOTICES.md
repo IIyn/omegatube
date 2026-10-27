@@ -12,6 +12,6 @@ OmegaTube reuses the following work. Thanks to their authors.
 | Mozilla CA certificate bundle, as packaged by [curl](https://curl.se/docs/caextract.html) | fetched by `scripts/fetch-deps.sh`, embedded in the core | MPL-2.0 |
 | [SponsorBlock](https://sponsor.ajay.app) segment data | queried at runtime | CC BY-NC-SA 4.0 (data) |
 
-The omega logo (`tools/branding/make_logo.py`) is rendered with the DejaVu Sans Bold font (Bitstream Vera / DejaVu license).
+The omega logo is rendered with the DejaVu Sans Bold font (Bitstream Vera / DejaVu license).
 
 YouTube is a trademark of Google LLC. OmegaTube is an independent project, not affiliated with Google or YouTube.
