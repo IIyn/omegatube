@@ -57,11 +57,14 @@ OMEGA_API omega_player* omega_player_create(void* ecore_wl2_window, int width, i
                                             const char* audio_url);
 // Resolves a YouTube video id (InnerTube), picks H.264 <= max_height + AAC, and starts playing.
 // Blocking (network): call it off the UI thread. Returns NULL on failure; the reason is in the log.
+// start_ms > 0 resumes at that position.
 OMEGA_API omega_player* omega_player_create_youtube(void* ecore_wl2_window, int width, int height, const char* video_id,
-                                                    int max_height);
+                                                    int max_height, int64_t start_ms);
 OMEGA_API void omega_player_toggle_pause(omega_player* player);
 // Seeks to position_ms (video decoding restarts from the preceding keyframe). Blocking for a few hundred ms.
 OMEGA_API int omega_player_seek(omega_player* player, int64_t position_ms);
+// Playback speed (0.5 .. 2.0), audio kept (pitch handled by the TV player).
+OMEGA_API int omega_player_set_rate(omega_player* player, double rate);
 OMEGA_API void omega_player_get_stats(omega_player* player, omega_player_stats* out);
 OMEGA_API void omega_player_destroy(omega_player* player);
 
@@ -75,6 +78,8 @@ OMEGA_API char* omega_yt_suggest(const char* query);
 // Signed-in feed (TV client): browse_id FEwhat_to_watch | FEsubscriptions | FEhistory. Same JSON as search;
 // {"error":"signed out"} when no account is connected.
 OMEGA_API char* omega_yt_browse(const char* browse_id, const char* continuation);
+// Related videos of video_id (player suggestions). Same JSON as search.
+OMEGA_API char* omega_yt_related(const char* video_id);
 // SponsorBlock: {"segments":[{"category","start","end"}]} (seconds) or {"error"}.
 OMEGA_API char* omega_sb_segments(const char* video_id);
 OMEGA_API void omega_free(void* p);

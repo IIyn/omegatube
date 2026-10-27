@@ -10,6 +10,7 @@ namespace OmegaTube.Data
     {
         public string Id, Title, Channel, Duration, Views, Published, Thumbnail;
         public bool Live;
+        public int WatchedPercent;   // account progress reported by YouTube (0 when unknown)
     }
 
     public class SkipSegment
@@ -35,6 +36,11 @@ namespace OmegaTube.Data
             return Task.Run(() => ToPage(Call(NativeCore.YtSearch(query, continuation ?? ""))));
         }
 
+        public static Task<FeedPage> Related(string videoId)
+        {
+            return Task.Run(() => ToPage(Call(NativeCore.YtRelated(videoId))));
+        }
+
         // Signed-in feeds: FEwhat_to_watch (recommended), FEsubscriptions, FEhistory.
         public static Task<FeedPage> Browse(string browseId, string continuation = "")
         {
@@ -58,6 +64,7 @@ namespace OmegaTube.Data
                         Published = Json.Str(o, "published"),
                         Thumbnail = Json.Str(o, "thumbnail"),
                         Live = Json.Bool(o, "live"),
+                        WatchedPercent = (int)Json.Num(o, "watched"),
                     });
                 }
                 page.Continuation = Json.Str(root, "continuation");

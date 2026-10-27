@@ -21,6 +21,7 @@ namespace OmegaTube
             EnableDevLog();
             NativeCore.Init(DirectoryInfo.Data);
             Config = AppConfig.Load(DirectoryInfo.Data);
+            LocalStore.Init(DirectoryInfo.Data);
             NativeCore.SetLocale(Config.Language, Config.Region);
 
             Window window = Window.Instance;
@@ -103,6 +104,24 @@ namespace OmegaTube
             Screen below = stack[stack.Count - 1];
             below.Root.Show();
             below.OnShow();
+        }
+
+        // Swaps the top screen (e.g. the player moving on to the next video).
+        public void Replace(Screen screen)
+        {
+            if (stack.Count == 0)
+            {
+                Push(screen);
+                return;
+            }
+            Screen top = stack[stack.Count - 1];
+            stack.RemoveAt(stack.Count - 1);
+            top.OnHide();
+            Window.Instance.Remove(top.Root);
+            top.Root.Dispose();
+            stack.Add(screen);
+            Window.Instance.Add(screen.Root);
+            screen.OnShow();
         }
 
         public void Play(VideoItem item)

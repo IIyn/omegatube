@@ -37,6 +37,7 @@ add_library(omegacore SHARED
     src/yt/innertube.cpp
     src/yt/auth.cpp
     src/yt/sponsorblock.cpp
+    src/yt/watch.cpp
     ${OMEGA_DEPS}/qrcodegen/qrcodegen.cpp
     src/core.cpp
     src/util/log.cpp

@@ -47,7 +47,7 @@ namespace OmegaTube.Ui
             queryLabel.VerticalAlignment = VerticalAlignment.Center;
             box.Add(queryLabel);
 
-            addButton = Widgets.Label("  + Ajouter à l'accueil  ", Theme.BodySize, Theme.Text, 0, 0);
+            addButton = Widgets.Label("  + Ajouter au menu  ", Theme.BodySize, Theme.Text, 0, 0);
             addButton.Position = new Position(KbX + 930, 86);
             addButton.BackgroundColor = Theme.Surface;
             addButton.Hide();
@@ -334,10 +334,10 @@ namespace OmegaTube.Ui
             {
                 return;
             }
-            App.Config.HomeRows.Add(new HomeRow { Title = q, Query = q });
+            App.Config.HomeRows.Add(new HomeRow { Title = q, Query = q, Icon = HomeRow.GuessIcon(q) });
             App.Config.Save();
             App.Home.InvalidateRows();
-            addButton.Text = "  ✓ Ajouté à l'accueil  ";
+            addButton.Text = "  ✓ Ajouté au menu  ";
         }
     }
 }

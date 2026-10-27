@@ -66,6 +66,20 @@ int main(int argc, char** argv) {
             for (const auto& s : sugg) printf("suggest: %s\n", s.c_str());
         return 0;
     }
+    if (argc >= 3 && strcmp(argv[1], "--next") == 0) {
+        omega::yt::Client client;
+        omega::yt::Feed feed;
+        std::string error;
+        if (!client.related(argv[2], feed, error)) {
+            printf("next failed: %s\n", error.c_str());
+            return 1;
+        }
+        for (const auto& it : feed.items)
+            printf("%s | %s | %s | %s | %s | %s\n", it.video_id.c_str(), it.title.c_str(), it.channel.c_str(),
+                   it.duration.c_str(), it.views.c_str(), it.published.c_str());
+        printf("%zu related\n", feed.items.size());
+        return 0;
+    }
     if (argc >= 3 && strcmp(argv[1], "--sb") == 0) {
         std::vector<omega::yt::SkipSegment> segs;
         std::string error;

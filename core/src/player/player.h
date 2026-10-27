@@ -24,6 +24,7 @@ struct PlayerConfig {
     int fps = 30;
     int max_width = 1920, max_height = 1080;
     int64_t duration_ms = 0;          // 0: derive from the stream index
+    int64_t start_ms = 0;             // resume position (set before prepare: no flash of the beginning)
     // Re-resolves expired stream URLs (YouTube URLs live ~6 h). Optional.
     std::function<bool(std::string& video_url, std::string& audio_url)> refresh_urls;
     std::string app_id, app_version;  // reported to the TV resource manager
@@ -59,6 +60,7 @@ public:
     void toggle_pause();
     // Jumps to the keyframe segment at or before `ms`. Returns false if not seekable (yet).
     bool seek(int64_t ms);
+    bool set_rate(double rate);
     PlayerStats stats();
     // 0 while preparing, 1 prepared, -1 prepare failed.
     int prepare_result() const { return prepared_ ? 1 : (prepare_failed_ ? -1 : 0); }

@@ -2,6 +2,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
+#include <cstring>
 #include <mutex>
 
 #include "util/log.h"
@@ -57,6 +59,16 @@ std::string last_thumbnail(const json& thumbs) {
     return list.empty() ? "" : list.back().value("url", "");
 }
 
+// The account's progress on a video: resume overlay (videoRenderer / tile) or progress bar (lockup).
+int watched_percent(const json& j) {
+    std::string d = j.dump();
+    for (const char* key : {"\"percentDurationWatched\":", "\"startPercent\":"}) {
+        size_t at = d.find(key);
+        if (at != std::string::npos) return std::max(0, std::min(100, atoi(d.c_str() + at + strlen(key))));
+    }
+    return 0;
+}
+
 void parse_video_renderer(const json& v, Feed& out) {
     FeedItem item;
     item.video_id = v.value("videoId", "");
@@ -69,6 +81,7 @@ void parse_video_renderer(const json& v, Feed& out) {
     item.thumbnail = "https://i.ytimg.com/vi/" + item.video_id + "/mqdefault.jpg";
     for (const json& badge : v.value("badges", json::array()))
         if (badge.dump().find("LIVE") != std::string::npos) item.is_live = true;
+    item.watched_percent = watched_percent(v.value("thumbnailOverlays", json::array()));
     out.items.push_back(std::move(item));
 }
 
@@ -103,6 +116,47 @@ void parse_tile(const json& t, Feed& out) {
         item.duration = text_of(ts.value("text", json::object()));
         if (ts.value("style", "") == "LIVE") item.is_live = true;
     }
+    item.watched_percent = watched_percent(header.value("thumbnailOverlays", json::array()));
+    out.items.push_back(std::move(item));
+}
+
+// 2025+ layout: lockupViewModel (contentId, lockupMetadataViewModel; duration in a thumbnail badge).
+void parse_lockup(const json& l, Feed& out) {
+    if (l.value("contentType", "") != "LOCKUP_CONTENT_TYPE_VIDEO") return;
+    FeedItem item;
+    item.video_id = l.value("contentId", "");
+    if (item.video_id.size() != 11) return;
+    for (const FeedItem& existing : out.items)
+        if (existing.video_id == item.video_id) return;
+    const json& meta = l.value("metadata", json::object()).value("lockupMetadataViewModel", json::object());
+    item.title = text_of(meta.value("title", json::object()));
+    if (item.title.empty()) return;
+    // metadataRows: [channel], [views, age]
+    std::vector<std::string> parts;
+    const json& rows = meta.value("metadata", json::object())
+                           .value("contentMetadataViewModel", json::object())
+                           .value("metadataRows", json::array());
+    for (const json& row : rows)
+        for (const json& part : row.value("metadataParts", json::array())) {
+            std::string text = text_of(part.value("text", json::object()));
+            if (!text.empty()) parts.push_back(text);
+        }
+    if (!parts.empty()) item.channel = parts[0];
+    if (parts.size() > 1) item.views = parts[1];
+    if (parts.size() > 2) item.published = parts[2];
+    item.thumbnail = "https://i.ytimg.com/vi/" + item.video_id + "/mqdefault.jpg";
+    std::string image = l.value("contentImage", json::object()).dump();
+    for (const char* key : {"\"text\":\""}) {
+        // The duration / LIVE badge: first thumbnailBadgeViewModel text.
+        size_t badge = image.find("thumbnailBadgeViewModel");
+        size_t at = badge == std::string::npos ? badge : image.find(key, badge);
+        if (at != std::string::npos) {
+            at += strlen(key);
+            item.duration = image.substr(at, image.find('"', at) - at);
+            if (item.duration == "LIVE" || item.duration == "EN DIRECT") item.is_live = true;
+        }
+    }
+    item.watched_percent = watched_percent(l.value("contentImage", json::object()));
     out.items.push_back(std::move(item));
 }
 
@@ -110,8 +164,10 @@ void parse_tile(const json& t, Feed& out) {
 void collect(const json& j, Feed& out) {
     if (j.is_object()) {
         for (auto it = j.begin(); it != j.end(); ++it) {
-            if (it.key() == "videoRenderer") {
+            if (it.key() == "videoRenderer" || it.key() == "compactVideoRenderer") {
                 parse_video_renderer(it.value(), out);
+            } else if (it.key() == "lockupViewModel") {
+                parse_lockup(it.value(), out);
             } else if (it.key() == "tileRenderer") {
                 parse_tile(it.value(), out);
             } else if (it.key() == "nextContinuationData" && out.continuation.empty()) {
@@ -266,6 +322,40 @@ bool Client::search(const std::string& query, const std::string& continuation, F
     out = Feed{};
     collect(r, out);
     OLOG("yt: search '%s'%s -> %zu items", query.c_str(), continuation.empty() ? "" : " (next page)", out.items.size());
+    return true;
+}
+
+bool Client::related(const std::string& video_id, Feed& out, std::string& error) {
+    if (!ensure_visitor(error)) return false;
+    ClientDef def = client_def("search", visitor_data_, web_client_version_);
+    json body = {{"context", {{"client", def.client}}}, {"videoId", video_id}};
+    net::Request req;
+    req.method = "POST";
+    req.url = "https://www.youtube.com/youtubei/v1/next?prettyPrint=false";
+    req.headers = client_headers(def, visitor_data_);
+    req.body = body.dump();
+    net::Response res = net::fetch(req);
+    if (!res.ok()) {
+        error = "next: " + (res.error.empty() ? "http " + std::to_string(res.status) : res.error);
+        return false;
+    }
+    json r = json::parse(res.body, nullptr, false);
+    if (r.is_discarded()) {
+        error = "next: invalid json";
+        return false;
+    }
+    out = Feed{};
+    // Only the secondary results column: the primary one repeats the current video.
+    const json* secondary = nullptr;
+    try {
+        secondary = &r.at("contents").at("twoColumnWatchNextResults").at("secondaryResults");
+    } catch (const json::exception&) {
+    }
+    collect(secondary ? *secondary : r, out);
+    out.items.erase(std::remove_if(out.items.begin(), out.items.end(),
+                                   [&](const FeedItem& i) { return i.video_id == video_id; }),
+                    out.items.end());
+    OLOG("yt: related %s -> %zu items", video_id.c_str(), out.items.size());
     return true;
 }
 

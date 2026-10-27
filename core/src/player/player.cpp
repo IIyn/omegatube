@@ -151,6 +151,31 @@ bool Player::start() {
     if (duration_ms_ == 0 && !video_.segments.empty()) duration_ms_ = video_.segments.back().start_ms;
 
     running_ = true;
+    if (cfg_.start_ms > 0 && !video_.segments.empty()) {
+        // Start mid-stream: same as a seek, but issued in IDLE before prepare (allowed by ESPlayer).
+        int64_t target = std::min<int64_t>(cfg_.start_ms, duration_ms_ > 0 ? duration_ms_ - 1000 : cfg_.start_ms);
+        rc = api_->seek(handle_, static_cast<uint64_t>(target));
+        OLOG("esp start position %lld ms -> %d", static_cast<long long>(target), rc);
+        feed_from_ms_ = target;
+        position_ms_ = target;
+        for (Source& src : sources) {
+            Track& t = *src.track;
+            media::Segment seg = t.segments.empty() ? media::Segment{0, 0, 0} : t.segments.front();
+            for (const auto& candidate : t.segments)
+                if (candidate.start_ms <= target) seg = candidate;
+            std::string url = src.http->url();
+            t.url = url;
+            src.http = std::make_unique<net::RangeReader>(url, cfg_.stream_headers, 4 * 1024 * 1024, seg.offset);
+            net::RangeReader* http = src.http.get();
+            src.reader = std::make_unique<media::Fmp4Reader>(
+                [http, &t](void* dst, size_t n) {
+                    size_t got = http->read(dst, n);
+                    t.bytes += got;
+                    return got;
+                },
+                t.info, seg);
+        }
+    }
     for (Source& src : sources) start_track(*src.track, src.reader.release(), src.http.release());
 
     rc = api_->prepare_async(handle_);
@@ -384,6 +409,13 @@ void Player::toggle_pause() {
     paused_ = !paused_;
     int rc = paused_ ? api_->pause(handle_) : api_->resume(handle_);
     OLOG("esp %s -> %d", paused_ ? "pause" : "resume", rc);
+}
+
+bool Player::set_rate(double rate) {
+    if (!handle_ || !prepared_) return false;
+    int rc = api_->set_playback_rate(handle_, rate, false);
+    OLOG("esp set_playback_rate(%.2f) -> %d", rate, rc);
+    return rc == 0;
 }
 
 PlayerStats Player::stats() {

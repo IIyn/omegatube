@@ -7,25 +7,29 @@ using Tizen.NUI.BaseComponents;
 
 namespace OmegaTube.Ui
 {
-    // A titled horizontal strip of cards backed by a paged search. The focused card stays at the left edge.
+    // A titled horizontal strip of cards backed by a paged feed. The focused card stays at the left edge.
     public class FeedRow : View
     {
         private const int VisibleAhead = 6;
+        private const int StripY = 64;
 
         public string Query { get; }   // search rows only (used by "add to home")
         public int Count => cards.Count;
         public int FocusIndex { get; private set; }
         public VideoItem FocusedItem => cards.Count > 0 ? cards[FocusIndex].Item : null;
 
+        private readonly Func<string, Task<FeedPage>> loader;
         private readonly TextLabel status;
         private readonly View strip;
         private readonly List<Card> cards = new List<Card>();
         private string continuation = "";
+        private string cacheKey;   // home rows: first page cached for an instant start-up
+        private bool fresh;        // first network page received
         private bool loading;
         private bool focused;
         private Animation slide;
 
-        private readonly Func<string, Task<FeedPage>> loader;
+        private static int Step => Theme.CardWidth + Theme.CardGap;
 
         public FeedRow(string title, string query, int width) : this(title, c => YouTube.Search(query, c), width)
         {
@@ -37,16 +41,39 @@ namespace OmegaTube.Ui
             this.loader = loader;
             Size = new Size(width, Theme.RowHeight);
 
-            var header = Widgets.Label(title, Theme.TitleSize, Theme.Text, width - 40);
+            var header = Widgets.Label(title, Theme.TitleSize - 4, Theme.Text, width - 40);
             header.PositionX = Theme.FocusMargin;
             Add(header);
 
             status = Widgets.Label("Chargement…", Theme.BodySize, Theme.TextDim, width - 40);
-            status.Position = new Position(Theme.FocusMargin, 120);
+            status.Position = new Position(Theme.FocusMargin, 140);
             Add(status);
 
-            strip = new View { Position = new Position(Theme.FocusMargin, 64), Size = new Size(10000, Theme.CardHeight + 20) };
+            strip = new View { Position = new Position(Theme.FocusMargin, StripY), Size = new Size(20000, Theme.CardHeight(Theme.CardWidth) + 40) };
             Add(strip);
+        }
+
+        // Shows the cached first page now; the next Load() replaces it with the network one.
+        public void UseCache(string key)
+        {
+            cacheKey = key;
+            FeedPage cached = LocalStore.LoadFeed(key);
+            if (cached != null)
+            {
+                AddCards(cached.Items);
+                status.Text = "";
+                UpdateVisible();
+            }
+        }
+
+        private void AddCards(IEnumerable<VideoItem> items)
+        {
+            foreach (VideoItem item in items)
+            {
+                var card = new Card(item) { Position = new Position(cards.Count * Step, 16) };
+                cards.Add(card);
+                strip.Add(card);
+            }
         }
 
         public async Task Load()
@@ -56,21 +83,36 @@ namespace OmegaTube.Ui
                 return;
             }
             loading = true;
-            FeedPage page = await loader(continuation);
+            FeedPage page = await loader(fresh ? continuation : "");
             loading = false;
-            if (page.Error != null && cards.Count == 0)
+            if (page.Error != null)
             {
-                status.Text = "Erreur : " + page.Error;
+                if (cards.Count == 0)
+                {
+                    status.Text = "Erreur : " + page.Error;
+                }
                 return;
             }
-            continuation = page.Continuation;
-            foreach (VideoItem item in page.Items)
+            if (!fresh)
             {
-                var card = new Card(item) { Position = new Position(cards.Count * (Theme.CardWidth + Theme.CardGap), 10) };
-                cards.Add(card);
-                strip.Add(card);
+                // First network page: replaces whatever the cache showed.
+                fresh = true;
+                foreach (Card c in cards)
+                {
+                    strip.Remove(c);
+                    c.Dispose();
+                }
+                cards.Clear();
+                if (cacheKey != null)
+                {
+                    LocalStore.SaveFeed(cacheKey, page);
+                }
+                FocusIndex = Math.Min(FocusIndex, Math.Max(0, page.Items.Count - 1));
+                slide = Widgets.Slide(strip, Theme.FocusMargin - FocusIndex * Step, StripY, slide);
             }
-            status.Text = cards.Count == 0 ? "Aucun résultat" : "";
+            continuation = page.Continuation;
+            AddCards(page.Items);
+            status.Text = cards.Count == 0 ? "Aucune vidéo" : "";
             UpdateVisible();
             if (focused && cards.Count > 0)
             {
@@ -80,6 +122,10 @@ namespace OmegaTube.Ui
 
         public void SetFocused(bool value)
         {
+            if (focused == value)
+            {
+                return;
+            }
             focused = value;
             if (cards.Count > 0)
             {
@@ -98,18 +144,27 @@ namespace OmegaTube.Ui
             cards[FocusIndex].SetFocused(false);
             FocusIndex = next;
             cards[FocusIndex].SetFocused(true);
-            slide = Widgets.Slide(strip, Theme.FocusMargin - FocusIndex * (Theme.CardWidth + Theme.CardGap), 64, slide);
+            slide = Widgets.Slide(strip, Theme.FocusMargin - FocusIndex * Step, StripY, slide);
             UpdateVisible();
-            if (FocusIndex >= cards.Count - VisibleAhead && !string.IsNullOrEmpty(continuation))
+            if (fresh && FocusIndex >= cards.Count - VisibleAhead && !string.IsNullOrEmpty(continuation))
             {
                 _ = Load();
             }
             return true;
         }
 
+        // Progress bars may have changed after watching something.
+        public void RefreshProgress()
+        {
+            foreach (Card c in cards)
+            {
+                c.UpdateProgress();
+            }
+        }
+
         private void UpdateVisible()
         {
-            for (int i = FocusIndex; i < Math.Min(cards.Count, FocusIndex + VisibleAhead); i++)
+            for (int i = Math.Max(0, FocusIndex - 1); i < Math.Min(cards.Count, FocusIndex + VisibleAhead); i++)
             {
                 cards[i].LoadImage();
             }

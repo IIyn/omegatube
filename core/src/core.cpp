@@ -13,6 +13,9 @@
 #include "yt/auth.h"
 #include "yt/innertube.h"
 #include "yt/sponsorblock.h"
+#include "yt/watch.h"
+
+#include <memory>
 
 #include <qrcodegen/qrcodegen.hpp>
 #include "util/log.h"
@@ -24,7 +27,9 @@ constexpr const char* kVersion = OMEGA_VERSION;  // from the repo's VERSION file
 
 struct omega_player {
     omega::Player impl;
+    std::unique_ptr<omega::yt::WatchReporter> history;  // signed-in YouTube playback only
     explicit omega_player(omega::PlayerConfig cfg) : impl(std::move(cfg)) {}
+    ~omega_player() { history.reset(); }  // stop pinging before the player goes away
 };
 
 const char* omega_version(void) { return kVersion; }
@@ -82,7 +87,7 @@ omega_player* omega_player_create(void* window, int width, int height, const cha
 }
 
 omega_player* omega_player_create_youtube(void* window, int width, int height, const char* video_id,
-                                          int max_height) {
+                                          int max_height, int64_t start_ms) {
     omega::yt::Client client;
     omega::yt::VideoInfo info;
     std::string error;
@@ -111,6 +116,7 @@ omega_player* omega_player_create_youtube(void* window, int width, int height, c
     cfg.max_width = video->width;
     cfg.max_height = video->height;
     cfg.duration_ms = info.length_s * 1000;
+    cfg.start_ms = start_ms;
     // Expired URLs (403/410): ask InnerTube again and keep the same formats.
     std::string id = video_id;
     int video_itag = video->itag, audio_itag = audio->itag;
@@ -136,6 +142,13 @@ omega_player* omega_player_create_youtube(void* window, int width, int height, c
         delete p;
         return nullptr;
     }
+    if (omega::yt::shared_auth().signed_in()) {
+        omega::Player* player = &p->impl;
+        p->history = std::make_unique<omega::yt::WatchReporter>(id, info.length_s * 1000, [player] {
+            omega::PlayerStats s = player->stats();
+            return s.state == 3 ? s.position_ms : int64_t(-1);  // only while PLAYING
+        });
+    }
     return p;
 }
 
@@ -144,6 +157,8 @@ void omega_player_toggle_pause(omega_player* p) {
 }
 
 int omega_player_seek(omega_player* p, int64_t position_ms) { return p && p->impl.seek(position_ms) ? 0 : -1; }
+
+int omega_player_set_rate(omega_player* p, double rate) { return p && p->impl.set_rate(rate) ? 0 : -1; }
 
 void omega_player_get_stats(omega_player* p, omega_player_stats* out) {
     if (!p || !out) return;
@@ -187,7 +202,8 @@ nlohmann::json feed_json(const omega::yt::Feed& feed) {
                          {"views", it.views},
                          {"published", it.published},
                          {"thumbnail", it.thumbnail},
-                         {"live", it.is_live}});
+                         {"live", it.is_live},
+                         {"watched", it.watched_percent}});
     return {{"items", items}, {"continuation", feed.continuation}};
 }
 
@@ -215,6 +231,13 @@ char* omega_yt_browse(const char* browse_id, const char* continuation) {
     if (!omega::yt::shared_client().browse(browse_id ? browse_id : "", continuation ? continuation : "", token, feed,
                                            error))
         return to_c_json({{"error", error}});
+    return to_c_json(feed_json(feed));
+}
+
+char* omega_yt_related(const char* video_id) {
+    omega::yt::Feed feed;
+    std::string error;
+    if (!omega::yt::shared_client().related(video_id ? video_id : "", feed, error)) return to_c_json({{"error", error}});
     return to_c_json(feed_json(feed));
 }
 

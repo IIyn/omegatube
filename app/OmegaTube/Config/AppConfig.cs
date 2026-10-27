@@ -5,23 +5,27 @@ using OmegaTube.Util;
 
 namespace OmegaTube.Config
 {
-    // A home screen row: a YouTube search, or one of the signed-in feeds.
+    // A section of the rail (Musique, Jeux vidéo...): a YouTube search shown as a grid. Home, Subscriptions
+    // and History are fixed rail entries backed by the account.
     public class HomeRow
     {
-        public const string Search = "search";
-        public const string Recommended = "recommended";
-        public const string Subscriptions = "subscriptions";
-        public const string History = "history";
-
-        public string Type = Search;
         public string Title;
-        public string Query;   // search only
+        public string Query;
+        public string Icon = "trending";   // res/icons/<name>.png
+        public bool Visible = true;
 
-        public bool NeedsAccount => Type != Search;
-
-        public string BrowseId => Type == Recommended ? "FEwhat_to_watch"
-                                : Type == Subscriptions ? "FEsubscriptions"
-                                : Type == History ? "FEhistory" : null;
+        // Picks a SmartTube icon from the section name when none was chosen.
+        public static string GuessIcon(string text)
+        {
+            string t = (text ?? "").ToLowerInvariant();
+            if (t.Contains("musi") || t.Contains("lofi") || t.Contains("music")) return "music";
+            if (t.Contains("jeu") || t.Contains("gam")) return "gaming";
+            if (t.Contains("sport") || t.Contains("foot")) return "sports";
+            if (t.Contains("actu") || t.Contains("info") || t.Contains("news") || t.Contains("docu")) return "news";
+            if (t.Contains("direct") || t.Contains("live")) return "live";
+            if (t.Contains("enfant") || t.Contains("kid")) return "kids";
+            return "trending";
+        }
     }
 
     public class PlayerOptions
@@ -107,18 +111,6 @@ namespace OmegaTube.Config
             return cfg;
         }
 
-        // First sign-in: put the account feeds on top of the home screen (once; the user can reorder/remove them).
-        public void AddAccountRows()
-        {
-            if (HomeRows.Exists(r => r.NeedsAccount))
-            {
-                return;
-            }
-            HomeRows.Insert(0, new HomeRow { Type = HomeRow.Subscriptions, Title = "Abonnements" });
-            HomeRows.Insert(0, new HomeRow { Type = HomeRow.Recommended, Title = "Recommandations" });
-            Save();
-        }
-
         public void Save()
         {
             try
@@ -137,11 +129,11 @@ namespace OmegaTube.Config
         {
             return new List<HomeRow>
             {
-                new HomeRow { Title = "Musique", Query = "musique" },
-                new HomeRow { Title = "Jeux vidéo", Query = "jeux vidéo" },
-                new HomeRow { Title = "Science & tech", Query = "science technologie" },
-                new HomeRow { Title = "Documentaires", Query = "documentaire" },
-                new HomeRow { Title = "Lofi", Query = "lofi hip hop" },
+                new HomeRow { Title = "Musique", Query = "musique", Icon = "music" },
+                new HomeRow { Title = "Jeux vidéo", Query = "jeux vidéo", Icon = "gaming" },
+                new HomeRow { Title = "Science & tech", Query = "science technologie", Icon = "trending" },
+                new HomeRow { Title = "Documentaires", Query = "documentaire", Icon = "news" },
+                new HomeRow { Title = "Lofi", Query = "lofi hip hop", Icon = "music" },
             };
         }
 
@@ -150,12 +142,21 @@ namespace OmegaTube.Config
             HomeRows.Clear();
             foreach (object r in Json.Arr(root, "homeRows") ?? new List<object>())
             {
-                string type = Json.Str(r, "type", HomeRow.Search);
+                // Older configs also listed account feeds here: they are fixed rail entries now.
+                string type = Json.Str(r, "type", "search");
                 string query = Json.Str(r, "query");
-                if (type != HomeRow.Search || query.Length > 0)
+                if (type != "search" || query.Length == 0)
                 {
-                    HomeRows.Add(new HomeRow { Type = type, Title = Json.Str(r, "title", query), Query = query });
+                    continue;
                 }
+                string title = Json.Str(r, "title", query);
+                HomeRows.Add(new HomeRow
+                {
+                    Title = title,
+                    Query = query,
+                    Icon = Json.Str(r, "icon", HomeRow.GuessIcon(title + " " + query)),
+                    Visible = Json.Bool(r, "visible", true),
+                });
             }
             Language = Json.Str(root, "language", Language);
             Region = Json.Str(root, "region", Region);
@@ -189,7 +190,10 @@ namespace OmegaTube.Config
             var rows = new List<object>();
             foreach (HomeRow r in HomeRows)
             {
-                rows.Add(new Dictionary<string, object> { ["type"] = r.Type, ["title"] = r.Title, ["query"] = r.Query ?? "" });
+                rows.Add(new Dictionary<string, object>
+                {
+                    ["type"] = "search", ["title"] = r.Title, ["query"] = r.Query, ["icon"] = r.Icon, ["visible"] = r.Visible,
+                });
             }
             var cats = new Dictionary<string, object>();
             foreach (SponsorCategory c in SponsorCategory.All)

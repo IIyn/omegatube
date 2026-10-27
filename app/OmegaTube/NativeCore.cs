@@ -46,7 +46,8 @@ namespace OmegaTube
         public static extern IntPtr PlayerCreate(IntPtr ecoreWindow, int width, int height, string videoUrl, string audioUrl);
 
         [DllImport(Lib, EntryPoint = "omega_player_create_youtube")]
-        public static extern IntPtr PlayerCreateYouTube(IntPtr ecoreWindow, int width, int height, string videoId, int maxHeight);
+        public static extern IntPtr PlayerCreateYouTube(IntPtr ecoreWindow, int width, int height, string videoId, int maxHeight,
+                                                        long startMs);
 
         [DllImport(Lib, EntryPoint = "omega_player_toggle_pause")]
         public static extern void PlayerTogglePause(IntPtr player);
@@ -120,6 +121,14 @@ namespace OmegaTube
         private static extern IntPtr QrEncodeRaw(byte[] text);
 
         public static IntPtr QrEncode(string text) => QrEncodeRaw(Utf8z(text));
+
+        [DllImport(Lib, EntryPoint = "omega_yt_related")]
+        private static extern IntPtr YtRelatedRaw(byte[] videoId);
+
+        public static IntPtr YtRelated(string videoId) => YtRelatedRaw(Utf8z(videoId));
+
+        [DllImport(Lib, EntryPoint = "omega_player_set_rate")]
+        public static extern int PlayerSetRate(IntPtr player, double rate);
 
         [DllImport(Lib, EntryPoint = "omega_sb_segments")]
         private static extern IntPtr SbSegmentsRaw(byte[] videoId);

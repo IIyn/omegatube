@@ -115,7 +115,6 @@ namespace OmegaTube.Ui
                         interval += 5;
                         continue;
                     case "done":
-                        App.Config.AddAccountRows();
                         App.Home.InvalidateRows();
                         ShowSignedIn();
                         status.Text = "Connecté !";

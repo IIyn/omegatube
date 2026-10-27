@@ -37,6 +37,7 @@ void load() {
     ok &= bind(lib, g_api.pause, "esplusplayer_pause");
     ok &= bind(lib, g_api.resume, "esplusplayer_resume");
     ok &= bind(lib, g_api.seek, "esplusplayer_seek");
+    ok &= bind(lib, g_api.set_playback_rate, "esplusplayer_set_playback_rate");
     ok &= bind(lib, g_api.get_state, "esplusplayer_get_state");
     ok &= bind(lib, g_api.set_ecore_display, "esplusplayer_set_ecore_display");
     ok &= bind(lib, g_api.set_display_mode, "esplusplayer_set_display_mode");

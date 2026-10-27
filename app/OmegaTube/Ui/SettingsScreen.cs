@@ -28,7 +28,6 @@ namespace OmegaTube.Ui
         private readonly View list;
         private readonly TextLabel help;
         private int index;
-        private HomeRow pendingDelete;
         private Animation scroll;
 
         public SettingsScreen(App app) : base(app)
@@ -128,17 +127,20 @@ namespace OmegaTube.Ui
                 });
             }
 
-            Header("Rangées de l'accueil (ajoute-en depuis la Recherche)");
+            Header("Sections du menu (ajoute-en depuis la Recherche)");
             foreach (HomeRow row in App.Config.HomeRows)
             {
                 HomeRow r = row;
                 AddEntry(new Entry
                 {
                     Row = r,
-                    Text = () => (pendingDelete == r ? "OK pour supprimer → " : "") + r.Title +
-                                 (r.NeedsAccount ? "  (compte)" : r.Title != r.Query ? $"  ({r.Query})" : ""),
+                    Text = () => r.Title + (r.Title != r.Query ? $"  ({r.Query})" : "") + (r.Visible ? "  : affichée" : "  : masquée"),
                     Change = d => MoveRow(r, d),
-                    Activate = () => DeleteRow(r),
+                    Activate = () =>
+                    {
+                        r.Visible = !r.Visible;
+                        Save();
+                    },
                 });
             }
             Refresh();
@@ -180,7 +182,7 @@ namespace OmegaTube.Ui
                 scroll = Widgets.Slide(list, 0, Math.Min(0, 600 - y), scroll);
             }
             help.Text = entries.Count > 0 && entries[index].Row != null
-                ? "◀ ▶ déplacer la rangée   OK supprimer   Retour quitter"
+                ? "◀ ▶ déplacer la section   OK afficher / masquer   Retour quitter"
                 : "◀ ▶ modifier   Retour quitter";
         }
 
@@ -215,10 +217,6 @@ namespace OmegaTube.Ui
                 case "Escape":
                     return false;
             }
-            if (key != "Return")
-            {
-                pendingDelete = null;
-            }
             Refresh();
             return true;
         }
@@ -244,20 +242,6 @@ namespace OmegaTube.Ui
             rows[i] = rows[j];
             rows[j] = r;
             index += d;
-        }
-
-        private void DeleteRow(HomeRow r)
-        {
-            if (pendingDelete != r)
-            {
-                pendingDelete = r;
-                return;
-            }
-            pendingDelete = null;
-            App.Config.HomeRows.Remove(r);
-            Save();
-            Build();
-            index = Math.Min(index, entries.Count - 1);
         }
 
         private void Save()

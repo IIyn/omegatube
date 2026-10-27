@@ -26,6 +26,7 @@ struct Format {
 struct FeedItem {
     std::string video_id, title, channel, duration, views, published, thumbnail;
     bool is_live = false;
+    int watched_percent = 0;  // account's progress as YouTube reports it (signed-in feeds)
 };
 
 struct Feed {
@@ -49,6 +50,8 @@ public:
 
     // Video search (WEB client). Pass the previous Feed::continuation to get the next page.
     bool search(const std::string& query, const std::string& continuation, Feed& out, std::string& error);
+    // Related videos of a watch page (WEB client "next" endpoint), for the player's suggestions row.
+    bool related(const std::string& video_id, Feed& out, std::string& error);
     // Signed-in feeds through the TV client: FEwhat_to_watch (home), FEsubscriptions, FEhistory.
     bool browse(const std::string& browse_id, const std::string& continuation, const std::string& access_token,
                 Feed& out, std::string& error);

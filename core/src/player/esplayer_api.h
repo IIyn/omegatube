@@ -87,6 +87,7 @@ struct Api {
     int (*pause)(Handle);
     int (*resume)(Handle);
     int (*seek)(Handle, uint64_t time_ms);
+    int (*set_playback_rate)(Handle, double rate, bool audio_mute);
     int (*get_state)(Handle);
     int (*set_ecore_display)(Handle, DisplayType, void* window, int x, int y, int w, int h);
     int (*set_display_mode)(Handle, DisplayMode);
