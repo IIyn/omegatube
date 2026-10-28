@@ -1,0 +1,53 @@
+# Builds the app on every published GitHub release and attaches the .tpk to it.
+# The package keeps the SDK test signature: Samsung certificates are bound to each TV,
+# so users sign it for their own TV with scripts/install-tv.sh.
+name: Release build
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tpk:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches VERSION
+        if: github.event_name == 'release'
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          VERSION=$(head -n1 VERSION)
+          [ "${TAG#v}" = "$VERSION" ] || { echo "::error::tag $TAG does not match VERSION $VERSION"; exit 1; }
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Fetch third-party sources
+        run: scripts/fetch-deps.sh
+
+      - name: Build core + app
+        run: OMEGA_NO_SIGN=1 scripts/build-app.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: omegatube-tpk
+          path: app/OmegaTube/bin/Release/tizen80/*.tpk
+
+      # Stable names: install.sh downloads them from releases/latest/download/.
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dist
+          cp app/OmegaTube/bin/Release/tizen80/*.tpk dist/OmegaTube.tpk
+          cp scripts/install-tv.sh dist/install.sh
+          cp scripts/install-tv.ps1 dist/install.ps1
+          cp tools/samsung-cert/SamsungCert.java dist/
+          gh release upload "${{ github.event.release.tag_name }}" dist/* --clobber
