@@ -269,7 +269,11 @@ namespace OmegaTube.Ui
                     }
                     break;
                 case "Left":
-                    keyCol = System.Math.Max(0, keyCol - 1);
+                    if (keyCol == 0)
+                    {
+                        return false;   // back to the home rail
+                    }
+                    keyCol--;
                     break;
                 case "Right":
                     if (keyCol == keyLabels[keyRow].Count - 1)

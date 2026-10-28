@@ -490,9 +490,9 @@ namespace OmegaTube.Ui
                         }
                         break;
                     default:
-                        if (back)
+                        if (back || key == "Left")
                         {
-                            return false;
+                            return false;   // back to the home rail
                         }
                         break;
                 }
@@ -530,7 +530,7 @@ namespace OmegaTube.Ui
                         Save();
                         if (relabel)
                         {
-                            App.Replace(new SettingsScreen(App, category, index));
+                            App.ReplaceScreen(this, new SettingsScreen(App, category, index));
                             return true;
                         }
                     }

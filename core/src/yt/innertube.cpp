@@ -3,6 +3,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cstring>
 #include <functional>
 #include <mutex>
@@ -23,8 +24,7 @@ struct ClientDef {
     std::string user_agent, version, name_id;
 };
 
-ClientDef client_def(const char* role, const std::string& visitor, const std::string& version_override = "") {
-    json c = cfg::obj({"innertube", role});
+ClientDef client_def_from(const json& c, const std::string& visitor, const std::string& version_override = "") {
     ClientDef d;
     d.user_agent = c.value("userAgent", "");
     d.version = version_override.empty() ? c.value("clientVersion", "") : version_override;
@@ -36,6 +36,10 @@ ClientDef client_def(const char* role, const std::string& visitor, const std::st
     d.client["gl"] = cfg::region();
     if (!visitor.empty()) d.client["visitorData"] = visitor;
     return d;
+}
+
+ClientDef client_def(const char* role, const std::string& visitor, const std::string& version_override = "") {
+    return client_def_from(cfg::obj({"innertube", role}), visitor, version_override);
 }
 
 net::Headers client_headers(const ClientDef& d, const std::string& visitor) {
@@ -111,6 +115,23 @@ void parse_video_renderer(const json& v, Feed& out) {
     if (item.duration.empty() && (item.views.find("spectateur") != std::string::npos ||
                                   item.views.find("watching") != std::string::npos))
         item.is_live = true;
+    item.watched_percent = watched_percent(v.value("thumbnailOverlays", json::array()));
+    out.items.push_back(std::move(item));
+}
+
+// A row of a playlist page (WEB browse VL<id>): no channel avatar, "views • age" in videoInfo.
+void parse_playlist_video(const json& v, Feed& out) {
+    if (!v.value("isPlayable", true)) return;  // deleted / private entries
+    FeedItem item;
+    item.video_id = v.value("videoId", "");
+    if (item.video_id.empty()) return;
+    item.title = text_of(v.value("title", json::object()));
+    item.channel = text_of(v.value("shortBylineText", json::object()));
+    item.duration = text_of(v.value("lengthText", json::object()));
+    const json& runs = v.value("videoInfo", json::object()).value("runs", json::array());
+    if (!runs.empty()) item.views = runs[0].value("text", "");
+    if (runs.size() >= 3) item.published = runs[2].value("text", "");
+    item.thumbnail = "https://i.ytimg.com/vi/" + item.video_id + "/mqdefault.jpg";
     item.watched_percent = watched_percent(v.value("thumbnailOverlays", json::array()));
     out.items.push_back(std::move(item));
 }
@@ -220,20 +241,50 @@ void collect(const json& j, Feed& out, Feed* highlights = nullptr) {
                 parse_video_renderer(it.value(), out);
             } else if (it.key() == "lockupViewModel") {
                 parse_lockup(it.value(), out);
+            } else if (it.key() == "playlistVideoRenderer") {
+                parse_playlist_video(it.value(), out);
             } else if (it.key() == "tileRenderer") {
                 parse_tile(it.value(), out);
             } else if (it.key() == "nextContinuationData" && out.continuation.empty()) {
                 out.continuation = it.value().value("continuation", "");
             } else if (it.key() == "reelShelfRenderer" || it.key() == "shortsLockupViewModel") {
                 continue;  // Shorts: not playable in a TV layout
-            } else if (it.key() == "continuationCommand" && out.continuation.empty()) {
+            } else if (it.key() == "continuationCommand" && out.continuation.empty() && it.value().contains("token")) {
                 out.continuation = it.value().value("token", "");
-            } else {
+            } else {  // continuationItemViewModel: the token sits in a nested continuationCommand
                 collect(it.value(), out, highlights);
             }
         }
     } else if (j.is_array()) {
         for (const json& e : j) collect(e, out, highlights);
+    }
+}
+
+// The TV home: one Shelf per titled shelfRenderer (Shorts and ads left out); the page continuation is the one
+// outside the shelves (theirs only extend their own row).
+void collect_shelves(const json& j, Feed& out) {
+    if (j.is_object()) {
+        for (auto it = j.begin(); it != j.end(); ++it) {
+            if (it.key() == "shelfRenderer" && it.value().is_object()) {
+                const json& s = it.value();
+                if (s.value("tvhtml5ShelfRendererType", "") == "TVHTML5_SHELF_RENDERER_TYPE_SHORTS") continue;
+                Shelf shelf;
+                if (s.contains("headerRenderer"))
+                    if (const json* title = find_key(s["headerRenderer"], "title")) shelf.title = text_of(*title);
+                Feed row;
+                collect(s.value("content", json::object()), row);
+                if (row.items.empty()) continue;
+                shelf.items = std::move(row.items);
+                shelf.continuation = row.continuation;
+                out.shelves.push_back(std::move(shelf));
+            } else if (it.key() == "nextContinuationData" && out.continuation.empty()) {
+                out.continuation = it.value().value("continuation", "");
+            } else if (it.key() != "adSlotRenderer") {
+                collect_shelves(it.value(), out);
+            }
+        }
+    } else if (j.is_array()) {
+        for (const json& e : j) collect_shelves(e, out);
     }
 }
 
@@ -368,58 +419,104 @@ bool Client::ensure_visitor(std::string& error) {
 
 net::Headers Client::stream_headers() const { return {{"User-Agent", cfg::str({"innertube", "player", "userAgent"})}}; }
 
-bool Client::player(const std::string& video_id, VideoInfo& out, std::string& error) {
+namespace {
+
+// The player clients to try, in order (remote-config innertube.playerClients, as yt-dlp's client list).
+// Older configs only have "player" (direct URLs) and "playerFallback" (TV client, deciphered, account retry).
+// include_disabled: also the entries with "enabled": false (dev tooling picking one by name).
+std::vector<json> player_clients(bool include_disabled) {
+    json all = cfg::snapshot();
+    const json* list = nullptr;
+    if (all.contains("innertube") && all["innertube"].contains("playerClients")) list = &all["innertube"]["playerClients"];
+    std::vector<json> out;
+    if (list && list->is_array()) {
+        for (const json& c : *list)
+            if (c.is_object() && !c.value("clientName", "").empty() && (include_disabled || c.value("enabled", true)))
+                out.push_back(c);
+        if (!out.empty()) return out;
+    }
+    json primary = cfg::obj({"innertube", "player"});
+    if (!primary.value("clientName", "").empty()) out.push_back(primary);
+    json fallback = cfg::obj({"innertube", "playerFallback"});
+    if (!fallback.value("clientName", "").empty()) {
+        fallback["decipher"] = true;
+        fallback["auth"] = "retry";
+        out.push_back(fallback);
+    }
+    return out;
+}
+
+std::atomic<int> g_last_good_client{-1};  // index of the client that last worked: tried first
+
+}  // namespace
+
+bool Client::player(const std::string& video_id, VideoInfo& out, std::string& error, const std::string& only_client) {
     refusal_ = {};
     if (!ensure_visitor(error)) {
         refusal_ = {"NETWORK", error};
         return false;
     }
-    if (player_with("player", video_id, out, error) && !out.formats.empty()) return true;
-    if (cfg::obj({"innertube", "playerFallback"}).value("clientName", "").empty()) return false;
-    std::string primary = error.empty() ? "no direct formats" : error;
-    error.clear();
-    if (player_fallback(video_id, out, error)) {
-        OLOG("yt: %s played through the fallback client (primary: %s)", video_id.c_str(), primary.c_str());
-        return true;
+    std::vector<json> clients = player_clients(!only_client.empty());
+    std::vector<size_t> order;
+    int good = g_last_good_client.load();
+    if (good >= 0 && static_cast<size_t>(good) < clients.size()) order.push_back(static_cast<size_t>(good));
+    for (size_t i = 0; i < clients.size(); i++)
+        if (static_cast<int>(i) != good) order.push_back(i);
+
+    std::string errors;
+    for (size_t i : order) {
+        const json& c = clients[i];
+        std::string name = c.value("clientName", "");
+        if (!only_client.empty() && name != only_client) continue;
+        std::string err;
+        if (try_client(c, video_id, out, err)) {
+            if (static_cast<int>(i) != good) OLOG("yt: %s played through %s", video_id.c_str(), name.c_str());
+            g_last_good_client = static_cast<int>(i);
+            return true;
+        }
+        OLOG("yt: %s via %s: %s", video_id.c_str(), name.c_str(), err.c_str());
+        errors += (errors.empty() ? "" : "; ") + name + ": " + err;
     }
-    error = primary + "; fallback: " + error;
+    error = errors.empty() ? "no player client" : errors;
     return false;
 }
 
-// The TV client, whose URLs need the player JS (n throttling, signatureCipher).
-bool Client::player_fallback(const std::string& video_id, VideoInfo& out, std::string& error) {
-    if (!ensure_visitor(error)) return false;
-    if (!shared_decipher().ensure(error)) return false;
-    if (player_with("playerFallback", video_id, out, error) && !out.formats.empty()) return true;
-    // Anonymous clients flagged as bots (and age-restricted videos) get LOGIN_REQUIRED / AGE_*: ask again
-    // as the account.
-    bool account_may_help = refusal_.status == "LOGIN_REQUIRED" || refusal_.status.rfind("AGE_", 0) == 0;
-    if (account_may_help && shared_auth().signed_in()) {
+// One client: deciphering when its URLs need the player JS, and (auth "retry") once more as the signed-in
+// account when YouTube wants a login (bot check, age); auth "always" sends the account right away.
+bool Client::try_client(const json& c, const std::string& video_id, VideoInfo& out, std::string& error) {
+    bool decipher = c.value("decipher", false);
+    if (decipher && !shared_decipher().ensure(error)) return false;
+    std::string auth = c.value("auth", "never");
+    std::string token;
+    if (auth != "never" && shared_auth().signed_in()) {
         std::string token_error;
-        std::string token = shared_auth().access_token(token_error);
-        if (!token.empty()) {
-            error.clear();
-            if (player_with("playerFallback", video_id, out, error, token) && !out.formats.empty()) {
-                OLOG("yt: %s played as the signed-in account", video_id.c_str());
-                return true;
-            }
+        token = shared_auth().access_token(token_error);
+    }
+    if (auth == "always" && !token.empty()) return player_with(c, video_id, out, error, token) && !out.formats.empty();
+    if (player_with(c, video_id, out, error) && !out.formats.empty()) return true;
+    bool account_may_help = refusal_.status == "LOGIN_REQUIRED" || refusal_.status.rfind("AGE_", 0) == 0;
+    if (auth == "retry" && account_may_help && !token.empty()) {
+        error.clear();
+        if (player_with(c, video_id, out, error, token) && !out.formats.empty()) {
+            OLOG("yt: %s played as the signed-in account", video_id.c_str());
+            return true;
         }
     }
-    if (error.empty()) error = "no playable formats";
+    if (error.empty()) error = decipher ? "no playable formats" : "no direct formats";
     return false;
 }
 
-bool Client::player_with(const char* role, const std::string& video_id, VideoInfo& out, std::string& error,
+bool Client::player_with(const json& c, const std::string& video_id, VideoInfo& out, std::string& error,
                          const std::string& access_token) {
-    bool fallback = std::string(role) == "playerFallback";
-    ClientDef def = client_def(role, visitor_data_);
+    bool decipher = c.value("decipher", false);
+    ClientDef def = client_def_from(c, visitor_data_);
     json body = {
         {"context", {{"client", def.client}}},
         {"videoId", video_id},
         {"contentCheckOk", true},
         {"racyCheckOk", true},
     };
-    if (fallback)
+    if (decipher)
         body["playbackContext"] = {{"contentPlaybackContext",
                                     {{"html5Preference", "HTML5_PREF_WANTS"},
                                      {"signatureTimestamp", shared_decipher().signature_timestamp()}}}};
@@ -464,14 +561,14 @@ bool Client::player_with(const char* role, const std::string& video_id, VideoInf
     size_t failed = 0;
     for (const json& f : r["streamingData"].value("adaptiveFormats", json::array())) {
         Format fmt;
-        if (fallback) {
+        if (decipher) {
             std::string err;
             if (!shared_decipher().stream_url(f.value("url", ""), f.value("signatureCipher", ""), fmt.url, err)) {
                 if (failed++ == 0) OLOG("yt: decipher itag %lld: %s", static_cast<long long>(to_int(f, "itag")), err.c_str());
                 continue;
             }
         } else {
-            if (!f.contains("url")) continue;  // ciphered formats: only through the fallback client
+            if (!f.contains("url")) continue;  // ciphered formats: only through a deciphering client
             fmt.url = f.value("url", "");
         }
         fmt.itag = static_cast<int>(to_int(f, "itag"));
@@ -491,7 +588,7 @@ bool Client::player_with(const char* role, const std::string& video_id, VideoInf
         out.formats.push_back(std::move(fmt));
     }
     OLOG("yt: '%s' by %s, %llds, %zu formats (%s client%s)", out.title.c_str(), out.author.c_str(),
-         static_cast<long long>(out.length_s), out.formats.size(), role,
+         static_cast<long long>(out.length_s), out.formats.size(), def.client.value("clientName", "").c_str(),
          failed ? (", " + std::to_string(failed) + " not deciphered").c_str() : "");
     return true;
 }
@@ -576,6 +673,38 @@ bool Client::playlist(const std::string& video_id, const std::string& playlist_i
                      all.begin() + static_cast<long>(std::min(all.size(), first + kWindow)));
     OLOG("yt: playlist %s '%s' from %s -> %zu next items", playlist_id.c_str(), title.c_str(), video_id.c_str(),
          out.items.size());
+    return true;
+}
+
+bool Client::playlist_page(const std::string& playlist_id, const std::string& continuation, Feed& out,
+                           std::string& title, std::string& error) {
+    if (!ensure_visitor(error)) return false;
+    ClientDef def = client_def("search", visitor_data_, web_client_version_);
+    json body = {{"context", {{"client", def.client}}}};
+    if (continuation.empty()) body["browseId"] = "VL" + playlist_id;
+    else body["continuation"] = continuation;
+    net::Request req;
+    req.method = "POST";
+    req.url = "https://www.youtube.com/youtubei/v1/browse?prettyPrint=false";
+    req.headers = client_headers(def, visitor_data_);
+    req.body = body.dump();
+    net::Response res = net::fetch(req);
+    if (!res.ok()) {
+        error = http_error("playlist", res);
+        return false;
+    }
+    last_response_ = res.body;
+    json r = json::parse(res.body, nullptr, false);
+    if (r.is_discarded()) {
+        error = "playlist: invalid json";
+        return false;
+    }
+    out = Feed{};
+    collect(r, out);
+    for (FeedItem& item : out.items) item.playlist_id = playlist_id;
+    if (const json* meta = find_key(r, "playlistMetadataRenderer")) title = meta->value("title", "");
+    OLOG("yt: playlist page %s%s '%s' -> %zu items", playlist_id.c_str(), continuation.empty() ? "" : " (next page)",
+         title.c_str(), out.items.size());
     return true;
 }
 
@@ -748,12 +877,17 @@ bool Client::browse(const std::string& browse_id, const std::string& continuatio
         return false;
     }
     out = Feed{};
-    // Subscriptions "Tous" tab: a titled "most relevant" shelf, then untitled shelves in date order.
-    Feed picked;
-    collect(r, out, browse_id == "FEsubscriptions" && continuation.empty() ? &picked : nullptr);
-    out.highlights = std::move(picked.items);
-    OLOG("yt: browse %s%s -> %zu items, %zu highlights", browse_id.c_str(), continuation.empty() ? "" : " (next page)",
-         out.items.size(), out.highlights.size());
+    if (browse_id == "FEwhat_to_watch") {
+        // Home: rows by topic (next pages bring more rows).
+        collect_shelves(r, out);
+    } else {
+        // Subscriptions "Tous" tab: a titled "most relevant" shelf, then untitled shelves in date order.
+        Feed picked;
+        collect(r, out, browse_id == "FEsubscriptions" && continuation.empty() ? &picked : nullptr);
+        out.highlights = std::move(picked.items);
+    }
+    OLOG("yt: browse %s%s -> %zu items, %zu highlights, %zu shelves", browse_id.c_str(),
+         continuation.empty() ? "" : " (next page)", out.items.size(), out.highlights.size(), out.shelves.size());
     return true;
 }
 

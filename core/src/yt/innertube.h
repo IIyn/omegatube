@@ -6,6 +6,8 @@
 #include <utility>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
 #include "net/http.h"
 
 namespace omega::yt {
@@ -40,10 +42,19 @@ struct FeedItem {
     int watched_percent = 0;  // account's progress as YouTube reports it (signed-in feeds)
 };
 
+// A titled row of the TV home ("Recommandations", "Jeux vidéo"...); continuation = more items of that row.
+struct Shelf {
+    std::string title;
+    std::vector<FeedItem> items;
+    std::string continuation;
+};
+
 struct Feed {
     std::vector<FeedItem> items;
     // FEsubscriptions: YouTube's picked shelf ("Les plus pertinentes") kept apart from the chronological feed.
     std::vector<FeedItem> highlights;
+    // FEwhat_to_watch: the home's rows (items stays empty); continuation then gives more rows.
+    std::vector<Shelf> shelves;
     std::string continuation;  // empty when there is no next page
 };
 
@@ -89,9 +100,9 @@ struct ChannelInfo {
 // non-throttled) stream URLs without PO token. See tools/yt-probe/probe.py to re-check.
 class Client {
 public:
-    // Tries the primary client, then (remote-config "playerFallback") the TV client with deciphering.
-    bool player(const std::string& video_id, VideoInfo& out, std::string& error);
-    bool player_fallback(const std::string& video_id, VideoInfo& out, std::string& error);
+    // Tries the player clients of remote-config innertube.playerClients in order (the one that last worked
+    // first), like yt-dlp's client list; only_client: that clientName alone (dev tooling).
+    bool player(const std::string& video_id, VideoInfo& out, std::string& error, const std::string& only_client = "");
     // HTTP headers the googlevideo stream requests must carry (same User-Agent as the player request).
     net::Headers stream_headers() const;
 
@@ -101,6 +112,9 @@ public:
     // asking again from a later video continues it.
     bool playlist(const std::string& video_id, const std::string& playlist_id, Feed& out, std::string& title,
                   std::string& error);
+    // A whole playlist (WEB browse VL<id>), in order, paged; the first page also gives its title.
+    bool playlist_page(const std::string& playlist_id, const std::string& continuation, Feed& out,
+                       std::string& title, std::string& error);
     // Related videos of a watch page (WEB client "next" endpoint), for the player's suggestions row.
     bool related(const std::string& video_id, Feed& out, std::string& error);
     // Watch-page details (WEB "next"): date, channel; plus, with an access token, the account's like and
@@ -126,7 +140,8 @@ public:
     const std::string& last_response() const { return last_response_; }
 
 private:
-    bool player_with(const char* role, const std::string& video_id, VideoInfo& out, std::string& error,
+    bool try_client(const nlohmann::json& client, const std::string& video_id, VideoInfo& out, std::string& error);
+    bool player_with(const nlohmann::json& client, const std::string& video_id, VideoInfo& out, std::string& error,
                      const std::string& access_token = "");
     bool ensure_visitor(std::string& error);
     std::string last_response_;

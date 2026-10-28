@@ -68,6 +68,16 @@ namespace OmegaTube.Ui
             }
         }
 
+        // Items already fetched (a home shelf): no first request; the loader only gives the next pages.
+        public void Seed(List<VideoItem> items, string nextContinuation)
+        {
+            fresh = true;
+            continuation = nextContinuation ?? "";
+            AddCards(items);
+            status.Text = cards.Count == 0 ? T("No videos") : "";
+            UpdateVisible();
+        }
+
         private void AddCards(IEnumerable<VideoItem> items)
         {
             foreach (VideoItem item in items)

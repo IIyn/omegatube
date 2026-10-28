@@ -9,7 +9,9 @@ using static OmegaTube.I18n;
 namespace OmegaTube.Ui
 {
     // A vertically scrolling grid of cards backed by a paged feed (Home, Subscriptions, History, sections).
-    // The focused row is kept second from the top; more pages load as the focus nears the end.
+    // The focused row is kept second from the top; more pages load well before the focus reaches the end.
+    // Smoothness on the TV: a page's cards are built a row per frame (not all at once), and only the rows
+    // around the focus are shown (hidden actors cost the renderer nothing).
     // When the feed has highlights (Subscriptions: YouTube's "most relevant" shelf), they sit above the grid
     // as a horizontally scrolling row; Up from the first grid row enters it, Down leaves it.
     public class FeedGrid : View
@@ -18,6 +20,8 @@ namespace OmegaTube.Ui
         private const int GapX = 34, GapY = 40;
         private const int Pad = Theme.FocusMargin;   // room for the focused card's scale-up
         private const int HeadingH = 56;              // section title above the highlights row and the grid
+        private const int RowsBefore = 2, RowsAfter = 4;   // rows kept shown around the focused one
+        private const int PrefetchRows = 5;           // next page asked when the focus is this close to the end
 
         public int Count => cards.Count + highlights.Count;
         public VideoItem FocusedItem => inHighlights ? highlights[hlFocus].Item : cards.Count > 0 ? cards[focus].Item : null;
@@ -39,6 +43,8 @@ namespace OmegaTube.Ui
         private int gridTop;      // y of the first grid row inside content (below the highlights)
         private int generation;   // ignores pages of a previous Show()
         private Animation scroll, hlScroll;
+        private readonly Queue<VideoItem> pending = new Queue<VideoItem>();   // items waiting for their card
+        private Timer builder;
 
         public FeedGrid(int width, int height)
         {
@@ -95,8 +101,17 @@ namespace OmegaTube.Ui
             _ = Load();
         }
 
+        protected override void Dispose(DisposeTypes type)
+        {
+            builder?.Stop();
+            builder = null;
+            pending.Clear();
+            base.Dispose(type);
+        }
+
         private void ClearCards()
         {
+            pending.Clear();
             foreach (Card c in cards)
             {
                 content.Remove(c);
@@ -131,15 +146,54 @@ namespace OmegaTube.Ui
             hlStrip.PositionX = 0;
         }
 
+        // The first rows are built right away (they are on screen), the rest a row per timer tick.
         private void AddCards(IEnumerable<VideoItem> items)
         {
             foreach (VideoItem item in items)
             {
+                pending.Enqueue(item);
+            }
+            BuildCards(Math.Max(0, (focus / Columns + RowsAfter + 1) * Columns - cards.Count));
+            if (pending.Count > 0 && builder == null)
+            {
+                builder = new Timer(30);
+                builder.Tick += (s, e) =>
+                {
+                    BuildCards(Columns);
+                    if (pending.Count > 0)
+                    {
+                        return true;
+                    }
+                    builder = null;
+                    return false;
+                };
+                builder.Start();
+            }
+        }
+
+        private void BuildCards(int max)
+        {
+            int built = 0;
+            while (pending.Count > 0 && built < max)
+            {
                 int i = cards.Count;
-                var card = new Card(item, cardW) { Position = new Position(Pad + (i % Columns) * (cardW + GapX), gridTop + (i / Columns) * rowStep) };
+                var card = new Card(pending.Dequeue(), cardW) { Position = new Position(Pad + (i % Columns) * (cardW + GapX), gridTop + (i / Columns) * rowStep) };
                 cards.Add(card);
                 content.Add(card);
+                built++;
+                bool near = NearFocus(i / Columns);
+                Widgets.SetVisible(card, near);
+                if (near)
+                {
+                    card.LoadImage();
+                }
             }
+        }
+
+        private bool NearFocus(int row)
+        {
+            int focusRow = inHighlights ? 0 : focus / Columns;
+            return row >= focusRow - RowsBefore && row <= focusRow + RowsAfter;
         }
 
         private async Task Load()
@@ -180,8 +234,19 @@ namespace OmegaTube.Ui
             }
             continuation = page.Continuation;
             AddCards(page.Items);
-            status.Text = Count == 0 ? T("No videos") : "";
+            status.Text = Count == 0 && pending.Count == 0 ? T("No videos") : "";
             AfterChange();
+            MaybePrefetch();
+        }
+
+        // Asks the next page early, while the user still has rows to look at.
+        private void MaybePrefetch()
+        {
+            int total = cards.Count + pending.Count;
+            if (fresh && !loading && !string.IsNullOrEmpty(continuation) && focus / Columns >= (total - 1) / Columns - PrefetchRows)
+            {
+                _ = Load();
+            }
         }
 
         private void AfterChange()
@@ -241,6 +306,10 @@ namespace OmegaTube.Ui
             {
                 return MoveInHighlights(key);
             }
+            if (key == "Down" && pending.Count > 0 && focus + Columns >= cards.Count)
+            {
+                BuildCards(2 * Columns);   // the user outran the builder
+            }
             int next = focus;
             switch (key)
             {
@@ -276,10 +345,7 @@ namespace OmegaTube.Ui
                 focus = next;
                 cards[focus].SetFocused(true);
                 ScrollToFocus();
-                if (fresh && focus / Columns >= (cards.Count - 1) / Columns - 2 && !string.IsNullOrEmpty(continuation))
-                {
-                    _ = Load();
-                }
+                MaybePrefetch();
             }
             return true;
         }
@@ -341,19 +407,30 @@ namespace OmegaTube.Ui
             if (inHighlights)
             {
                 scroll = Widgets.Slide(content, 0, Pad, scroll);
-                for (int i = 0; i < Math.Min(cards.Count, 2 * Columns); i++)
-                {
-                    cards[i].LoadImage();
-                }
+                UpdateVisibleRows();
                 return;
             }
             int row = focus / Columns;
             // The first row keeps the highlights in view; further rows sit second from the top.
             int focusY = gridTop + row * rowStep;
             scroll = Widgets.Slide(content, 0, Pad - (row == 0 ? 0 : Math.Max(0, focusY - rowStep)), scroll);
-            for (int i = Math.Max(0, (row - 1) * Columns); i < Math.Min(cards.Count, (row + 3) * Columns); i++)
+            UpdateVisibleRows();
+        }
+
+        // Shows the rows around the focus (loading their thumbnails), hides the others.
+        private void UpdateVisibleRows()
+        {
+            for (int i = 0; i < cards.Count; i++)
             {
-                cards[i].LoadImage();
+                bool near = NearFocus(i / Columns);
+                if (near != cards[i].Visibility)
+                {
+                    Widgets.SetVisible(cards[i], near);
+                }
+                if (near)
+                {
+                    cards[i].LoadImage();
+                }
             }
         }
     }

@@ -30,14 +30,23 @@ namespace OmegaTube.Data
                 return null;
             }
             var page = new FeedPage { Items = YouTube.ToItems(root, "items"), Highlights = YouTube.ToItems(root, "highlights") };
-            return page.Items.Count > 0 ? page : null;
+            foreach (object s in Json.Arr(root, "shelves") ?? new List<object>())
+            {
+                page.Shelves.Add(new Shelf { Title = Json.Str(s, "title"), Items = YouTube.ToItems(s, "items") });
+            }
+            return page.Items.Count > 0 || page.Shelves.Count > 0 ? page : null;
         }
 
         public static void SaveFeed(string key, FeedPage page)
         {
+            var shelves = new List<object>();
+            foreach (Shelf s in page.Shelves)
+            {
+                shelves.Add(new Dictionary<string, object> { ["title"] = s.Title, ["items"] = ItemsJson(s.Items) });
+            }
             WriteJson(FeedFile(key), new Dictionary<string, object>
             {
-                ["items"] = ItemsJson(page.Items), ["highlights"] = ItemsJson(page.Highlights),
+                ["items"] = ItemsJson(page.Items), ["highlights"] = ItemsJson(page.Highlights), ["shelves"] = shelves,
             });
         }
 

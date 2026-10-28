@@ -93,11 +93,15 @@ OMEGA_API char* omega_yt_search(const char* query, const char* continuation);
 OMEGA_API char* omega_yt_suggest(const char* query);
 // Signed-in feed (TV client): browse_id FEwhat_to_watch | FEsubscriptions | FEhistory. Same JSON as search
 // (FEsubscriptions first page adds "highlights": YouTube's "most relevant" shelf, same item format);
+// FEwhat_to_watch (home) gives rows instead of items: "shelves":[{"title","items":[...],"continuation"}] (a row's
+// continuation, passed back with browse_id "" , returns more items of that row).
 // {"error":"signed out"} when no account is connected.
 OMEGA_API char* omega_yt_browse(const char* browse_id, const char* continuation);
 // Items: also "playlistId" and "kind" ("video" | "playlist" | "mix": a playlist card plays "id" within it).
 // The (up to 25) videos after video_id in playlist_id (playlist or mix): same JSON as search plus "title".
 OMEGA_API char* omega_yt_playlist(const char* video_id, const char* playlist_id);
+// A whole playlist in order (paged): same JSON as search plus "title" (first page); items carry "playlistId".
+OMEGA_API char* omega_yt_playlist_page(const char* playlist_id, const char* continuation);
 // Related videos of video_id (player suggestions). Same JSON as search.
 OMEGA_API char* omega_yt_related(const char* video_id);
 // Watch-page details: {"channelId","channel","channelAvatar","subscribers","date","likes","dislikes",

@@ -130,6 +130,11 @@ namespace OmegaTube
 
         public static IntPtr YtPlaylist(string videoId, string playlistId) => YtPlaylistRaw(Utf8z(videoId), Utf8z(playlistId));
 
+        [DllImport(Lib, EntryPoint = "omega_yt_playlist_page")]
+        private static extern IntPtr YtPlaylistPageRaw(byte[] playlistId, byte[] continuation);
+
+        public static IntPtr YtPlaylistPage(string playlistId, string continuation) => YtPlaylistPageRaw(Utf8z(playlistId), Utf8z(continuation));
+
         [DllImport(Lib, EntryPoint = "omega_yt_related")]
         private static extern IntPtr YtRelatedRaw(byte[] videoId);
 

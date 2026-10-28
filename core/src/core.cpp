@@ -331,6 +331,12 @@ nlohmann::json items_json(const std::vector<omega::yt::FeedItem>& list) {
 nlohmann::json feed_json(const omega::yt::Feed& feed) {
     nlohmann::json j = {{"items", items_json(feed.items)}, {"continuation", feed.continuation}};
     if (!feed.highlights.empty()) j["highlights"] = items_json(feed.highlights);
+    if (!feed.shelves.empty()) {
+        nlohmann::json shelves = nlohmann::json::array();
+        for (const auto& s : feed.shelves)
+            shelves.push_back({{"title", s.title}, {"items", items_json(s.items)}, {"continuation", s.continuation}});
+        j["shelves"] = shelves;
+    }
     return j;
 }
 
@@ -366,6 +372,17 @@ char* omega_yt_playlist(const char* video_id, const char* playlist_id) {
     std::string title, error;
     if (!omega::yt::shared_client().playlist(video_id ? video_id : "", playlist_id ? playlist_id : "", feed, title,
                                              error))
+        return to_c_json({{"error", error}});
+    nlohmann::json j = feed_json(feed);
+    j["title"] = title;
+    return to_c_json(j);
+}
+
+char* omega_yt_playlist_page(const char* playlist_id, const char* continuation) {
+    omega::yt::Feed feed;
+    std::string title, error;
+    if (!omega::yt::shared_client().playlist_page(playlist_id ? playlist_id : "", continuation ? continuation : "",
+                                                  feed, title, error))
         return to_c_json({{"error", error}});
     nlohmann::json j = feed_json(feed);
     j["title"] = title;

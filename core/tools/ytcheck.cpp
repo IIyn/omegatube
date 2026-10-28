@@ -103,6 +103,57 @@ int main(int argc, char** argv) {
             printf("  %s | %s | %s | %s\n", it.video_id.c_str(), it.title.c_str(), it.channel.c_str(), it.duration.c_str());
         return 0;
     }
+    if (argc >= 2 && strcmp(argv[1], "--home") == 0) {
+        // Home rows: first page, the next page of rows, then more items of the first row.
+        omega::yt::Client client;
+        omega::yt::Auth& auth = omega::yt::shared_auth();
+        auth.init("omegatube-auth.json");
+        std::string error, token = auth.access_token(error);
+        omega::yt::Feed first, next, row;
+        if (token.empty() || !client.browse("FEwhat_to_watch", "", token, first, error)) {
+            printf("home failed: %s\n", error.c_str());
+            return 1;
+        }
+        auto print = [](const omega::yt::Feed& f) {
+            for (const auto& sh : f.shelves) printf("  '%s' %zu items\n", sh.title.c_str(), sh.items.size());
+        };
+        print(first);
+        if (!first.continuation.empty() && client.browse("FEwhat_to_watch", first.continuation, token, next, error)) {
+            printf("next page: %zu shelves, %zu items\n", next.shelves.size(), next.items.size());
+            print(next);
+        }
+        if (!first.shelves.empty() && client.browse("", first.shelves[0].continuation, token, row, error))
+            printf("row '%s' continued: %zu items, continuation %s\n", first.shelves[0].title.c_str(), row.items.size(),
+                   row.continuation.empty() ? "none" : "yes");
+        return 0;
+    }
+    if (argc >= 3 && strcmp(argv[1], "--playlist-page") == 0) {
+        // A whole playlist page by page: --playlist-page <listId> [pages]
+        omega::yt::Client client;
+        std::string title, error, cont;
+        int pages = argc > 3 ? atoi(argv[3]) : 1;
+        for (int p = 0; p < pages; p++) {
+            omega::yt::Feed feed;
+            if (!client.playlist_page(argv[2], cont, feed, title, error)) {
+                printf("playlist page failed: %s\n", error.c_str());
+                return 1;
+            }
+            if (const char* dump = getenv("DUMP")) {  // raw response of the last page
+                if (FILE* f = fopen(dump, "wb")) {
+                    fwrite(client.last_response().data(), 1, client.last_response().size(), f);
+                    fclose(f);
+                }
+            }
+            printf("'%s' page %d: %zu items, continuation %s\n", title.c_str(), p + 1, feed.items.size(),
+                   feed.continuation.empty() ? "none" : "yes");
+            for (const auto& it : feed.items)
+                printf("  %s | %s | %s | %s | %s | %s\n", it.video_id.c_str(), it.title.c_str(), it.channel.c_str(),
+                       it.duration.c_str(), it.views.c_str(), it.published.c_str());
+            cont = feed.continuation;
+            if (cont.empty()) break;
+        }
+        return 0;
+    }
     if (argc >= 3 && strcmp(argv[1], "--sb") == 0) {
         std::vector<omega::yt::SkipSegment> segs;
         std::string error;
@@ -134,6 +185,10 @@ int main(int argc, char** argv) {
             omega::yt::Feed feed;
             ok = !token.empty() && client.browse(argv[2], "", token, feed, error);
             if (ok) printf("%zu items parsed\n", feed.items.size());
+            for (const auto& sh : feed.shelves)
+                printf("  shelf '%s': %zu items, continuation %s\n", sh.title.c_str(), sh.items.size(),
+                       sh.continuation.empty() ? "none" : "yes");
+            if (ok && !feed.shelves.empty()) printf("  page continuation %s\n", feed.continuation.empty() ? "none" : "yes");
         }
         if (!client.last_response().empty()) {
             FILE* out = fopen(argv[3], "wb");
@@ -341,11 +396,11 @@ int main(int argc, char** argv) {
     omega::yt::Client client;
     omega::yt::VideoInfo info;
     std::string error;
-    // FALLBACK=1: resolve through the fallback (TV) client with deciphering, as if the primary failed.
+    // CLIENT=<clientName>: only that player client (e.g. CLIENT=TVHTML5), to see which ones YouTube accepts.
     omega::yt::shared_decipher().set_cache_dir(".");
     omega::yt::shared_auth().init("omegatube-auth.json");  // signed-in retry on LOGIN_REQUIRED, as on the TV
-    bool fallback = getenv("FALLBACK") != nullptr;
-    if (!(fallback ? client.player_fallback(argv[1], info, error) : client.player(argv[1], info, error))) {
+    const char* only = getenv("CLIENT");
+    if (!client.player(argv[1], info, error, only ? only : "")) {
         printf("player failed: %s\n", error.c_str());
         printf("refusal: status '%s' reason '%s'\n", client.refusal().status.c_str(), client.refusal().reason.c_str());
         return 1;

@@ -94,7 +94,16 @@ namespace OmegaTube.Data
         public string Continuation = "";
         public string Title = "";   // playlists, channels
         public string Avatar = "", Subscribers = "";   // channels
+        public List<Shelf> Shelves = new List<Shelf>();   // home: rows by topic (Items then empty)
         public string Error;
+    }
+
+    // A titled row of the home; Continuation gives more items of that row (YouTube.Browse("", token)).
+    public class Shelf
+    {
+        public string Title = "";
+        public List<VideoItem> Items = new List<VideoItem>();
+        public string Continuation = "";
     }
 
     // Async wrappers over the native core's YouTube data calls (network runs on the thread pool,
@@ -110,6 +119,12 @@ namespace OmegaTube.Data
         public static Task<FeedPage> Playlist(string videoId, string playlistId)
         {
             return Task.Run(() => ToPage(Call(NativeCore.YtPlaylist(videoId, playlistId))));
+        }
+
+        // A whole playlist, in order and paged (page.Title on the first page).
+        public static Task<FeedPage> PlaylistPage(string playlistId, string continuation = "")
+        {
+            return Task.Run(() => ToPage(Call(NativeCore.YtPlaylistPage(playlistId, continuation ?? ""))));
         }
 
         public static Task<FeedPage> Channel(string channelId, string continuation = "")
@@ -162,6 +177,10 @@ namespace OmegaTube.Data
                 page.Title = Json.Str(root, "title");
                 page.Avatar = Json.Str(root, "avatar");
                 page.Subscribers = Json.Str(root, "subscribers");
+                foreach (object s in Json.Arr(root, "shelves") ?? new List<object>())
+                {
+                    page.Shelves.Add(new Shelf { Title = Json.Str(s, "title"), Items = ToItems(s, "items"), Continuation = Json.Str(s, "continuation") });
+                }
                 return page;
             }
         }

@@ -3,7 +3,7 @@
   "version": 1,
   "innertube": {
     "player": {
-      "_comment": "Stream URLs. VISIONOS gives direct, non-ciphered URLs without PO token (2026-10).",
+      "_comment": "Pre-playerClients builds only (kept for installed versions reading this file from main).",
       "clientName": "VISIONOS",
       "clientVersion": "1.02",
       "clientNameId": 101,
@@ -17,7 +17,7 @@
       }
     },
     "playerFallback": {
-      "_comment": "Used when the player client fails or has no direct URLs. Its stream URLs carry the n throttling parameter (and sometimes signatureCipher): the core deciphers them by running the TV player JS (QuickJS + yt-dlp EJS). Empty clientName disables it.",
+      "_comment": "Pre-playerClients builds only. Used when the player client fails or has no direct URLs. Its stream URLs carry the n throttling parameter (and sometimes signatureCipher): the core deciphers them by running the TV player JS (QuickJS + yt-dlp EJS). Empty clientName disables it.",
       "clientName": "TVHTML5",
       "clientVersion": "5.20260707",
       "clientNameId": 7,
@@ -30,6 +30,54 @@
         "osVersion": "2.4.0"
       }
     },
+    "playerClients": [
+      {
+        "_comment": "Direct, non-ciphered URLs without PO token (2026-10).",
+        "clientName": "VISIONOS",
+        "clientVersion": "1.02",
+        "clientNameId": 101,
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+        "context": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+          "deviceMake": "Apple",
+          "deviceModel": "RealityDevice17,1",
+          "osName": "visionOS",
+          "osVersion": "26.5.23O471"
+        }
+      },
+      {
+        "_comment": "URLs deciphered with the TV player JS (QuickJS + yt-dlp EJS). Accepts the account's token: asked again signed in on LOGIN_REQUIRED / AGE_*.",
+        "clientName": "TVHTML5",
+        "clientVersion": "5.20260707",
+        "clientNameId": 7,
+        "userAgent": "Mozilla/5.0 (SMART-TV; Linux; Tizen 2.4.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/2.4.0 TV Safari/538.1",
+        "context": {
+          "userAgent": "Mozilla/5.0 (SMART-TV; Linux; Tizen 2.4.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/2.4.0 TV Safari/538.1",
+          "deviceMake": "Samsung",
+          "deviceModel": "UKS9800",
+          "osName": "Tizen",
+          "osVersion": "2.4.0"
+        },
+        "decipher": true,
+        "auth": "retry"
+      },
+      {
+        "_comment": "Candidate from yt-dlp's android_vr client (direct URLs). Untested here: check with CLIENT=ANDROID_VR ./ytcheck <id> 1, then enable.",
+        "enabled": false,
+        "clientName": "ANDROID_VR",
+        "clientVersion": "1.65.10",
+        "clientNameId": 28,
+        "userAgent": "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip",
+        "context": {
+          "userAgent": "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip",
+          "deviceMake": "Oculus",
+          "deviceModel": "Quest 3",
+          "androidSdkVersion": 32,
+          "osName": "Android",
+          "osVersion": "12L"
+        }
+      }
+    ],
     "browse": {
       "_comment": "Signed-in feeds (Bearer token): only the TV client accepts it.",
       "clientName": "TVHTML5",

@@ -10,6 +10,7 @@ namespace OmegaTube
     public class App : NUIApplication
     {
         private readonly List<Screen> stack = new List<Screen>();
+        private ConfirmDialog dialog;   // open modal question: gets every key
 
         public AppConfig Config { get; private set; }
         public HomeScreen Home { get; private set; }
@@ -93,7 +94,7 @@ namespace OmegaTube
         {
             if (stack.Count <= 1)
             {
-                Exit();
+                Confirm(I18n.T("Do you want to quit OmegaTube?"), Exit);
                 return;
             }
             Screen top = stack[stack.Count - 1];
@@ -104,6 +105,19 @@ namespace OmegaTube
             Screen below = stack[stack.Count - 1];
             below.Root.Show();
             below.OnShow();
+        }
+
+        // A screen rebuilding itself: on the stack (Replace) or hosted beside the home rail.
+        public void ReplaceScreen(Screen old, Screen replacement)
+        {
+            if (stack.Count > 0 && stack[stack.Count - 1] == old)
+            {
+                Replace(replacement);
+            }
+            else
+            {
+                Home.ReplaceEmbedded(old, replacement);
+            }
         }
 
         // Swaps the top screen (e.g. the player moving on to the next video).
@@ -124,8 +138,26 @@ namespace OmegaTube
             screen.OnShow();
         }
 
+        // A playlist card opens the list to pick from; a mix (endless) plays right away.
+        // Yes / No question over the current screen; onYes runs after it closes.
+        public void Confirm(string question, Action onYes)
+        {
+            if (dialog != null)
+            {
+                return;
+            }
+            dialog = new ConfirmDialog(question, onYes);
+            dialog.Closed += () => dialog = null;
+            Window.Instance.Add(dialog);
+        }
+
         public void Play(VideoItem item)
         {
+            if (item.Kind == "playlist")
+            {
+                Push(new PlaylistScreen(this, item));
+                return;
+            }
             Push(new PlayerScreen(this, item));
         }
 
@@ -136,6 +168,11 @@ namespace OmegaTube
                 return;
             }
             string key = e.Key.KeyPressedName;
+            if (dialog != null)
+            {
+                dialog.OnKey(key);
+                return;
+            }
             if (!stack[stack.Count - 1].OnKey(key) && (key == "XF86Back" || key == "Escape"))
             {
                 Pop();
@@ -155,7 +192,7 @@ namespace OmegaTube
         {
             while (stack.Count > 1)
             {
-                Pop();
+                Pop();   // never reaches the quit question (the last screen stays)
             }
             base.OnTerminate();
         }

@@ -376,6 +376,10 @@ namespace OmegaTube.Ui
                 }
                 return false;
             }
+            if (key == "Left")
+            {
+                return false;   // back to the home rail
+            }
             if (key != "Return")
             {
                 return true;
