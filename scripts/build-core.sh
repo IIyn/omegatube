@@ -10,5 +10,6 @@ docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/src" -w /src omegatube-toolchai
   arm-linux-gnueabi-strip build/core-arm/libomegacore.so &&
   file build/core-arm/libomegacore.so'
 
+mkdir -p app/OmegaTube/lib
 cp build/core-arm/libomegacore.so app/OmegaTube/lib/
 echo "-> app/OmegaTube/lib/libomegacore.so"

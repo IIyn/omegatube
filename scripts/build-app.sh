@@ -27,5 +27,8 @@ rm -rf app/OmegaTube/bin/Release
 dotnet build app/OmegaTube/OmegaTube.csproj -c Release
 
 TPK=$(find app/OmegaTube/bin/Release -name '*.tpk' | head -n1)
-"$TIZEN" package -t tpk -s "$PROFILE" -- "$TPK"
+# OMEGA_NO_SIGN=1 (CI): keep the SDK's test signature, users re-sign for their TV (scripts/install-tv.sh).
+if [ -z "${OMEGA_NO_SIGN:-}" ]; then
+  "$TIZEN" package -t tpk -s "$PROFILE" -- "$TPK"
+fi
 echo "-> $TPK"

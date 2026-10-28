@@ -107,9 +107,13 @@ public class SamsungCert {
         System.out.println("[..] open this URL in your browser and sign in with your Samsung account:");
         System.out.println(LOGIN_URL);
         System.out.flush();
-        try {
-            new ProcessBuilder("xdg-open", LOGIN_URL).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
-        } catch (IOException ignored) {
+        String[][] openers = {{"xdg-open", LOGIN_URL}, {"open", LOGIN_URL}, {"rundll32", "url.dll,FileProtocolHandler", LOGIN_URL}};
+        for (String[] opener : openers) {  // Linux, macOS, Windows
+            try {
+                new ProcessBuilder(opener).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
+                break;
+            } catch (IOException ignored) {
+            }
         }
         String json = code.get(10, TimeUnit.MINUTES);
         server.stop(0);
