@@ -64,6 +64,11 @@ OMEGA_API omega_player* omega_player_create(void* ecore_wl2_window, int width, i
 OMEGA_API omega_player* omega_player_create_youtube(void* ecore_wl2_window, int width, int height, const char* video_id,
                                                     int max_height, const char* codecs, int64_t start_ms,
                                                     const char* audio_track);
+// Why the last omega_player_create_youtube returned NULL: {"kind","status","reason","detail","signedIn"}.
+// kind: login | age | upcoming | unplayable | unavailable | rate_limited | http | network | formats | player | other;
+// status: YouTube's playabilityStatus ("LOGIN_REQUIRED"...) or "HTTP_<code>"; reason: YouTube's own message
+// (in the request language), may be empty; detail: technical error. Release with omega_free().
+OMEGA_API char* omega_player_last_error(void);
 // Video qualities of a YouTube player (best variant per height, same codec preference as at creation):
 // {"current":{"width","height","fps","codec"},"available":[{...}, ...],"live":bool,"title","author"} (highest first),
 // codec = "avc1" | "vp9" | "av01". Also "description", "views" (raw count), "channelId",

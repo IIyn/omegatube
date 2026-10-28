@@ -9,6 +9,7 @@
 
 #include "util/log.h"
 #include "util/remote_config.h"
+#include "yt/auth.h"
 #include "yt/js_solver.h"
 
 namespace omega::yt {
@@ -368,7 +369,11 @@ bool Client::ensure_visitor(std::string& error) {
 net::Headers Client::stream_headers() const { return {{"User-Agent", cfg::str({"innertube", "player", "userAgent"})}}; }
 
 bool Client::player(const std::string& video_id, VideoInfo& out, std::string& error) {
-    if (!ensure_visitor(error)) return false;
+    refusal_ = {};
+    if (!ensure_visitor(error)) {
+        refusal_ = {"NETWORK", error};
+        return false;
+    }
     if (player_with("player", video_id, out, error) && !out.formats.empty()) return true;
     if (cfg::obj({"innertube", "playerFallback"}).value("clientName", "").empty()) return false;
     std::string primary = error.empty() ? "no direct formats" : error;
@@ -386,11 +391,26 @@ bool Client::player_fallback(const std::string& video_id, VideoInfo& out, std::s
     if (!ensure_visitor(error)) return false;
     if (!shared_decipher().ensure(error)) return false;
     if (player_with("playerFallback", video_id, out, error) && !out.formats.empty()) return true;
+    // Anonymous clients flagged as bots (and age-restricted videos) get LOGIN_REQUIRED / AGE_*: ask again
+    // as the account.
+    bool account_may_help = refusal_.status == "LOGIN_REQUIRED" || refusal_.status.rfind("AGE_", 0) == 0;
+    if (account_may_help && shared_auth().signed_in()) {
+        std::string token_error;
+        std::string token = shared_auth().access_token(token_error);
+        if (!token.empty()) {
+            error.clear();
+            if (player_with("playerFallback", video_id, out, error, token) && !out.formats.empty()) {
+                OLOG("yt: %s played as the signed-in account", video_id.c_str());
+                return true;
+            }
+        }
+    }
     if (error.empty()) error = "no playable formats";
     return false;
 }
 
-bool Client::player_with(const char* role, const std::string& video_id, VideoInfo& out, std::string& error) {
+bool Client::player_with(const char* role, const std::string& video_id, VideoInfo& out, std::string& error,
+                         const std::string& access_token) {
     bool fallback = std::string(role) == "playerFallback";
     ClientDef def = client_def(role, visitor_data_);
     json body = {
@@ -407,10 +427,12 @@ bool Client::player_with(const char* role, const std::string& video_id, VideoInf
     req.method = "POST";
     req.url = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false";
     req.headers = client_headers(def, visitor_data_);
+    if (!access_token.empty()) req.headers.emplace_back("Authorization", "Bearer " + access_token);
     req.body = body.dump();
     net::Response res = net::fetch(req);
     if (!res.ok()) {
         error = "player: " + (res.error.empty() ? "http " + std::to_string(res.status) : res.error);
+        refusal_ = res.status > 0 ? Refusal{"HTTP_" + std::to_string(res.status), ""} : Refusal{"NETWORK", res.error};
         return false;
     }
 
@@ -424,6 +446,7 @@ bool Client::player_with(const char* role, const std::string& video_id, VideoInf
     std::string status = ps.value("status", "");
     if (status != "OK") {
         error = "playability " + status + ": " + ps.value("reason", "");
+        refusal_ = {status, ps.value("reason", "")};
         return false;
     }
     const json& details = r.value("videoDetails", json::object());

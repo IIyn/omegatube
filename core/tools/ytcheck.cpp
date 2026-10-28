@@ -343,9 +343,11 @@ int main(int argc, char** argv) {
     std::string error;
     // FALLBACK=1: resolve through the fallback (TV) client with deciphering, as if the primary failed.
     omega::yt::shared_decipher().set_cache_dir(".");
+    omega::yt::shared_auth().init("omegatube-auth.json");  // signed-in retry on LOGIN_REQUIRED, as on the TV
     bool fallback = getenv("FALLBACK") != nullptr;
     if (!(fallback ? client.player_fallback(argv[1], info, error) : client.player(argv[1], info, error))) {
         printf("player failed: %s\n", error.c_str());
+        printf("refusal: status '%s' reason '%s'\n", client.refusal().status.c_str(), client.refusal().reason.c_str());
         return 1;
     }
     printf("'%s' by %s (%llds), %zu direct formats\n", info.title.c_str(), info.author.c_str(),

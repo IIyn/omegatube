@@ -402,7 +402,7 @@ namespace OmegaTube.Ui
             player = created;
             if (player == IntPtr.Zero)
             {
-                ShowError();
+                ShowError(YouTube.LastPlayError());
                 return;
             }
             info = YouTube.Playback(player);
@@ -441,15 +441,62 @@ namespace OmegaTube.Ui
             }
         }
 
-        private void ShowError()
+        private void ShowError(PlayError e)
         {
             ShowLoading("", opaque: true);
             spin.Stop();
             spinner.Hide();
             stateLabel.MultiLine = true;
-            stateLabel.Size = new Size(1920, 300);
-            stateLabel.PositionY = 420;
-            stateLabel.Text = T("Cannot play this video") + "\n\n" + LastError() + "\n\n" + T("Back to return");
+            stateLabel.Size = new Size(1600, 440);
+            stateLabel.Position = new Position(160, 340);
+            var (title, hint) = ErrorTexts(e);
+            // YouTube's own message says which case it is (private, members only, bot check...); else the technical one.
+            string why = e.Reason.Length > 0 ? e.Reason : e.Kind == "player" || e.Kind == "other" || e.Kind == "formats" ? e.Detail : "";
+            var lines = new List<string> { title };
+            if (why.Length > 0)
+            {
+                lines.Add(why);
+            }
+            if (hint.Length > 0)
+            {
+                lines.Add(hint);
+            }
+            lines.Add(T("Back to return"));
+            stateLabel.Text = string.Join("\n\n", lines);
+        }
+
+        private static (string Title, string Hint) ErrorTexts(PlayError e)
+        {
+            switch (e.Kind)
+            {
+                case "login":
+                    return e.SignedIn
+                        ? (T("YouTube refused this video, even with your account"),
+                           T("YouTube may be flagging your network as a bot. Wait a while, or restart your router to get a new IP address."))
+                        : (T("YouTube asks you to sign in to watch this video"), T("Sign in from the Account screen, then try again."));
+                case "age":
+                    return (T("This video is age-restricted"),
+                            e.SignedIn ? T("Your YouTube account must be age-verified to watch it.")
+                                       : T("Sign in with an age-verified account, then try again."));
+                case "upcoming":
+                    return (T("This live has not started yet"), "");
+                case "unplayable":
+                    return (T("YouTube does not allow this video to be played here"), "");
+                case "unavailable":
+                    return (T("This video is unavailable"), "");
+                case "rate_limited":
+                    return (T("YouTube is receiving too many requests from your network"), T("Wait a few minutes, then try again."));
+                case "http":
+                    return (T("YouTube answered with an error ({0})", e.Status.Replace("HTTP_", "")), T("Try again later."));
+                case "network":
+                    return (T("Cannot reach YouTube"), T("Check the TV's internet connection."));
+                case "formats":
+                    return (T("No video format this TV can play"), T("Try other video codecs in Settings > Player."));
+                case "player":
+                    return (T("The TV's player refused this video"), "");
+                default:
+                    return (T("Cannot play this video"), "");
+            }
         }
 
         // "1,2 M de vues  •  12 mars 2023" (the card's texts until the player / details answer).
@@ -2050,11 +2097,5 @@ namespace OmegaTube.Ui
         }
 
         private static string SignedSeconds(long ms) => (ms >= 0 ? "+" : "−") + Format(Math.Abs(ms));
-
-        private static string LastError()
-        {
-            string[] lines = NativeCore.RecentLog(3).Trim().Split('\n');
-            return lines.Length > 0 ? lines[lines.Length - 1] : "";
-        }
     }
 }

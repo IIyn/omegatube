@@ -49,6 +49,9 @@ namespace OmegaTube
         public static extern IntPtr PlayerCreateYouTube(IntPtr ecoreWindow, int width, int height, string videoId, int maxHeight,
                                                         string codecs, long startMs, string audioTrack);
 
+        [DllImport(Lib, EntryPoint = "omega_player_last_error")]
+        public static extern IntPtr PlayerLastError();
+
         [DllImport(Lib, EntryPoint = "omega_player_toggle_pause")]
         public static extern void PlayerTogglePause(IntPtr player);
 

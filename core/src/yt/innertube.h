@@ -114,13 +114,23 @@ public:
     bool browse(const std::string& browse_id, const std::string& continuation, const std::string& access_token,
                 Feed& out, std::string& error);
 
+    // Why the last player() call was refused: playabilityStatus.status ("LOGIN_REQUIRED", "UNPLAYABLE",
+    // "LIVE_STREAM_OFFLINE", ...) with YouTube's reason (in the request language), "HTTP_<code>" for a
+    // refused request or "NETWORK"; empty status when YouTube accepted (e.g. no playable formats).
+    struct Refusal {
+        std::string status, reason;
+    };
+    const Refusal& refusal() const { return refusal_; }
+
     // Raw JSON of the last player/browse response (dev tooling: ytcheck --dump).
     const std::string& last_response() const { return last_response_; }
 
 private:
-    bool player_with(const char* role, const std::string& video_id, VideoInfo& out, std::string& error);
+    bool player_with(const char* role, const std::string& video_id, VideoInfo& out, std::string& error,
+                     const std::string& access_token = "");
     bool ensure_visitor(std::string& error);
     std::string last_response_;
+    Refusal refusal_;
     std::mutex mutex_;  // guards the lazily fetched session data below
     std::string visitor_data_;
     std::string web_client_version_;

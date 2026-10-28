@@ -77,6 +77,16 @@ namespace OmegaTube.Data
         public string Name, Handle, Photo, Error;
     }
 
+    // Why a video could not start (see omega_player_last_error).
+    public class PlayError
+    {
+        public string Kind = "other";   // login | age | upcoming | unplayable | unavailable | rate_limited | http | network | formats | player | other
+        public string Status = "";      // YouTube's playabilityStatus or "HTTP_<code>"
+        public string Reason = "";      // YouTube's own message, in the app language
+        public string Detail = "";      // technical error
+        public bool SignedIn;
+    }
+
     public class FeedPage
     {
         public List<VideoItem> Items = new List<VideoItem>();
@@ -235,6 +245,17 @@ namespace OmegaTube.Data
                 rows.Add(o as string ?? "");
             }
             return rows;
+        }
+
+        // Why the last PlayerCreateYouTube failed. No network call.
+        public static PlayError LastPlayError()
+        {
+            object root = Call(NativeCore.PlayerLastError());
+            return new PlayError
+            {
+                Kind = Json.Str(root, "kind", "other"), Status = Json.Str(root, "status"), Reason = Json.Str(root, "reason"),
+                Detail = Json.Str(root, "detail"), SignedIn = Json.Bool(root, "signedIn"),
+            };
         }
 
         // What the player resolved (qualities, audio tracks, captions...). No network call.

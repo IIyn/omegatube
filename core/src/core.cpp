@@ -5,6 +5,7 @@
 #include <climits>
 #include <cstdlib>
 #include <cstring>
+#include <mutex>
 
 #include <nlohmann/json.hpp>
 #include <stdexcept>
@@ -153,6 +154,33 @@ omega_player* start_youtube(void* window, int width, int height, omega::yt::Clie
 
 namespace {
 
+// Why the last omega_player_create_youtube failed (omega_player_last_error).
+std::mutex g_play_error_mutex;
+nlohmann::json g_play_error = nlohmann::json::object();
+
+void set_play_error(const std::string& kind, const std::string& status, const std::string& reason,
+                    const std::string& detail) {
+    std::lock_guard<std::mutex> lock(g_play_error_mutex);
+    g_play_error = {{"kind", kind},
+                    {"status", status},
+                    {"reason", reason},
+                    {"detail", detail},
+                    {"signedIn", omega::yt::shared_auth().signed_in()}};
+}
+
+// YouTube's playabilityStatus (or HTTP refusal) -> the app's error kinds.
+std::string refusal_kind(const std::string& status) {
+    if (status == "LOGIN_REQUIRED") return "login";
+    if (status.rfind("AGE_", 0) == 0 || status == "CONTENT_CHECK_REQUIRED") return "age";
+    if (status == "LIVE_STREAM_OFFLINE") return "upcoming";
+    if (status == "UNPLAYABLE") return "unplayable";
+    if (status == "ERROR") return "unavailable";
+    if (status == "HTTP_429") return "rate_limited";
+    if (status.rfind("HTTP_", 0) == 0) return "http";
+    if (status == "NETWORK") return "network";
+    return "other";
+}
+
 // Audio languages of a multi-track video, in YouTube's order (one entry per track id).
 nlohmann::json audio_tracks_json(const omega::yt::VideoInfo& info) {
     nlohmann::json tracks = nlohmann::json::array();
@@ -177,6 +205,8 @@ omega_player* omega_player_create_youtube(void* window, int width, int height, c
     std::string error;
     if (!client.player(video_id ? video_id : "", info, error)) {
         OLOG("youtube %s: %s", video_id ? video_id : "-", error.c_str());
+        const omega::yt::Client::Refusal& r = client.refusal();
+        set_play_error(refusal_kind(r.status), r.status, r.reason, error);
         return nullptr;
     }
     std::vector<std::string> prefs = omega::yt::parse_codec_list(codecs && *codecs ? codecs : "avc1,vp9");
@@ -185,6 +215,8 @@ omega_player* omega_player_create_youtube(void* window, int width, int height, c
     const omega::yt::Format* audio = omega::yt::pick_audio(info, audio_track ? audio_track : "");
     if (videos.empty() || !audio) {
         OLOG("youtube %s: no playable video (%s) / AAC audio format", video_id, codecs ? codecs : "-");
+        set_play_error("formats", "", "", videos.empty() ? "no video format for " + std::string(codecs ? codecs : "-")
+                                                          : "no AAC audio format");
         return nullptr;
     }
     // A codec the TV refuses (ESPlayer rejects its stream info) is dropped and the next best format tried.
@@ -221,6 +253,8 @@ omega_player* omega_player_create_youtube(void* window, int width, int height, c
         }
         refused.push_back(video->video_codec());
     }
+    std::vector<std::string> last = omega::log::tail(1);  // "player start failed: ..."
+    set_play_error("player", "", "", last.empty() ? "" : last.back());
     return nullptr;
 }
 
@@ -257,6 +291,11 @@ void omega_player_destroy(omega_player* p) { delete p; }
 
 namespace {
 char* to_c_json(const nlohmann::json& j);
+}
+
+char* omega_player_last_error(void) {
+    std::lock_guard<std::mutex> lock(g_play_error_mutex);
+    return to_c_json(g_play_error);
 }
 
 char* omega_player_formats(omega_player* p) {
