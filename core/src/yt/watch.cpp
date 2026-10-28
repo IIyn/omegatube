@@ -155,7 +155,8 @@ void WatchReporter::run() {
         }
         if (++waited < 40 && !final_report) continue;  // every 20 s
         waited = 0;
-        if (span_start < 0 || last <= span_start) continue;
+        // Nothing new since the last report; the final one is still sent (it carries the resume point).
+        if (span_start < 0 || (last <= span_start && !final_report)) continue;
         token = shared_auth().access_token(error);
         if (token.empty()) return;
         double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
@@ -166,10 +167,16 @@ void WatchReporter::run() {
                      {"cmt", seconds_text(last / 1000.0)},
                      {"len", seconds_text(length_ms_ / 1000.0)},
                      {"el", "detailpage"},
-                     {"state", "playing"}};
+                     {"state", final_report ? "paused" : "playing"}};
+        // The last report of the playback (player closed): YouTube's players flag it, and it is the one
+        // the account's resume point follows on other devices.
+        if (final_report) wf.push_back({"final", "1"});
         add_client(wf, version);
         wf.insert(wf.end(), {{"rt", seconds_text(elapsed)}, {"muted", "0"}, {"volume", "100"}});
-        ping(stats_url(watchtime, wf), token);
+        bool sent = ping(stats_url(watchtime, wf), token);
+        if (final_report || !sent)
+            OLOG("history: %swatchtime %s %.0f-%.0f s -> %s", final_report ? "final " : "", video_id_.c_str(),
+                 span_start / 1000.0, last / 1000.0, sent ? "ok" : "failed");
         span_start = last;
     }
 }

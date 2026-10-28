@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <functional>
 #include <mutex>
 
 #include "util/log.h"
@@ -252,6 +253,86 @@ int64_t to_int(const json& j, const char* key) {
     return 0;
 }
 
+// Subtitle tracks and the machine-translation targets (captions.playerCaptionsTracklistRenderer).
+void parse_captions(const json& captions, VideoInfo& out) {
+    out.captions.clear();
+    out.translations.clear();
+    const json& list = captions.value("playerCaptionsTracklistRenderer", json::object());
+    for (const json& t : list.value("captionTracks", json::array())) {
+        CaptionTrack track;
+        track.url = t.value("baseUrl", "");
+        if (track.url.empty()) continue;
+        if (track.url[0] == '/') track.url = "https://www.youtube.com" + track.url;
+        track.lang = t.value("languageCode", "");
+        track.name = text_of(t.value("name", json::object()));
+        track.automatic = t.value("kind", "") == "asr";
+        track.translatable = t.value("isTranslatable", false);
+        if (track.name.empty()) track.name = track.lang;
+        out.captions.push_back(std::move(track));
+    }
+    for (const json& l : list.value("translationLanguages", json::array())) {
+        std::string code = l.value("languageCode", "");
+        if (!code.empty()) out.translations.emplace_back(code, text_of(l.value("languageName", json::object())));
+    }
+}
+
+// `url` without its `name` query parameter.
+std::string drop_param(const std::string& url, const std::string& name) {
+    size_t mark = url.find('?');
+    if (mark == std::string::npos) return url;
+    std::string out = url.substr(0, mark + 1);
+    bool first = true;
+    for (size_t at = mark + 1; at <= url.size();) {
+        size_t end = url.find('&', at);
+        if (end == std::string::npos) end = url.size();
+        std::string pair = url.substr(at, end - at);
+        if (!pair.empty() && pair.substr(0, pair.find('=')) != name) {
+            out += (first ? "" : "&") + pair;
+            first = false;
+        }
+        at = end + 1;
+    }
+    return out;
+}
+
+// POST to an InnerTube endpoint as the signed-in account (TV client + Bearer), as YouTube's TV app does.
+net::Response post_as_account(const std::string& endpoint, json body, const std::string& access_token) {
+    ClientDef def = client_def("browse", "");
+    body["context"] = {{"client", def.client}};
+    net::Request req;
+    req.method = "POST";
+    req.url = "https://www.youtube.com/youtubei/v1/" + endpoint + "?prettyPrint=false";
+    req.headers = client_headers(def, "");
+    req.headers.emplace_back("Authorization", "Bearer " + access_token);
+    req.body = body.dump();
+    return net::fetch(req);
+}
+
+std::string http_error(const char* what, const net::Response& res) {
+    return std::string(what) + ": " + (res.error.empty() ? "http " + std::to_string(res.status) : res.error);
+}
+
+// Every text of `key` objects under j (e.g. all "metadataParts" texts of a header).
+void texts_under(const json& j, const char* key, std::vector<std::string>& out) {
+    if (j.is_object()) {
+        for (auto it = j.begin(); it != j.end(); ++it) {
+            if (it.key() == key && it.value().is_array()) {
+                for (const json& part : it.value()) out.push_back(text_of(part.value("text", json::object())));
+            } else {
+                texts_under(it.value(), key, out);
+            }
+        }
+    } else if (j.is_array()) {
+        for (const json& e : j) texts_under(e, key, out);
+    }
+}
+
+bool contains_any(const std::string& s, std::initializer_list<const char*> words) {
+    for (const char* w : words)
+        if (s.find(w) != std::string::npos) return true;
+    return false;
+}
+
 }  // namespace
 
 bool Client::ensure_visitor(std::string& error) {
@@ -351,6 +432,10 @@ bool Client::player_with(const char* role, const std::string& video_id, VideoInf
     out.author = details.value("author", "");
     out.length_s = to_int(details, "lengthSeconds");
     out.is_live = details.value("isLive", false);
+    out.description = details.value("shortDescription", "");
+    out.channel_id = details.value("channelId", "");
+    out.views = details.value("viewCount", "");
+    parse_captions(r.value("captions", json::object()), out);
     out.formats.clear();
     out.user_agent = def.user_agent;
     size_t failed = 0;
@@ -375,6 +460,11 @@ bool Client::player_with(const char* role, const std::string& video_id, VideoInf
         fmt.content_length = to_int(f, "contentLength");
         fmt.audio_sample_rate = static_cast<int>(to_int(f, "audioSampleRate"));
         fmt.audio_channels = static_cast<int>(to_int(f, "audioChannels"));
+        if (f.value("isDrc", false)) continue;  // loudness-compressed duplicate of an audio format
+        const json& track = f.value("audioTrack", json::object());
+        fmt.audio_track_id = track.value("id", "");
+        fmt.audio_track_name = track.value("displayName", "");
+        fmt.audio_default = track.value("audioIsDefault", false);
         out.formats.push_back(std::move(fmt));
     }
     OLOG("yt: '%s' by %s, %llds, %zu formats (%s client%s)", out.title.c_str(), out.author.c_str(),
@@ -500,6 +590,117 @@ bool Client::related(const std::string& video_id, Feed& out, std::string& error)
     return true;
 }
 
+bool Client::details(const std::string& video_id, const std::string& access_token, VideoDetails& out,
+                     std::string& error) {
+    if (!ensure_visitor(error)) return false;
+    ClientDef def = client_def("search", visitor_data_, web_client_version_);
+    json body = {{"context", {{"client", def.client}}}, {"videoId", video_id}};
+    net::Request req;
+    req.method = "POST";
+    req.url = "https://www.youtube.com/youtubei/v1/next?prettyPrint=false";
+    req.headers = client_headers(def, visitor_data_);
+    req.body = body.dump();
+    net::Response res = net::fetch(req);
+    if (!res.ok()) {
+        error = http_error("next", res);
+        return false;
+    }
+    json r = json::parse(res.body, nullptr, false);
+    if (r.is_discarded()) {
+        error = "next: invalid json";
+        return false;
+    }
+    out = VideoDetails{};
+    if (const json* primary = find_key(r, "videoPrimaryInfoRenderer"))
+        out.date = text_of(primary->value("dateText", json::object()));
+    if (const json* owner = find_key(r, "videoOwnerRenderer")) {
+        out.channel = text_of(owner->value("title", json::object()));
+        out.channel_avatar = last_thumbnail(owner->value("thumbnail", json::object()));
+        out.subscribers = text_of(owner->value("subscriberCountText", json::object()));
+        // The channel link moved from navigationEndpoint into the title runs: take any browseId under the owner.
+        if (const json* browse = find_key(*owner, "browseId"))
+            if (browse->is_string()) out.channel_id = browse->get<std::string>();
+    }
+    if (out.channel_id.empty())
+        if (const json* sub = find_key(r, "subscribeButtonRenderer"))
+            if (sub->is_object()) out.channel_id = sub->value("channelId", "");
+    if (out.channel_avatar.compare(0, 2, "//") == 0) out.channel_avatar = "https:" + out.channel_avatar;
+
+    // The account's state: only the TV "next" answer (with the Bearer token) knows it.
+    if (!access_token.empty()) {
+        net::Response tv = post_as_account("next", {{"videoId", video_id}}, access_token);
+        json t = tv.ok() ? json::parse(tv.body, nullptr, false) : json();
+        if (t.is_object()) {
+            if (const json* like = find_key(t, "likeStatus"))
+                if (like->is_string()) out.like_status = like->get<std::string>();
+            if (const json* sub = find_key(t, "subscribeButtonRenderer"))
+                if (sub->is_object()) {
+                    if (sub->contains("subscribed")) out.subscribed = sub->value("subscribed", false) ? 1 : 0;
+                    if (out.channel_id.empty()) out.channel_id = sub->value("channelId", "");
+                }
+        } else {
+            OLOG("yt: details %s: account state %s", video_id.c_str(), http_error("tv next", tv).c_str());
+        }
+    }
+    OLOG("yt: details %s: '%s' %s, %s, like %s, subscribed %d", video_id.c_str(), out.channel.c_str(),
+         out.subscribers.c_str(), out.date.c_str(), out.like_status.c_str(), out.subscribed);
+    return true;
+}
+
+bool Client::channel(const std::string& channel_id, const std::string& continuation, Feed& out, ChannelInfo& header,
+                     std::string& error) {
+    if (!ensure_visitor(error)) return false;
+    ClientDef def = client_def("search", visitor_data_, web_client_version_);
+    json body = {{"context", {{"client", def.client}}}};
+    if (continuation.empty()) {
+        body["browseId"] = channel_id;
+        body["params"] = "EgZ2aWRlb3PyBgQKAjoA";  // "Vidéos" tab
+    } else {
+        body["continuation"] = continuation;
+    }
+    net::Request req;
+    req.method = "POST";
+    req.url = "https://www.youtube.com/youtubei/v1/browse?prettyPrint=false";
+    req.headers = client_headers(def, visitor_data_);
+    req.body = body.dump();
+    net::Response res = net::fetch(req);
+    if (!res.ok()) {
+        error = http_error("channel", res);
+        return false;
+    }
+    last_response_ = res.body;
+    json r = json::parse(res.body, nullptr, false);
+    if (r.is_discarded()) {
+        error = "channel: invalid json";
+        return false;
+    }
+    out = Feed{};
+    collect(r, out);
+    if (const json* meta = find_key(r, "channelMetadataRenderer")) {
+        header.title = meta->value("title", "");
+        header.avatar = last_thumbnail(meta->value("avatar", json::object()));
+    }
+    if (const json* page = find_key(r, "pageHeaderViewModel")) {
+        std::vector<std::string> parts;
+        texts_under(*page, "metadataParts", parts);
+        for (const std::string& p : parts)
+            if (contains_any(p, {"abonn", "subscriber"})) header.subscribers = p;
+    }
+    // Videos of a channel page carry no channel name: lockups then list [views, age] where parse_lockup
+    // expects [channel, views, age].
+    for (FeedItem& item : out.items) {
+        if (contains_any(item.channel, {"vue", "view"})) {
+            item.published = item.views;
+            item.views = item.channel;
+            item.channel.clear();
+        }
+        if (item.channel.empty()) item.channel = header.title;
+    }
+    OLOG("yt: channel %s%s -> %zu items", channel_id.c_str(), continuation.empty() ? "" : " (next page)",
+         out.items.size());
+    return true;
+}
+
 bool Client::browse(const std::string& browse_id, const std::string& continuation, const std::string& access_token,
                     Feed& out, std::string& error) {
     ClientDef def = client_def("browse", "");
@@ -607,13 +808,153 @@ std::vector<std::string> parse_codec_list(const std::string& list) {
     return out;
 }
 
-const Format* pick_audio(const VideoInfo& info) {
+const Format* pick_audio(const VideoInfo& info, const std::string& track) {
+    auto aac = [](const Format& f) {
+        return f.is_audio() && f.mime == "audio/mp4" && f.codecs.compare(0, 4, "mp4a") == 0;
+    };
+    // The track to play: exact id, else same language ("fr" matches "fr.3" and "fr-FR.3"), else the default.
+    std::string wanted;
+    if (!track.empty()) {
+        for (const Format& f : info.formats)
+            if (aac(f) && f.audio_track_id == track) wanted = track;
+        std::string lang = track.substr(0, track.find_first_of(".-"));
+        for (const Format& f : info.formats) {
+            if (!wanted.empty() || !aac(f) || f.audio_track_id.empty()) continue;
+            if (f.audio_track_id.substr(0, f.audio_track_id.find_first_of(".-")) == lang) wanted = f.audio_track_id;
+        }
+    }
+    if (wanted.empty())
+        for (const Format& f : info.formats)
+            if (aac(f) && f.audio_default) wanted = f.audio_track_id;
     const Format* best = nullptr;
     for (const Format& f : info.formats) {
-        if (!f.is_audio() || f.mime != "audio/mp4" || f.codecs.compare(0, 4, "mp4a") != 0) continue;
+        if (!aac(f) || (!wanted.empty() && f.audio_track_id != wanted)) continue;
         if (!best || f.bitrate > best->bitrate) best = &f;
     }
     return best;
+}
+
+bool fetch_captions(const std::string& url, const std::string& translate_to, std::vector<CaptionCue>& out,
+                    std::string& error) {
+    net::Request req;
+    req.url = drop_param(drop_param(url, "fmt"), "tlang") + "&fmt=json3";
+    if (!translate_to.empty()) req.url += "&tlang=" + translate_to;
+    req.headers = {{"User-Agent", cfg::str({"innertube", "search", "userAgent"})}};
+    net::Response res = net::fetch(req);
+    if (!res.ok()) {
+        error = "captions: " + (res.error.empty() ? "http " + std::to_string(res.status) : res.error);
+        return false;
+    }
+    json r = json::parse(res.body, nullptr, false);
+    if (!r.is_object()) {
+        error = res.body.empty() ? "captions: empty answer" : "captions: invalid json";
+        return false;
+    }
+    out.clear();
+    // json3: events {tStartMs, dDurationMs, segs:[{utf8}]}; speech-recognition tracks split lines into
+    // word segments and add "\n"-only events, which carry nothing to show.
+    for (const json& e : r.value("events", json::array())) {
+        if (!e.contains("segs")) continue;
+        CaptionCue cue;
+        for (const json& seg : e["segs"]) cue.text += seg.value("utf8", "");
+        size_t first = cue.text.find_first_not_of(" \n");
+        if (first == std::string::npos) continue;
+        cue.text = cue.text.substr(first, cue.text.find_last_not_of(" \n") + 1 - first);
+        cue.start_ms = to_int(e, "tStartMs");
+        cue.end_ms = cue.start_ms + to_int(e, "dDurationMs");
+        out.push_back(std::move(cue));
+    }
+    OLOG("yt: captions %s -> %zu cues", translate_to.empty() ? "" : ("-> " + translate_to).c_str(), out.size());
+    return true;
+}
+
+bool rate_video(const std::string& video_id, const std::string& rating, const std::string& access_token,
+                std::string& error) {
+    std::string endpoint = rating == "like" ? "like/like" : rating == "dislike" ? "like/dislike" : "like/removelike";
+    net::Response res = post_as_account(endpoint, {{"target", {{"videoId", video_id}}}}, access_token);
+    if (!res.ok()) {
+        error = http_error(endpoint.c_str(), res);
+        return false;
+    }
+    OLOG("yt: %s %s ok", endpoint.c_str(), video_id.c_str());
+    return true;
+}
+
+bool set_subscribed(const std::string& channel_id, bool subscribe, const std::string& access_token, std::string& error) {
+    std::string endpoint = subscribe ? "subscription/subscribe" : "subscription/unsubscribe";
+    net::Response res = post_as_account(endpoint, {{"channelIds", json::array({channel_id})}}, access_token);
+    if (!res.ok()) {
+        error = http_error(endpoint.c_str(), res);
+        return false;
+    }
+    OLOG("yt: %s %s ok", endpoint.c_str(), channel_id.c_str());
+    return true;
+}
+
+bool vote_counts(const std::string& video_id, int64_t& likes, int64_t& dislikes, std::string& error) {
+    likes = dislikes = -1;
+    std::string api = cfg::str({"returnYouTubeDislike", "api"});
+    if (api.empty()) api = "https://returnyoutubedislikeapi.com";
+    net::Request req;
+    req.url = api + "/votes?videoId=" + video_id;
+    req.headers = {{"User-Agent", "OmegaTube"}};
+    net::Response res = net::fetch(req);
+    if (!res.ok()) {
+        error = http_error("ryd", res);
+        return false;
+    }
+    json r = json::parse(res.body, nullptr, false);
+    if (!r.is_object()) {
+        error = "ryd: invalid json";
+        return false;
+    }
+    likes = to_int(r, "likes");
+    dislikes = to_int(r, "dislikes");
+    return true;
+}
+
+bool account_info(const std::string& access_token, AccountInfo& out, std::string& error) {
+    ClientDef def = client_def("browse", "");
+    json body = {{"context", {{"client", def.client}}}};
+    net::Request req;
+    req.method = "POST";
+    req.url = "https://www.youtube.com/youtubei/v1/account/accounts_list?prettyPrint=false";
+    req.headers = client_headers(def, "");
+    req.headers.emplace_back("Authorization", "Bearer " + access_token);
+    req.body = body.dump();
+    net::Response res = net::fetch(req);
+    if (!res.ok()) {
+        error = "accounts_list: " + (res.error.empty() ? "http " + std::to_string(res.status) : res.error);
+        return false;
+    }
+    json r = json::parse(res.body, nullptr, false);
+    // accountItem {accountName, accountPhoto, channelHandle, isSelected}: the selected one, else the first.
+    std::vector<const json*> items;
+    std::function<void(const json&)> walk = [&](const json& j) {
+        if (j.is_object()) {
+            for (auto it = j.begin(); it != j.end(); ++it) {
+                if ((it.key() == "accountItem" || it.key() == "accountItemRenderer") && it.value().is_object())
+                    items.push_back(&it.value());
+                else
+                    walk(it.value());
+            }
+        } else if (j.is_array()) {
+            for (const json& e : j) walk(e);
+        }
+    };
+    if (!r.is_discarded()) walk(r);
+    const json* item = nullptr;
+    for (const json* i : items)
+        if (!item || i->value("isSelected", false)) item = i;
+    if (!item) {
+        error = "accounts_list: no account";
+        return false;
+    }
+    out.name = text_of(item->value("accountName", json::object()));
+    out.handle = text_of(item->value("channelHandle", json::object()));
+    out.photo = last_thumbnail(item->value("accountPhoto", json::object()));
+    if (out.photo.compare(0, 2, "//") == 0) out.photo = "https:" + out.photo;
+    return true;
 }
 
 }  // namespace omega::yt

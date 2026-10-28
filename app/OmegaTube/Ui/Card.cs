@@ -2,6 +2,7 @@ using System;
 using OmegaTube.Data;
 using Tizen.NUI;
 using Tizen.NUI.BaseComponents;
+using static OmegaTube.I18n;
 
 namespace OmegaTube.Ui
 {
@@ -40,7 +41,7 @@ namespace OmegaTube.Ui
             };
             Add(thumb);
 
-            string badge = item.Live ? "EN DIRECT" : item.Duration;
+            string badge = item.Live ? T("LIVE") : item.Duration;
             if (!string.IsNullOrEmpty(badge))
             {
                 var duration = Widgets.Label(" " + badge + " ", Theme.SmallSize - 2, Theme.Text);

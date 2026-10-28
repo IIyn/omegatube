@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using OmegaTube.Data;
 using Tizen.NUI;
 using Tizen.NUI.BaseComponents;
+using static OmegaTube.I18n;
 
 namespace OmegaTube.Ui
 {
@@ -46,7 +47,7 @@ namespace OmegaTube.Ui
             header.PositionX = Theme.FocusMargin;
             Add(header);
 
-            status = Widgets.Label("Chargement…", Theme.BodySize, Theme.TextDim, width - 40);
+            status = Widgets.Label(T("Loading…"), Theme.BodySize, Theme.TextDim, width - 40);
             status.Position = new Position(Theme.FocusMargin, 140);
             Add(status);
 
@@ -90,7 +91,7 @@ namespace OmegaTube.Ui
             {
                 if (cards.Count == 0)
                 {
-                    status.Text = "Erreur : " + page.Error;
+                    status.Text = T("Error: {0}", page.Error);
                 }
                 return;
             }
@@ -113,7 +114,7 @@ namespace OmegaTube.Ui
             }
             continuation = page.Continuation;
             AddCards(page.Items);
-            status.Text = cards.Count == 0 ? "Aucune vidéo" : "";
+            status.Text = cards.Count == 0 ? T("No videos") : "";
             UpdateVisible();
             if (focused && cards.Count > 0)
             {

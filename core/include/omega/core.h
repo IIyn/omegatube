@@ -59,12 +59,17 @@ OMEGA_API omega_player* omega_player_create(void* ecore_wl2_window, int width, i
 // codecs: comma-separated preference among "avc1" (H.264), "vp9", "av01" (AV1); NULL/empty = "avc1,vp9".
 // At equal resolution and fps the first listed codec wins; if the TV refuses a codec the next one is tried.
 // Blocking (network): call it off the UI thread. Returns NULL on failure; the reason is in the log.
-// start_ms > 0 resumes at that position.
+// start_ms > 0 resumes at that position. audio_track: audio track id ("fr.3") or language ("fr") for videos
+// with several audio languages; NULL/empty or not offered = the default (original) track.
 OMEGA_API omega_player* omega_player_create_youtube(void* ecore_wl2_window, int width, int height, const char* video_id,
-                                                    int max_height, const char* codecs, int64_t start_ms);
+                                                    int max_height, const char* codecs, int64_t start_ms,
+                                                    const char* audio_track);
 // Video qualities of a YouTube player (best variant per height, same codec preference as at creation):
 // {"current":{"width","height","fps","codec"},"available":[{...}, ...],"live":bool,"title","author"} (highest first),
-// codec = "avc1" | "vp9" | "av01". Release with omega_free(). {"available":[]} for a URL player.
+// codec = "avc1" | "vp9" | "av01". Also "description", "views" (raw count), "channelId",
+// "audioTracks":[{"id","name","default"}] (empty for single-track videos), "audioTrack": the playing id,
+// "captions":[{"url","lang","name","auto","translatable"}], "translations":[{"code","name"}].
+// Release with omega_free(). {"available":[]} for a URL player.
 OMEGA_API char* omega_player_formats(omega_player* player);
 OMEGA_API void omega_player_toggle_pause(omega_player* player);
 // Seeks to position_ms (video decoding restarts from the preceding keyframe). Blocking for a few hundred ms.
@@ -90,6 +95,18 @@ OMEGA_API char* omega_yt_browse(const char* browse_id, const char* continuation)
 OMEGA_API char* omega_yt_playlist(const char* video_id, const char* playlist_id);
 // Related videos of video_id (player suggestions). Same JSON as search.
 OMEGA_API char* omega_yt_related(const char* video_id);
+// Watch-page details: {"channelId","channel","channelAvatar","subscribers","date","likes","dislikes",
+// "likeStatus":"LIKE|DISLIKE|INDIFFERENT|" (empty: signed out),"subscribed":1|0|-1} or {"error"}.
+// likes / dislikes: Return YouTube Dislike estimates, -1 when unknown.
+OMEGA_API char* omega_yt_details(const char* video_id);
+// As the signed-in account: rating "like" | "dislike" | "none"; (un)subscribe. {"ok":true} or {"error"}.
+OMEGA_API char* omega_yt_rate(const char* video_id, const char* rating);
+OMEGA_API char* omega_yt_subscribe(const char* channel_id, int subscribe);
+// A channel's videos (newest first): same JSON as search plus "title","avatar","subscribers" (first page).
+OMEGA_API char* omega_yt_channel(const char* channel_id, const char* continuation);
+// Subtitles: a caption track URL (from omega_player_formats), machine-translated to translate_to when not
+// NULL/empty: {"cues":[{"start","end","text"}]} (ms) or {"error"}.
+OMEGA_API char* omega_yt_captions(const char* url, const char* translate_to);
 // SponsorBlock: {"segments":[{"category","start","end"}]} (seconds) or {"error"}.
 OMEGA_API char* omega_sb_segments(const char* video_id);
 OMEGA_API void omega_free(void* p);
@@ -104,6 +121,8 @@ OMEGA_API char* omega_auth_begin(void);
 // {"status":"pending|slow_down|done|denied|expired|failed","error":"..."}
 OMEGA_API char* omega_auth_poll(const char* device_code);
 OMEGA_API void omega_auth_sign_out(void);
+// Network: the signed-in account {"name","handle","photo"} or {"error"}.
+OMEGA_API char* omega_auth_account(void);
 
 // QR code of `text` (ECC medium): {"size":N,"rows":["0101...", ...]} ("1" = dark module).
 OMEGA_API char* omega_qr_encode(const char* text);

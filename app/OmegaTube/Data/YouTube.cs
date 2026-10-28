@@ -31,12 +31,59 @@ namespace OmegaTube.Data
         public string Codec;   // avc1 | vp9 | av01
     }
 
+    public class AudioTrack
+    {
+        public string Id, Name;
+        public bool Default;
+    }
+
+    public class CaptionTrack
+    {
+        public string Url, Lang, Name;
+        public bool Auto, Translatable;
+    }
+
+    public class CaptionCue
+    {
+        public long StartMs, EndMs;
+        public string Text;
+    }
+
+    // What the core resolved for the playing video: formats, audio languages, subtitles, details.
+    public class PlaybackInfo
+    {
+        public List<VideoQuality> Qualities = new List<VideoQuality>();   // highest first
+        public VideoQuality Current;
+        public bool Live;
+        public string Title = "", Author = "", Description = "", Views = "", ChannelId = "";
+        public List<AudioTrack> AudioTracks = new List<AudioTrack>();     // empty: single-language video
+        public string AudioTrack = "";                                    // playing track id
+        public List<CaptionTrack> Captions = new List<CaptionTrack>();
+        public Dictionary<string, string> Translations = new Dictionary<string, string>();  // code -> name
+    }
+
+    // Watch-page details and the account's state for the playing video.
+    public class VideoDetails
+    {
+        public string ChannelId = "", Channel = "", ChannelAvatar = "", Subscribers = "", Date = "";
+        public long Likes = -1, Dislikes = -1;      // Return YouTube Dislike estimates
+        public string LikeStatus = "";             // LIKE | DISLIKE | INDIFFERENT | "" (signed out)
+        public int Subscribed = -1;                // 1 / 0 / -1 unknown
+        public string Error;
+    }
+
+    public class AccountInfo
+    {
+        public string Name, Handle, Photo, Error;
+    }
+
     public class FeedPage
     {
         public List<VideoItem> Items = new List<VideoItem>();
         public List<VideoItem> Highlights = new List<VideoItem>();  // subscriptions: YouTube's "most relevant" shelf
         public string Continuation = "";
-        public string Title = "";   // playlists
+        public string Title = "";   // playlists, channels
+        public string Avatar = "", Subscribers = "";   // channels
         public string Error;
     }
 
@@ -54,6 +101,34 @@ namespace OmegaTube.Data
         {
             return Task.Run(() => ToPage(Call(NativeCore.YtPlaylist(videoId, playlistId))));
         }
+
+        public static Task<FeedPage> Channel(string channelId, string continuation = "")
+        {
+            return Task.Run(() => ToPage(Call(NativeCore.YtChannel(channelId, continuation ?? ""))));
+        }
+
+        public static Task<VideoDetails> Details(string videoId)
+        {
+            return Task.Run(() =>
+            {
+                object root = Call(NativeCore.YtDetails(videoId));
+                return new VideoDetails
+                {
+                    ChannelId = Json.Str(root, "channelId"), Channel = Json.Str(root, "channel"),
+                    ChannelAvatar = Json.Str(root, "channelAvatar"), Subscribers = Json.Str(root, "subscribers"),
+                    Date = Json.Str(root, "date"), Likes = (long)Json.Num(root, "likes", -1),
+                    Dislikes = (long)Json.Num(root, "dislikes", -1), LikeStatus = Json.Str(root, "likeStatus"),
+                    Subscribed = (int)Json.Num(root, "subscribed", -1), Error = Json.Str(root, "error", null),
+                };
+            });
+        }
+
+        // "like" | "dislike" | "none". Returns the error, or null.
+        public static Task<string> Rate(string videoId, string rating) =>
+            Task.Run(() => Json.Str(Call(NativeCore.YtRate(videoId, rating)), "error", null));
+
+        public static Task<string> Subscribe(string channelId, bool subscribe) =>
+            Task.Run(() => Json.Str(Call(NativeCore.YtSubscribe(channelId, subscribe)), "error", null));
 
         public static Task<FeedPage> Related(string videoId)
         {
@@ -75,6 +150,8 @@ namespace OmegaTube.Data
                 page.Highlights = ToItems(root, "highlights");
                 page.Continuation = Json.Str(root, "continuation");
                 page.Title = Json.Str(root, "title");
+                page.Avatar = Json.Str(root, "avatar");
+                page.Subscribers = Json.Str(root, "subscribers");
                 return page;
             }
         }
@@ -160,20 +237,76 @@ namespace OmegaTube.Data
             return rows;
         }
 
-        // Qualities the core can play for this player (highest first) and the one playing. No network call.
-        public static List<VideoQuality> Qualities(IntPtr player, out VideoQuality current, out bool live, out string title)
+        // What the player resolved (qualities, audio tracks, captions...). No network call.
+        public static PlaybackInfo Playback(IntPtr player)
         {
             object root = Call(NativeCore.PlayerFormats(player));
-            live = Json.Bool(root, "live", false);
-            title = Json.Str(root, "title");
+            var info = new PlaybackInfo
+            {
+                Live = Json.Bool(root, "live", false),
+                Title = Json.Str(root, "title"),
+                Author = Json.Str(root, "author"),
+                Description = Json.Str(root, "description"),
+                Views = Json.Str(root, "views"),
+                ChannelId = Json.Str(root, "channelId"),
+                AudioTrack = Json.Str(root, "audioTrack"),
+            };
             object cur = Json.Obj(root, "current");
-            current = cur != null ? ToQuality(cur) : null;
-            var list = new List<VideoQuality>();
+            info.Current = cur != null ? ToQuality(cur) : null;
             foreach (object o in Json.Arr(root, "available") ?? new List<object>())
             {
-                list.Add(ToQuality(o));
+                info.Qualities.Add(ToQuality(o));
             }
-            return list;
+            foreach (object o in Json.Arr(root, "audioTracks") ?? new List<object>())
+            {
+                info.AudioTracks.Add(new AudioTrack { Id = Json.Str(o, "id"), Name = Json.Str(o, "name"), Default = Json.Bool(o, "default") });
+            }
+            foreach (object o in Json.Arr(root, "captions") ?? new List<object>())
+            {
+                info.Captions.Add(new CaptionTrack
+                {
+                    Url = Json.Str(o, "url"), Lang = Json.Str(o, "lang"), Name = Json.Str(o, "name"),
+                    Auto = Json.Bool(o, "auto"), Translatable = Json.Bool(o, "translatable"),
+                });
+            }
+            foreach (object o in Json.Arr(root, "translations") ?? new List<object>())
+            {
+                info.Translations[Json.Str(o, "code")] = Json.Str(o, "name");
+            }
+            return info;
+        }
+
+        // Timed subtitle lines of a caption track, machine-translated when translateTo is set. Null on error.
+        public static Task<List<CaptionCue>> Captions(string url, string translateTo = "")
+        {
+            return Task.Run(() =>
+            {
+                object root = Call(NativeCore.YtCaptions(url, translateTo ?? ""));
+                if (Json.Str(root, "error", null) != null)
+                {
+                    return null;
+                }
+                var list = new List<CaptionCue>();
+                foreach (object o in Json.Arr(root, "cues") ?? new List<object>())
+                {
+                    list.Add(new CaptionCue { StartMs = (long)Json.Num(o, "start"), EndMs = (long)Json.Num(o, "end"), Text = Json.Str(o, "text") });
+                }
+                list.Sort((a, b) => a.StartMs.CompareTo(b.StartMs));
+                return list;
+            });
+        }
+
+        public static Task<AccountInfo> Account()
+        {
+            return Task.Run(() =>
+            {
+                object root = Call(NativeCore.AuthAccount());
+                return new AccountInfo
+                {
+                    Name = Json.Str(root, "name"), Handle = Json.Str(root, "handle"), Photo = Json.Str(root, "photo"),
+                    Error = Json.Str(root, "error", null),
+                };
+            });
         }
 
         private static VideoQuality ToQuality(object o)

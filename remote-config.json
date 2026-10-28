@@ -59,6 +59,10 @@
   "sponsorblock": {
     "api": "https://sponsor.ajay.app"
   },
+  "returnYouTubeDislike": {
+    "_comment": "Like / dislike estimates shown under the player title.",
+    "api": "https://returnyoutubedislikeapi.com"
+  },
   "updates": {
     "repo": "IIyn/omegatube"
   }

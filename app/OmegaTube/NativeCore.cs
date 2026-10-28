@@ -47,7 +47,7 @@ namespace OmegaTube
 
         [DllImport(Lib, EntryPoint = "omega_player_create_youtube")]
         public static extern IntPtr PlayerCreateYouTube(IntPtr ecoreWindow, int width, int height, string videoId, int maxHeight,
-                                                        string codecs, long startMs);
+                                                        string codecs, long startMs, string audioTrack);
 
         [DllImport(Lib, EntryPoint = "omega_player_toggle_pause")]
         public static extern void PlayerTogglePause(IntPtr player);
@@ -137,6 +137,34 @@ namespace OmegaTube
 
         [DllImport(Lib, EntryPoint = "omega_player_set_rate")]
         public static extern int PlayerSetRate(IntPtr player, double rate);
+
+        [DllImport(Lib, EntryPoint = "omega_yt_captions")]
+        private static extern IntPtr YtCaptionsRaw(byte[] url, byte[] translateTo);
+
+        public static IntPtr YtCaptions(string url, string translateTo) => YtCaptionsRaw(Utf8z(url), Utf8z(translateTo));
+
+        [DllImport(Lib, EntryPoint = "omega_yt_details")]
+        private static extern IntPtr YtDetailsRaw(byte[] videoId);
+
+        public static IntPtr YtDetails(string videoId) => YtDetailsRaw(Utf8z(videoId));
+
+        [DllImport(Lib, EntryPoint = "omega_yt_rate")]
+        private static extern IntPtr YtRateRaw(byte[] videoId, byte[] rating);
+
+        public static IntPtr YtRate(string videoId, string rating) => YtRateRaw(Utf8z(videoId), Utf8z(rating));
+
+        [DllImport(Lib, EntryPoint = "omega_yt_subscribe")]
+        private static extern IntPtr YtSubscribeRaw(byte[] channelId, int subscribe);
+
+        public static IntPtr YtSubscribe(string channelId, bool subscribe) => YtSubscribeRaw(Utf8z(channelId), subscribe ? 1 : 0);
+
+        [DllImport(Lib, EntryPoint = "omega_yt_channel")]
+        private static extern IntPtr YtChannelRaw(byte[] channelId, byte[] continuation);
+
+        public static IntPtr YtChannel(string channelId, string continuation) => YtChannelRaw(Utf8z(channelId), Utf8z(continuation));
+
+        [DllImport(Lib, EntryPoint = "omega_auth_account")]
+        public static extern IntPtr AuthAccount();
 
         [DllImport(Lib, EntryPoint = "omega_sb_segments")]
         private static extern IntPtr SbSegmentsRaw(byte[] videoId);

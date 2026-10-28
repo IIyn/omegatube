@@ -17,6 +17,11 @@ namespace OmegaTube.Ui
         public static readonly Color Text = Rgb(0xf1f1f1);
         public static readonly Color TextDim = Rgb(0xaaaaaa);
         public static readonly Color Scrim = new Color(0f, 0f, 0f, 0.65f);
+        public static readonly Color Panel = Rgb(0x181818);         // settings / account cards, player panels
+        public static readonly Color PanelLine = Rgb(0x2c2c2c);     // separators
+        public static readonly Color TextMuted = Rgb(0x6f6f6f);
+        public static readonly Color Success = Rgb(0x2ba640);
+        public static readonly Color GlassButton = new Color(1f, 1f, 1f, 0.14f);
 
         public const float TitleSize = 34f;
         public const float BodySize = 24f;
@@ -31,9 +36,13 @@ namespace OmegaTube.Ui
         public const float FocusScale = 1.1f;
         public const int FocusMargin = 30;         // room for the focused card's scale-up
         public const int RowHeight = 470;
+        public const int PanelRadius = 20;
 
         public static int ThumbHeight(int cardWidth) => cardWidth * 9 / 16;
         public static int CardHeight(int cardWidth) => ThumbHeight(cardWidth) + CardInfoHeight;
+
+        public static string Image(string name) =>
+            System.IO.Path.Combine(Tizen.Applications.Application.Current.DirectoryInfo.Resource, "images", name + ".png");
 
         public static string Icon(string name) =>
             System.IO.Path.Combine(Tizen.Applications.Application.Current.DirectoryInfo.Resource, "icons", name + ".png");

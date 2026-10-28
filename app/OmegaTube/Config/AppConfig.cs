@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using OmegaTube.Util;
+using static OmegaTube.I18n;
 
 namespace OmegaTube.Config
 {
@@ -18,12 +19,12 @@ namespace OmegaTube.Config
         public static string GuessIcon(string text)
         {
             string t = (text ?? "").ToLowerInvariant();
-            if (t.Contains("musi") || t.Contains("lofi") || t.Contains("music")) return "music";
-            if (t.Contains("jeu") || t.Contains("gam")) return "gaming";
-            if (t.Contains("sport") || t.Contains("foot")) return "sports";
-            if (t.Contains("actu") || t.Contains("info") || t.Contains("news") || t.Contains("docu")) return "news";
+            if (t.Contains("musi") || t.Contains("músi") || t.Contains("lofi")) return "music";
+            if (t.Contains("jeu") || t.Contains("gam") || t.Contains("jueg")) return "gaming";
+            if (t.Contains("sport") || t.Contains("foot") || t.Contains("deport") || t.Contains("fútbol")) return "sports";
+            if (t.Contains("actu") || t.Contains("info") || t.Contains("news") || t.Contains("notic") || t.Contains("docu")) return "news";
             if (t.Contains("direct") || t.Contains("live")) return "live";
-            if (t.Contains("enfant") || t.Contains("kid")) return "kids";
+            if (t.Contains("enfant") || t.Contains("kid") || t.Contains("niñ")) return "kids";
             return "trending";
         }
     }
@@ -37,9 +38,47 @@ namespace OmegaTube.Config
         public int MaxHeight = 1080;
         // Video codec preference for the core ("avc1" H.264, "vp9", "av01" AV1). Above 1080p YouTube has no H.264.
         public string Codecs = "avc1,vp9";
+        public bool Autoplay = true;        // at the end of a video, play the first suggestion (after a countdown)
+        // Subtitles: language turned on automatically ("" off). Choosing a track in the player updates it.
+        public string CaptionLang = "";
+        public bool CaptionTranslate = true;   // no track in that language: machine-translate one
+        public int CaptionSize = 1;            // index in CaptionSizes
+        public int CaptionBackground = 2;      // index in CaptionBackgrounds
+        // Audio language for dubbed videos ("" = the original track).
+        public string AudioLang = "";
+
+        public static readonly float[] CaptionSizes = { 32f, 40f, 50f, 62f };
+        public static readonly string[] CaptionSizeLabels = { "Small", "Medium", "Large", "Extra large" };
+        public static readonly float[] CaptionBackgrounds = { 0f, 0.45f, 0.75f, 1f };
+        public static readonly string[] CaptionBackgroundLabels = { "None (outline)", "Light", "Dark", "Opaque" };
     }
 
     public enum SkipMode { Auto, Manual, Off }
+
+    // Languages offered for subtitles / dubbed audio (French names), by ISO 639-1 code.
+    public static class Languages
+    {
+        public static readonly string[] Codes = { "fr", "en", "es", "de", "it", "pt", "nl", "ar", "ja", "ko", "zh", "ru", "tr", "pl" };
+        private static readonly string[] Names =
+        {
+            "French", "English", "Spanish", "German", "Italian", "Portuguese", "Dutch", "Arabic", "Japanese",
+            "Korean", "Chinese", "Russian", "Turkish", "Polish",
+        };
+
+        public static string Name(string code)
+        {
+            int i = Array.IndexOf(Codes, Base(code));
+            return i >= 0 ? T(Names[i]) : code;
+        }
+
+        // "fr-FR" / "fr.3" -> "fr"
+        public static string Base(string code)
+        {
+            code = code ?? "";
+            int cut = code.IndexOfAny(new[] { '-', '.', '_' });
+            return (cut >= 0 ? code.Substring(0, cut) : code).ToLowerInvariant();
+        }
+    }
 
     // SponsorBlock categories (https://wiki.sponsor.ajay.app/w/Segment_Categories), French labels and colours.
     public class SponsorCategory
@@ -51,13 +90,13 @@ namespace OmegaTube.Config
         public static readonly SponsorCategory[] All =
         {
             new SponsorCategory { Id = "sponsor", Label = "Sponsor", Color = new Tizen.NUI.Color(0f, 0.83f, 0f, 1f), DefaultMode = SkipMode.Auto },
-            new SponsorCategory { Id = "selfpromo", Label = "Autopromo", Color = new Tizen.NUI.Color(1f, 1f, 0f, 1f), DefaultMode = SkipMode.Auto },
-            new SponsorCategory { Id = "interaction", Label = "Rappel d'abonnement", Color = new Tizen.NUI.Color(0.8f, 0f, 1f, 1f), DefaultMode = SkipMode.Auto },
+            new SponsorCategory { Id = "selfpromo", Label = "Self-promotion", Color = new Tizen.NUI.Color(1f, 1f, 0f, 1f), DefaultMode = SkipMode.Auto },
+            new SponsorCategory { Id = "interaction", Label = "Interaction reminder", Color = new Tizen.NUI.Color(0.8f, 0f, 1f, 1f), DefaultMode = SkipMode.Auto },
             new SponsorCategory { Id = "intro", Label = "Intro", Color = new Tizen.NUI.Color(0f, 1f, 1f, 1f), DefaultMode = SkipMode.Manual },
-            new SponsorCategory { Id = "outro", Label = "Fin / crédits", Color = new Tizen.NUI.Color(0.01f, 0.01f, 0.93f, 1f), DefaultMode = SkipMode.Manual },
-            new SponsorCategory { Id = "preview", Label = "Aperçu / récap", Color = new Tizen.NUI.Color(0f, 0.56f, 0.84f, 1f), DefaultMode = SkipMode.Manual },
-            new SponsorCategory { Id = "filler", Label = "Hors-sujet", Color = new Tizen.NUI.Color(0.45f, 0f, 1f, 1f), DefaultMode = SkipMode.Manual },
-            new SponsorCategory { Id = "music_offtopic", Label = "Passage non musical", Color = new Tizen.NUI.Color(1f, 0.6f, 0f, 1f), DefaultMode = SkipMode.Off },
+            new SponsorCategory { Id = "outro", Label = "Endcards / credits", Color = new Tizen.NUI.Color(0.01f, 0.01f, 0.93f, 1f), DefaultMode = SkipMode.Manual },
+            new SponsorCategory { Id = "preview", Label = "Preview / recap", Color = new Tizen.NUI.Color(0f, 0.56f, 0.84f, 1f), DefaultMode = SkipMode.Manual },
+            new SponsorCategory { Id = "filler", Label = "Filler / tangent", Color = new Tizen.NUI.Color(0.45f, 0f, 1f, 1f), DefaultMode = SkipMode.Manual },
+            new SponsorCategory { Id = "music_offtopic", Label = "Non-music section", Color = new Tizen.NUI.Color(1f, 0.6f, 0f, 1f), DefaultMode = SkipMode.Off },
         };
 
         public static SponsorCategory Find(string id) => Array.Find(All, c => c.Id == id);
@@ -69,6 +108,7 @@ namespace OmegaTube.Config
     {
         public List<HomeRow> HomeRows = new List<HomeRow>();
         public PlayerOptions Player = new PlayerOptions();
+        public string UiLanguage = "en"; // app texts (I18n): en | fr | es
         public string Language = "fr";   // InnerTube hl
         public string Region = "FR";     // InnerTube gl
         public bool CheckUpdates = true;
@@ -131,10 +171,10 @@ namespace OmegaTube.Config
         {
             return new List<HomeRow>
             {
-                new HomeRow { Title = "Musique", Query = "musique", Icon = "music" },
-                new HomeRow { Title = "Jeux vidéo", Query = "jeux vidéo", Icon = "gaming" },
-                new HomeRow { Title = "Science & tech", Query = "science technologie", Icon = "trending" },
-                new HomeRow { Title = "Documentaires", Query = "documentaire", Icon = "news" },
+                new HomeRow { Title = T("Music"), Query = T("music"), Icon = "music" },
+                new HomeRow { Title = T("Gaming"), Query = T("video games"), Icon = "gaming" },
+                new HomeRow { Title = T("Science & tech"), Query = T("science technology"), Icon = "trending" },
+                new HomeRow { Title = T("Documentaries"), Query = T("documentary"), Icon = "news" },
                 new HomeRow { Title = "Lofi", Query = "lofi hip hop", Icon = "music" },
             };
         }
@@ -160,6 +200,12 @@ namespace OmegaTube.Config
                     Visible = Json.Bool(r, "visible", true),
                 });
             }
+            UiLanguage = Json.Str(root, "uiLanguage", UiLanguage);
+            if (Array.IndexOf(I18n.Codes, UiLanguage) < 0)
+            {
+                UiLanguage = "en";
+            }
+            I18n.Lang = UiLanguage;
             Language = Json.Str(root, "language", Language);
             Region = Json.Str(root, "region", Region);
             CheckUpdates = Json.Bool(root, "checkUpdates", CheckUpdates);
@@ -185,6 +231,14 @@ namespace OmegaTube.Config
                 Player.ShowStats = Json.Bool(p, "showStats", Player.ShowStats);
                 Player.MaxHeight = (int)Json.Num(p, "maxHeight", Player.MaxHeight);
                 Player.Codecs = Json.Str(p, "codecs", Player.Codecs);
+                Player.Autoplay = Json.Bool(p, "autoplay", Player.Autoplay);
+                Player.CaptionLang = Json.Str(p, "captionLang", Player.CaptionLang);
+                Player.CaptionTranslate = Json.Bool(p, "captionTranslate", Player.CaptionTranslate);
+                Player.CaptionSize = Math.Max(0, Math.Min(PlayerOptions.CaptionSizes.Length - 1,
+                                                          (int)Json.Num(p, "captionSize", Player.CaptionSize)));
+                Player.CaptionBackground = Math.Max(0, Math.Min(PlayerOptions.CaptionBackgrounds.Length - 1,
+                                                                (int)Json.Num(p, "captionBackground", Player.CaptionBackground)));
+                Player.AudioLang = Json.Str(p, "audioLang", Player.AudioLang);
             }
         }
 
@@ -205,6 +259,7 @@ namespace OmegaTube.Config
             }
             return new Dictionary<string, object>
             {
+                ["uiLanguage"] = UiLanguage,
                 ["language"] = Language,
                 ["region"] = Region,
                 ["checkUpdates"] = CheckUpdates,
@@ -218,6 +273,12 @@ namespace OmegaTube.Config
                     ["showStats"] = Player.ShowStats,
                     ["maxHeight"] = Player.MaxHeight,
                     ["codecs"] = Player.Codecs,
+                    ["autoplay"] = Player.Autoplay,
+                    ["captionLang"] = Player.CaptionLang,
+                    ["captionTranslate"] = Player.CaptionTranslate,
+                    ["captionSize"] = Player.CaptionSize,
+                    ["captionBackground"] = Player.CaptionBackground,
+                    ["audioLang"] = Player.AudioLang,
                 },
             };
         }

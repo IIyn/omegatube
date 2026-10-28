@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "net/http.h"
@@ -18,6 +19,10 @@ struct Format {
     int64_t bitrate = 0;
     int64_t content_length = 0;
     int audio_sample_rate = 0, audio_channels = 0;
+    // Videos with several audio languages (dubbed): the same itags once per track.
+    std::string audio_track_id;    // e.g. "fr.3", "en.4" (empty: single-track video)
+    std::string audio_track_name;  // e.g. "Français (doublage)", "English (United States) original"
+    bool audio_default = false;
     bool is_video() const { return mime.compare(0, 6, "video/") == 0; }
     bool is_audio() const { return mime.compare(0, 6, "audio/") == 0; }
     // "avc1", "vp9" or "av01" for the video codecs we can play (8-bit SDR only), else "".
@@ -42,12 +47,42 @@ struct Feed {
     std::string continuation;  // empty when there is no next page
 };
 
+// One subtitle track of a video (playerCaptionsTracklistRenderer).
+struct CaptionTrack {
+    std::string url;   // timedtext base URL (fetch_captions adds the format / translation)
+    std::string lang;  // e.g. "fr", "en-US"
+    std::string name;  // e.g. "Français", "Anglais (générés automatiquement)"
+    bool automatic = false;   // speech recognition ("asr")
+    bool translatable = false;
+};
+
+struct CaptionCue {
+    int64_t start_ms = 0, end_ms = 0;
+    std::string text;
+};
+
 struct VideoInfo {
     std::string id, title, author;
+    std::string description, views;  // views: raw count
+    std::string channel_id;
     int64_t length_s = 0;
     bool is_live = false;  // broadcasting now: formats are numbered-segment streams (net::LiveReader)
     std::string user_agent;  // of the client that resolved the formats (stream requests must send it)
     std::vector<Format> formats;  // directly playable adaptive formats only
+    std::vector<CaptionTrack> captions;
+    // Languages a translatable caption track can be machine-translated to: (code, name).
+    std::vector<std::pair<std::string, std::string>> translations;
+};
+
+struct VideoDetails {
+    std::string channel_id, channel, channel_avatar, subscribers;  // subscribers: display text ("1,2 M d'abonnés")
+    std::string date;           // display text ("12 mars 2023")
+    std::string like_status;    // "LIKE" | "DISLIKE" | "INDIFFERENT" | "" (signed out / unknown)
+    int subscribed = -1;        // 1 / 0, -1 unknown
+};
+
+struct ChannelInfo {
+    std::string title, avatar, subscribers;
 };
 
 // InnerTube client impersonating the visionOS YouTube app: as of 2026-10 it gets direct (non-ciphered,
@@ -68,6 +103,13 @@ public:
                   std::string& error);
     // Related videos of a watch page (WEB client "next" endpoint), for the player's suggestions row.
     bool related(const std::string& video_id, Feed& out, std::string& error);
+    // Watch-page details (WEB "next"): date, channel; plus, with an access token, the account's like and
+    // subscription state (TV "next").
+    bool details(const std::string& video_id, const std::string& access_token, struct VideoDetails& out,
+                 std::string& error);
+    // A channel's videos tab (WEB browse), newest first; the first page also fills the channel header.
+    bool channel(const std::string& channel_id, const std::string& continuation, Feed& out, struct ChannelInfo& header,
+                 std::string& error);
     // Signed-in feeds through the TV client: FEwhat_to_watch (home), FEsubscriptions, FEhistory.
     bool browse(const std::string& browse_id, const std::string& continuation, const std::string& access_token,
                 Feed& out, std::string& error);
@@ -89,8 +131,27 @@ private:
 std::vector<const Format*> rank_videos(const VideoInfo& info, int max_height, const std::vector<std::string>& codecs);
 // "avc1,vp9" -> {"avc1", "vp9"}
 std::vector<std::string> parse_codec_list(const std::string& list);
-// The AAC audio track with the highest bitrate.
-const Format* pick_audio(const VideoInfo& info);
+// The AAC format with the highest bitrate of the preferred audio track: `track` is a track id ("fr.3") or a
+// language ("fr"); empty, or not offered, picks the default (original) track.
+const Format* pick_audio(const VideoInfo& info, const std::string& track = "");
+
+// Downloads a caption track (json3), optionally machine-translated to `translate_to`, as timed cues.
+bool fetch_captions(const std::string& url, const std::string& translate_to, std::vector<CaptionCue>& out,
+                    std::string& error);
+
+// Like / dislike / neutral ("like", "dislike", "none") and (un)subscribe, as the signed-in account (TV client).
+bool rate_video(const std::string& video_id, const std::string& rating, const std::string& access_token,
+                std::string& error);
+bool set_subscribed(const std::string& channel_id, bool subscribe, const std::string& access_token, std::string& error);
+
+// Return YouTube Dislike estimates (returnyoutubedislikeapi.com): likes, dislikes; -1 when unknown.
+bool vote_counts(const std::string& video_id, int64_t& likes, int64_t& dislikes, std::string& error);
+
+// Name and avatar of the signed-in account (TV client accounts_list).
+struct AccountInfo {
+    std::string name, handle, photo;
+};
+bool account_info(const std::string& access_token, AccountInfo& out, std::string& error);
 
 // Search-as-you-type suggestions (Google suggest service, YouTube dataset).
 bool suggest(const std::string& query, std::vector<std::string>& out, std::string& error);

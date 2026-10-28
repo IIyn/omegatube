@@ -5,6 +5,7 @@ using OmegaTube.Config;
 using OmegaTube.Data;
 using Tizen.NUI;
 using Tizen.NUI.BaseComponents;
+using static OmegaTube.I18n;
 
 namespace OmegaTube.Ui
 {
@@ -53,7 +54,7 @@ namespace OmegaTube.Ui
                 updateBanner.Position = new Position(1000, 50);
                 Root.Add(updateBanner);
             }
-            updateBanner.Text = $"  Nouvelle version {version} disponible : {url.Replace("https://", "")}  ";
+            updateBanner.Text = "  " + T("New version {0} available: {1}", version, url.Replace("https://", "")) + "  ";
         }
 
         // Sections or the account changed: rebuild the rail and reload on next show.
@@ -79,28 +80,27 @@ namespace OmegaTube.Ui
         {
             dirty = false;
             bool signedIn = YouTube.SignedIn();
-            const string signIn = "Connecte ton compte (menu Compte) pour voir ";
             sections.Clear();
             sections.Add(new Section
             {
-                Title = "Accueil",
+                Title = T("Home"),
                 Icon = "home",
                 CacheKey = "home",
                 Loader = signedIn ? (Func<string, Task<FeedPage>>)(c => YouTube.Browse("FEwhat_to_watch", c)) : null,
-                EmptyText = signIn + "tes recommandations, ou utilise la Recherche et les sections du menu.",
+                EmptyText = T("Sign in to your account (Account menu) to see your recommendations, or use Search and the menu sections."),
             });
-            sections.Add(new Section { Title = "Recherche", Icon = "search", Open = () => new SearchScreen(App) });
+            sections.Add(new Section { Title = T("Search"), Icon = "search", Open = () => new SearchScreen(App) });
             sections.Add(new Section
             {
-                Title = "Abonnements", Icon = "subscriptions", CacheKey = "subscriptions",
+                Title = T("Subscriptions"), Icon = "subscriptions", CacheKey = "subscriptions",
                 Loader = signedIn ? (Func<string, Task<FeedPage>>)(c => YouTube.Browse("FEsubscriptions", c)) : null,
-                EmptyText = signIn + "les vidéos de tes abonnements.",
+                EmptyText = T("Sign in to your account (Account menu) to see the videos of your subscriptions."),
             });
             sections.Add(new Section
             {
-                Title = "Historique", Icon = "history", CacheKey = "history",
+                Title = T("History"), Icon = "history", CacheKey = "history",
                 Loader = signedIn ? (Func<string, Task<FeedPage>>)(c => YouTube.Browse("FEhistory", c)) : null,
-                EmptyText = signIn + "ton historique.",
+                EmptyText = T("Sign in to your account (Account menu) to see your history."),
             });
             foreach (HomeRow row in App.Config.HomeRows)
             {
@@ -115,8 +115,8 @@ namespace OmegaTube.Ui
                     Loader = c => YouTube.Search(query, c),
                 });
             }
-            sections.Add(new Section { Title = "Compte", Icon = "set_account", Open = () => new AccountScreen(App) });
-            sections.Add(new Section { Title = "Réglages", Icon = "settings", Open = () => new SettingsScreen(App) });
+            sections.Add(new Section { Title = T("Account"), Icon = "set_account", Open = () => new AccountScreen(App) });
+            sections.Add(new Section { Title = T("Settings"), Icon = "settings", Open = () => new SettingsScreen(App) });
 
             if (rail != null)
             {

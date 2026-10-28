@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using OmegaTube.Data;
 using Tizen.NUI;
 using Tizen.NUI.BaseComponents;
+using static OmegaTube.I18n;
 
 namespace OmegaTube.Ui
 {
@@ -47,10 +48,10 @@ namespace OmegaTube.Ui
             rowStep = Theme.CardHeight(cardW) + GapY;
             content = new View { Position = new Position(0, Pad), Size = new Size(width, 100000) };
             Add(content);
-            hlHeading = Widgets.Label("Les plus pertinentes", Theme.TitleSize - 6, Theme.Text, width - 2 * Pad, HeadingH);
+            hlHeading = Widgets.Label(T("Most relevant"), Theme.TitleSize - 6, Theme.Text, width - 2 * Pad, HeadingH);
             hlHeading.PositionX = Pad;
             hlStrip = new View { Position = new Position(0, HeadingH), Size = new Size(100000, rowStep) };
-            gridHeading = Widgets.Label("Toutes les vidéos", Theme.TitleSize - 6, Theme.Text, width - 2 * Pad, HeadingH);
+            gridHeading = Widgets.Label(T("All videos"), Theme.TitleSize - 6, Theme.Text, width - 2 * Pad, HeadingH);
             gridHeading.Position = new Position(Pad, HeadingH + rowStep);
             foreach (View v in new View[] { hlHeading, hlStrip, gridHeading })
             {
@@ -67,6 +68,8 @@ namespace OmegaTube.Ui
         public void Show(Func<string, Task<FeedPage>> newLoader, string newCacheKey, string emptyText = null)
         {
             generation++;
+            hlHeading.Text = T("Most relevant");   // the app language may have changed since the last feed
+            gridHeading.Text = T("All videos");
             ClearCards();
             focus = 0;
             continuation = "";
@@ -80,7 +83,7 @@ namespace OmegaTube.Ui
                 status.Text = emptyText ?? "";
                 return;
             }
-            status.Text = "Chargement…";
+            status.Text = T("Loading…");
             FeedPage cached = cacheKey != null ? LocalStore.LoadFeed(cacheKey) : null;
             if (cached != null)
             {
@@ -157,7 +160,7 @@ namespace OmegaTube.Ui
             {
                 if (cards.Count == 0)
                 {
-                    status.Text = "Erreur : " + page.Error;
+                    status.Text = T("Error: {0}", page.Error);
                 }
                 return;
             }
@@ -177,7 +180,7 @@ namespace OmegaTube.Ui
             }
             continuation = page.Continuation;
             AddCards(page.Items);
-            status.Text = Count == 0 ? "Aucune vidéo" : "";
+            status.Text = Count == 0 ? T("No videos") : "";
             AfterChange();
         }
 

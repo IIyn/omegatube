@@ -3,9 +3,15 @@
 //   ytcheck --sb <videoId>        SponsorBlock segments
 //   ytcheck --signin              Google device-flow sign-in, then signed-in home + subscriptions
 //   ytcheck --search <query>     search results + suggestions
+//   ytcheck --captions <videoId> [lang] [tlang]  caption tracks, then the first cues of the `lang` track
+//                                (default: the first one), machine-translated to tlang if given
+//   ytcheck --account            name / handle / photo of the account of a previous --signin
+//   ytcheck --details <videoId>  date, channel, like / subscription state (with a --signin token), RYD votes
+//   ytcheck --channel <channelId>  channel header + first videos
 //   ytcheck --range <url> [MB] [out]  downloads MB megabytes through RangeReader (1 MB ranges, kept-alive)
 //   ytcheck <videoId> [MB]       resolves formats via InnerTube and downloads the whole audio stream and
 //                                the first MB megabytes (default 100) of the 1080p H.264 stream via ranges.
+//                                Env AUDIO=<track id or language> picks the audio language.
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -172,6 +178,82 @@ int main(int argc, char** argv) {
         }
         return 0;
     }
+    if (argc >= 3 && strcmp(argv[1], "--captions") == 0) {
+        omega::yt::Client client;
+        omega::yt::VideoInfo info;
+        std::string error;
+        if (!client.player(argv[2], info, error)) {
+            printf("player failed: %s\n", error.c_str());
+            return 1;
+        }
+        const omega::yt::CaptionTrack* pick = nullptr;
+        for (const auto& c : info.captions) {
+            printf("  %-8s %-40s %s%s\n", c.lang.c_str(), c.name.c_str(), c.automatic ? "auto " : "",
+                   c.translatable ? "translatable" : "");
+            if (!pick && (argc < 4 || c.lang == argv[3])) pick = &c;
+        }
+        printf("%zu tracks, %zu translation languages\n", info.captions.size(), info.translations.size());
+        if (!pick) return 1;
+        std::vector<omega::yt::CaptionCue> cues;
+        if (!omega::yt::fetch_captions(pick->url, argc > 4 ? argv[4] : "", cues, error)) {
+            printf("captions failed: %s\n", error.c_str());
+            return 1;
+        }
+        for (size_t i = 0; i < cues.size() && i < 12; ++i)
+            printf("  %7lld-%7lld %s\n", static_cast<long long>(cues[i].start_ms), static_cast<long long>(cues[i].end_ms),
+                   cues[i].text.c_str());
+        printf("%zu cues\n", cues.size());
+        return cues.empty() ? 1 : 0;
+    }
+    if (argc >= 3 && strcmp(argv[1], "--details") == 0) {
+        omega::yt::Auth& auth = omega::yt::shared_auth();
+        auth.init("omegatube-auth.json");
+        std::string error;
+        std::string token = auth.signed_in() ? auth.access_token(error) : "";
+        omega::yt::Client client;
+        omega::yt::VideoDetails d;
+        if (!client.details(argv[2], token, d, error)) {
+            printf("details failed: %s\n", error.c_str());
+            return 1;
+        }
+        int64_t likes = -1, dislikes = -1;
+        if (!omega::yt::vote_counts(argv[2], likes, dislikes, error)) printf("ryd failed: %s\n", error.c_str());
+        printf("channel '%s' (%s) %s\navatar %s\ndate '%s'\nlikes %lld dislikes %lld\nlikeStatus '%s' subscribed %d%s\n",
+               d.channel.c_str(), d.channel_id.c_str(), d.subscribers.c_str(), d.channel_avatar.c_str(), d.date.c_str(),
+               static_cast<long long>(likes), static_cast<long long>(dislikes), d.like_status.c_str(), d.subscribed,
+               token.empty() ? "  (signed out: run --signin for the account state)" : "");
+        return 0;
+    }
+    if (argc >= 3 && strcmp(argv[1], "--channel") == 0) {
+        omega::yt::Client client;
+        omega::yt::Feed feed;
+        omega::yt::ChannelInfo header;
+        std::string error;
+        if (!client.channel(argv[2], "", feed, header, error)) {
+            printf("channel failed: %s\n", error.c_str());
+            return 1;
+        }
+        printf("'%s' %s\navatar %s\n%zu items, continuation %s\n", header.title.c_str(), header.subscribers.c_str(),
+               header.avatar.c_str(), feed.items.size(), feed.continuation.empty() ? "none" : "yes");
+        for (size_t i = 0; i < feed.items.size() && i < 8; ++i)
+            printf("   %s | %s | %s | %s | %s | %s\n", feed.items[i].video_id.c_str(), feed.items[i].title.c_str(),
+                   feed.items[i].channel.c_str(), feed.items[i].duration.c_str(), feed.items[i].views.c_str(),
+                   feed.items[i].published.c_str());
+        return feed.items.empty() ? 1 : 0;
+    }
+    if (argc >= 2 && strcmp(argv[1], "--account") == 0) {
+        omega::yt::Auth& auth = omega::yt::shared_auth();
+        auth.init("omegatube-auth.json");
+        std::string error;
+        std::string token = auth.access_token(error);
+        omega::yt::AccountInfo account;
+        if (token.empty() || !omega::yt::account_info(token, account, error)) {
+            printf("account failed: %s\n", token.empty() ? "signed out (run --signin)" : error.c_str());
+            return 1;
+        }
+        printf("name '%s' handle '%s'\nphoto %s\n", account.name.c_str(), account.handle.c_str(), account.photo.c_str());
+        return 0;
+    }
     if (argc >= 2 && strcmp(argv[1], "--signin") == 0) {
         // Device flow end to end, token kept in ./omegatube-auth.json; then lists the signed-in home feed.
         omega::yt::Auth& auth = omega::yt::shared_auth();
@@ -273,19 +355,25 @@ int main(int argc, char** argv) {
             printf("  itag %3d %-10s %-34s %4dx%-4d @%d %6lld kb/s %s\n", f.itag, f.mime.c_str(), f.codecs.c_str(), f.width,
                    f.height, f.fps, static_cast<long long>(f.bitrate / 1000),
                    f.video_codec().empty() ? "(skipped)" : f.video_codec().c_str());
+    for (const auto& f : info.formats)
+        if (f.is_audio() && !f.audio_track_id.empty())
+            printf("  itag %3d %-10s %-10s track %-8s %s%s\n", f.itag, f.mime.c_str(), f.codecs.c_str(),
+                   f.audio_track_id.c_str(), f.audio_track_name.c_str(), f.audio_default ? " (default)" : "");
+    printf("%zu caption tracks\n", info.captions.size());
     // Same choice as the TV with "Qualité max" / "Codecs" from the environment (default 2160, avc1,vp9).
     const char* max_env = getenv("MAX_HEIGHT");
     const char* codecs_env = getenv("CODECS");
     auto videos = omega::yt::rank_videos(info, max_env ? atoi(max_env) : 2160,
                                          omega::yt::parse_codec_list(codecs_env ? codecs_env : "avc1,vp9"));
     const omega::yt::Format* video = videos.empty() ? nullptr : videos.front();
-    const omega::yt::Format* audio = omega::yt::pick_audio(info);
+    const char* audio_env = getenv("AUDIO");
+    const omega::yt::Format* audio = omega::yt::pick_audio(info, audio_env ? audio_env : "");
     if (!video || !audio) {
         printf("no playable video / AAC formats\n");
         return 1;
     }
-    printf("video itag %d %dx%d@%d %s, audio itag %d %s\n", video->itag, video->width, video->height, video->fps,
-           video->codecs.c_str(), audio->itag, audio->codecs.c_str());
+    printf("video itag %d %dx%d@%d %s, audio itag %d %s %s\n", video->itag, video->width, video->height, video->fps,
+           video->codecs.c_str(), audio->itag, audio->codecs.c_str(), audio->audio_track_id.c_str());
     omega::net::Headers headers = {{"User-Agent", info.user_agent}};
     bool ok = drain("audio", *audio, headers, UINT64_MAX);
     ok &= drain("video", *video, headers, video_limit);
