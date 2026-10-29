@@ -167,16 +167,46 @@ namespace OmegaTube.Config
 
         public SkipMode ModeForRaw(SponsorCategory c) => SkipModes.TryGetValue(c.Id, out SkipMode m) ? m : c.DefaultMode;
 
+        // English keys of the default sections: title, search query, icon.
+        private static readonly string[][] Defaults =
+        {
+            new[] { "Music", "music", "music" },
+            new[] { "Gaming", "video games", "gaming" },
+            new[] { "Science & tech", "science technology", "trending" },
+            new[] { "Documentaries", "documentary", "news" },
+        };
+
         private static List<HomeRow> DefaultRows()
         {
-            return new List<HomeRow>
+            var rows = new List<HomeRow>();
+            foreach (string[] d in Defaults)
             {
-                new HomeRow { Title = T("Music"), Query = T("music"), Icon = "music" },
-                new HomeRow { Title = T("Gaming"), Query = T("video games"), Icon = "gaming" },
-                new HomeRow { Title = T("Science & tech"), Query = T("science technology"), Icon = "trending" },
-                new HomeRow { Title = T("Documentaries"), Query = T("documentary"), Icon = "news" },
-                new HomeRow { Title = "Lofi", Query = "lofi hip hop", Icon = "music" },
-            };
+                rows.Add(new HomeRow { Title = T(d[0]), Query = T(d[1]), Icon = d[2] });
+            }
+            rows.Add(new HomeRow { Title = "Lofi", Query = "lofi hip hop", Icon = "music" });
+            return rows;
+        }
+
+        // The default sections are saved in the language of the first launch: after an app language change,
+        // the ones still showing a default title (in any language) take the new language. Renamed ones are kept.
+        public void RelabelDefaultRows()
+        {
+            foreach (HomeRow r in HomeRows)
+            {
+                foreach (string[] d in Defaults)
+                {
+                    if (Array.FindIndex(I18n.Codes, lang => r.Title == I18n.In(lang, d[0])) < 0)
+                    {
+                        continue;
+                    }
+                    r.Title = T(d[0]);
+                    if (Array.FindIndex(I18n.Codes, lang => r.Query == I18n.In(lang, d[1])) >= 0)
+                    {
+                        r.Query = T(d[1]);
+                    }
+                    break;
+                }
+            }
         }
 
         private void FromJson(object root)

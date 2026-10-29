@@ -340,6 +340,7 @@ namespace OmegaTube.Ui
                              i = (Math.Max(0, i) + d + I18n.Codes.Length) % I18n.Codes.Length;
                              App.Config.UiLanguage = I18n.Codes[i];
                              I18n.Lang = App.Config.UiLanguage;
+                             App.Config.RelabelDefaultRows();
                              relabel = true;
                          }));
             l.Add(Choice(T("YouTube language and region"), T("Language of titles, searches and trends"),

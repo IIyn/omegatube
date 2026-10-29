@@ -12,13 +12,16 @@ namespace OmegaTube
         // Current app language: "en", "fr" or "es".
         public static string Lang { get; set; } = "en";
 
-        public static string T(string en)
-        {
-            Dictionary<string, string> table = Lang == "fr" ? Fr : Lang == "es" ? Es : null;
-            return table != null && table.TryGetValue(en, out string text) ? text : en;
-        }
+        public static string T(string en) => In(Lang, en);
 
         public static string T(string en, params object[] args) => string.Format(T(en), args);
+
+        // The text in a given language instead of the current one.
+        public static string In(string lang, string en)
+        {
+            Dictionary<string, string> table = lang == "fr" ? Fr : lang == "es" ? Es : null;
+            return table != null && table.TryGetValue(en, out string text) ? text : en;
+        }
 
         // "1.5" -> "1,5" outside English.
         public static string Decimal(string number) => Lang == "en" ? number : number.Replace('.', ',');
