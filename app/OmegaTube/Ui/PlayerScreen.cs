@@ -200,7 +200,7 @@ namespace OmegaTube.Ui
             // screen, under the suggestions row, the bottom one's darkest shade continues.
             chrome.Add(new ImageView { ResourceUrl = Theme.Image("scrim_top"), Size = new Size(1920, 200) });
             chrome.Add(new ImageView { ResourceUrl = Theme.Image("scrim_bottom"), Size = new Size(1920, 620), Position = new Position(0, 460) });
-            var under = Widgets.Box(new Color(0, 0, 0, 0.62f), 1920, ChromeLift);
+            var under = Widgets.Box(new Color(0, 0, 0, 0.8f), 1920, ChromeLift);
             under.PositionY = 1080;
             chrome.Add(under);
 

@@ -87,6 +87,9 @@ namespace OmegaTube.Ui
 
         private IFeedView Feed => feedView as IFeedView;
 
+        // Something to look at: rows of the open feed, or a hosted screen (the launch screen waits for this).
+        public bool HasContent => Feed == null || Feed.Count > 0;
+
         private void DropEmbedded(string key)
         {
             embedHost.Remove(embedded[key].Root);

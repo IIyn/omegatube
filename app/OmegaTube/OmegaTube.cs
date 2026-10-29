@@ -11,6 +11,7 @@ namespace OmegaTube
     {
         private readonly List<Screen> stack = new List<Screen>();
         private ConfirmDialog dialog;   // open modal question: gets every key
+        private Splash splash;          // launch screen: keys wait until it is gone
 
         public AppConfig Config { get; private set; }
         public HomeScreen Home { get; private set; }
@@ -37,6 +38,9 @@ namespace OmegaTube
 
             Home = new HomeScreen(this);
             Push(Home);
+            splash = new Splash(() => Home.HasContent);
+            splash.Closed += () => splash = null;
+            window.Add(splash);
             _ = RefreshRemote();
         }
 
@@ -166,7 +170,7 @@ namespace OmegaTube
 
         private void OnKeyEvent(object sender, Window.KeyEventArgs e)
         {
-            if (e.Key.State != Key.StateType.Down || stack.Count == 0)
+            if (e.Key.State != Key.StateType.Down || stack.Count == 0 || splash != null)
             {
                 return;
             }
