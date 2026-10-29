@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="app/OmegaTube/shared/res/omegatube.png" width="128" alt="OmegaTube logo">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="branding/omegatube-mark-dark.png">
+    <img src="branding/omegatube-mark-light.png" width="128" alt="OmegaTube logo">
+  </picture>
 </p>
 
 <h1 align="center">OmegaTube</h1>
