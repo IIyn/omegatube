@@ -1,0 +1,890 @@
+<!doctype html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OmegaTube — YouTube for Samsung TVs, without the ads</title>
+<meta name="description" content="OmegaTube is a free, open source YouTube client for Samsung smart TVs (Tizen): no ads, SponsorBlock built in, smooth native 4K playback.">
+<meta property="og:title" content="OmegaTube">
+<meta property="og:description" content="All of YouTube on your Samsung TV. None of the ads.">
+<meta property="og:image" content="https://iiyn.github.io/omegatube/img/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0c0a09">
+<link rel="icon" href="logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0c0a09;
+    --ink-2: #14110f;
+    --rule: rgba(255, 240, 225, .12);
+    --paper: #f4ece2;
+    --dim: #a89c90;
+    --red: #e52d27;
+    --hot: #ff5a2e;
+    --magenta: #d6246e;
+    --osd: #5dff8a;
+    --gutter: clamp(16px, 4vw, 48px);
+    --max: 1320px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: "Archivo", system-ui, sans-serif;
+    font-size: 17px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  a { color: inherit; }
+  ::selection { background: var(--red); color: #fff; }
+  .wrap { max-width: var(--max); margin: 0 auto; padding: 0 var(--gutter); }
+  .mono { font-family: "VT323", ui-monospace, monospace; letter-spacing: .02em; }
+  [hidden] { display: none !important; }
+  html[data-lang="en"] [data-l="fr"], html[data-lang="fr"] [data-l="en"] { display: none !important; }
+
+  /* Film grain over everything */
+  body::after {
+    content: ""; position: fixed; inset: -50%; z-index: 100; pointer-events: none; opacity: .07;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    animation: grain 1s steps(6) infinite;
+  }
+  @keyframes grain {
+    0% { transform: translate(0, 0); } 20% { transform: translate(-3%, 2%); } 40% { transform: translate(2%, -4%); }
+    60% { transform: translate(-4%, -1%); } 80% { transform: translate(3%, 3%); } 100% { transform: translate(0, 0); }
+  }
+
+  /* ───────── Top bar ───────── */
+  .bar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+    transition: background .3s, border-color .3s;
+    border-bottom: 1px solid transparent;
+  }
+  .bar.solid { background: rgba(12, 10, 9, .82); backdrop-filter: blur(14px); border-color: var(--rule); }
+  .bar .wrap { display: flex; align-items: center; height: 64px; gap: 28px; }
+  .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 800; font-stretch: 112%; font-size: 19px; letter-spacing: -.01em; }
+  .logo img { width: 30px; height: 30px; }
+  .bar nav { display: flex; gap: 26px; margin-left: auto; }
+  .bar nav a { text-decoration: none; color: var(--dim); font-size: 15px; transition: color .2s; }
+  .bar nav a:hover { color: var(--paper); }
+  .lang { display: flex; font-family: "VT323", monospace; font-size: 20px; line-height: 1; }
+  .lang button { background: none; border: 0; color: var(--dim); cursor: pointer; padding: 4px 6px; font: inherit; }
+  .lang button[aria-pressed="true"] { color: var(--osd); text-shadow: 0 0 8px rgba(93, 255, 138, .6); }
+
+  /* ───────── Hero ───────── */
+  .hero { position: relative; min-height: min(100vh, 1000px); padding: 120px 0 0; display: flex; flex-direction: column; overflow: hidden; }
+  .glow { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  .glow i { position: absolute; border-radius: 50%; filter: blur(90px); mix-blend-mode: screen; }
+  .glow i:nth-child(1) { width: 52vw; height: 52vw; right: -8vw; top: 4vh; background: var(--red); opacity: .55; animation: drift1 18s ease-in-out infinite alternate; }
+  .glow i:nth-child(2) { width: 34vw; height: 34vw; right: 20vw; top: 34vh; background: var(--magenta); opacity: .35; animation: drift2 22s ease-in-out infinite alternate; }
+  .glow i:nth-child(3) { width: 26vw; height: 26vw; right: 2vw; top: 52vh; background: var(--hot); opacity: .4; animation: drift3 15s ease-in-out infinite alternate; }
+  @keyframes drift1 { to { transform: translate(-8vw, 6vh) scale(1.1); } }
+  @keyframes drift2 { to { transform: translate(10vw, -8vh) scale(.85); } }
+  @keyframes drift3 { to { transform: translate(-12vw, -4vh) scale(1.2); } }
+
+  .hero-grid { position: relative; flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: clamp(24px, 4vw, 64px); align-items: center; }
+  .kicker { display: inline-flex; gap: 10px; align-items: center; font-family: "VT323", monospace; font-size: 22px; color: var(--osd); text-shadow: 0 0 10px rgba(93, 255, 138, .5); margin-bottom: 18px; }
+  .kicker .rec { width: 10px; height: 10px; border-radius: 50%; background: var(--red); box-shadow: 0 0 10px var(--red); animation: blink 1.2s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  h1 {
+    margin: 0; font-weight: 900; font-stretch: 125%; line-height: .9; letter-spacing: -.035em;
+    font-size: clamp(40px, 6.2vw, 104px); text-transform: uppercase;
+  }
+  h1 .line { display: block; overflow: hidden; padding-bottom: .06em; white-space: nowrap; }
+  h1 .line > span { display: inline-block; transform: translateY(105%); animation: rise .9s cubic-bezier(.2, .8, .2, 1) forwards; }
+  h1 .line:nth-child(2) > span { animation-delay: .1s; }
+  h1 .line:nth-child(3) > span { animation-delay: .2s; }
+  h1 .line:nth-child(4) > span { animation-delay: .3s; }
+  @keyframes rise { to { transform: none; } }
+  h1 .outline { color: transparent; -webkit-text-stroke: 2px var(--paper); }
+  h1 s { text-decoration: none; position: relative; color: var(--red); }
+  h1 s::after {
+    content: ""; position: absolute; left: -4%; right: -4%; top: 52%; height: .11em; background: var(--paper);
+    transform: scaleX(0) rotate(-4deg); transform-origin: left; animation: strike .5s 1.1s cubic-bezier(.7, 0, .3, 1) forwards;
+  }
+  @keyframes strike { to { transform: scaleX(1) rotate(-4deg); } }
+  .lede { max-width: 470px; color: var(--dim); font-size: clamp(17px, 1.4vw, 19px); margin: 28px 0 34px; opacity: 0; animation: fade .8s .5s forwards; }
+  .lede b { color: var(--paper); font-weight: 600; }
+  @keyframes fade { to { opacity: 1; } }
+  .actions { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: center; opacity: 0; animation: fade .8s .7s forwards; }
+  .btn {
+    position: relative; display: inline-flex; align-items: center; gap: 10px; text-decoration: none;
+    padding: 16px 26px; font-weight: 700; font-stretch: 110%; font-size: 16px; letter-spacing: .01em;
+    background: var(--red); color: #fff; overflow: hidden; isolation: isolate;
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
+  }
+  .btn::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--hot); transform: translateX(-101%); transition: transform .35s cubic-bezier(.7, 0, .3, 1); }
+  .btn:hover::before { transform: none; }
+  .btn svg { width: 18px; height: 18px; fill: currentColor; }
+  .link { color: var(--paper); text-decoration: none; font-weight: 600; border-bottom: 1px solid var(--rule); padding: 4px 0; transition: border-color .2s; }
+  .link:hover { border-color: var(--paper); }
+  .ver { font-family: "VT323", monospace; font-size: 20px; color: var(--dim); text-decoration: none; }
+
+  /* The TV */
+  .tv-zone { position: relative; perspective: 1600px; opacity: 0; animation: fade 1s .3s forwards; }
+  .tv { position: relative; transform: rotateY(-9deg) rotateX(3deg); transition: transform .6s cubic-bezier(.2, .8, .2, 1); }
+  .tv-frame {
+    position: relative; padding: 10px; background: linear-gradient(160deg, #2a2522, #0f0d0c 60%); border-radius: 6px;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, .06), 0 50px 120px -30px rgba(229, 45, 39, .55), 0 30px 60px -20px rgba(0, 0, 0, .9);
+  }
+  .screen { position: relative; aspect-ratio: 16 / 9; background: #000; overflow: hidden; border-radius: 2px; }
+  .screen-in { position: absolute; inset: 0; animation: power 1.1s .4s both cubic-bezier(.2, .8, .2, 1); }
+  @keyframes power {
+    0%, 40% { transform: scale(1, .004); filter: brightness(6); }
+    70% { transform: scale(1, 1); filter: brightness(2); }
+    100% { transform: none; filter: none; }
+  }
+  .screen img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; }
+  .screen img.on { opacity: 1; }
+  .screen canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; image-rendering: pixelated; }
+  .screen canvas.on { opacity: 1; }
+  .screen::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background:
+      repeating-linear-gradient(0deg, rgba(0, 0, 0, .14) 0 1px, transparent 1px 3px),
+      radial-gradient(120% 90% at 50% 50%, transparent 60%, rgba(0, 0, 0, .45));
+  }
+  .osd { position: absolute; z-index: 2; font-family: "VT323", monospace; color: var(--osd); text-shadow: 0 0 6px rgba(93, 255, 138, .8), 2px 2px 0 rgba(0, 0, 0, .6); pointer-events: none; opacity: 0; }
+  .osd-ch { top: 4%; right: 4%; font-size: clamp(22px, 2.6vw, 40px); line-height: 1; }
+  .osd-name { bottom: 5%; left: 4%; font-size: clamp(16px, 1.6vw, 24px); background: rgba(0, 0, 0, .55); padding: 0 8px; }
+  .osd.flash { animation: osd 2.4s forwards; }
+  @keyframes osd { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+  .tv-stand { width: 34%; height: 18px; margin: 0 auto; background: linear-gradient(#1a1614, #0c0a09); clip-path: polygon(12% 0, 88% 0, 100% 100%, 0 100%); }
+  .zapper { display: flex; gap: 6px; justify-content: center; margin-top: 20px; }
+  .zapper button {
+    width: 38px; height: 30px; border: 1px solid var(--rule); background: rgba(255, 255, 255, .03); color: var(--dim);
+    font-family: "VT323", monospace; font-size: 20px; cursor: pointer; transition: all .2s;
+  }
+  .zapper button:hover { color: var(--paper); border-color: var(--dim); }
+  .zapper button[aria-current="true"] { background: var(--red); border-color: var(--red); color: #fff; }
+
+  /* Ticker */
+  .ticker {
+    position: relative; margin-top: 64px; background: var(--red); color: #fff; overflow: hidden; white-space: nowrap;
+    transform: rotate(-1.2deg) scale(1.03); box-shadow: 0 10px 40px -10px rgba(229, 45, 39, .6);
+  }
+  .ticker .run { display: inline-flex; animation: tick 40s linear infinite; padding: 14px 0; }
+  .ticker span { font-weight: 900; font-stretch: 125%; font-size: clamp(16px, 1.6vw, 22px); text-transform: uppercase; letter-spacing: .02em; padding: 0 22px; }
+  .ticker span.sep { padding: 0; opacity: .6; }
+  @keyframes tick { to { transform: translateX(-50%); } }
+
+  /* ───────── Section shell ───────── */
+  section { position: relative; padding: clamp(80px, 11vw, 150px) 0; }
+  .label { display: flex; align-items: center; gap: 14px; font-family: "VT323", monospace; font-size: 22px; color: var(--dim); margin-bottom: 26px; }
+  .label::before { content: ""; width: 34px; height: 2px; background: var(--red); }
+  h2 {
+    margin: 0; font-weight: 900; font-stretch: 125%; text-transform: uppercase; line-height: .95; letter-spacing: -.03em;
+    font-size: clamp(36px, 5.2vw, 76px);
+  }
+  h2 em { font-style: normal; color: var(--red); }
+  .reveal { opacity: 0; transform: translateY(40px); transition: opacity .9s, transform .9s cubic-bezier(.2, .8, .2, 1); }
+  .reveal.in { opacity: 1; transform: none; }
+
+  /* ───────── Programme (features) ───────── */
+  .prog-head { display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: end; margin-bottom: 56px; }
+  .prog-head p { max-width: 380px; color: var(--dim); margin: 0; }
+  .prog { border-top: 1px solid var(--rule); }
+  .prog-row {
+    position: relative; display: grid; grid-template-columns: 90px minmax(0, 1.1fr) minmax(0, 1fr) 120px; gap: 24px; align-items: center;
+    padding: 30px 0; border-bottom: 1px solid var(--rule); isolation: isolate;
+  }
+  .prog-row::before {
+    content: ""; position: absolute; inset: 0 calc(-1 * var(--gutter)); z-index: -1;
+    background: linear-gradient(90deg, rgba(229, 45, 39, .22), rgba(214, 36, 110, .06) 60%, transparent);
+    transform: scaleX(0); transform-origin: left; transition: transform .5s cubic-bezier(.7, 0, .3, 1);
+  }
+  .prog-row:hover::before { transform: none; }
+  .prog-row .ch { font-family: "VT323", monospace; font-size: 30px; color: var(--red); line-height: 1; }
+  .prog-row h3 { margin: 0; font-weight: 800; font-stretch: 118%; font-size: clamp(22px, 2.4vw, 34px); line-height: 1.05; letter-spacing: -.02em; text-transform: uppercase; transition: transform .4s; }
+  .prog-row:hover h3 { transform: translateX(10px); }
+  .prog-row p { margin: 0; color: var(--dim); font-size: 16px; }
+  .prog-row .tag { justify-self: end; font-family: "VT323", monospace; font-size: 19px; color: var(--dim); border: 1px solid var(--rule); padding: 2px 10px; white-space: nowrap; }
+
+  /* ───────── Signal (why) ───────── */
+  .signal { background: var(--ink-2); border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); overflow: hidden; }
+  .signal-grid { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: clamp(32px, 6vw, 96px); align-items: center; }
+  .signal-copy p { color: var(--dim); max-width: 520px; }
+  .signal-copy p b { color: var(--paper); font-weight: 600; }
+  .scope { display: grid; gap: 18px; }
+  .trace { position: relative; border: 1px solid var(--rule); background: #080707; padding: 18px 20px 14px; overflow: hidden; }
+  .trace::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .5;
+    background-image: linear-gradient(var(--rule) 1px, transparent 1px), linear-gradient(90deg, var(--rule) 1px, transparent 1px);
+    background-size: 100% 25%, 8.33% 100%;
+  }
+  .trace header { position: relative; display: flex; justify-content: space-between; gap: 12px; font-family: "VT323", monospace; font-size: 20px; color: var(--dim); }
+  .trace header b { font-weight: 400; color: var(--paper); }
+  .trace svg { position: relative; display: block; width: 100%; height: 90px; margin-top: 6px; overflow: hidden; }
+  .trace .wave { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+  .trace.bad .wave { stroke: #8a7f76; }
+  .trace.good .wave { stroke: var(--osd); filter: drop-shadow(0 0 4px rgba(93, 255, 138, .7)); }
+  .trace .move { transform-box: fill-box; }
+  .trace.good .move { animation: scroll 3s linear infinite; }
+  .trace.bad .move { animation: scrollBad 3.6s linear infinite; }
+  @keyframes scroll { to { transform: translateX(-50%); } }
+  @keyframes scrollBad {
+    0% { transform: translateX(0); } 22% { transform: translateX(-11%); } 27% { transform: translateX(-11%); }
+    55% { transform: translateX(-27%); } 63% { transform: translateX(-27%); } 100% { transform: translateX(-50%); }
+  }
+  .trace .flags { position: relative; display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .trace .flags span { font-family: "VT323", monospace; font-size: 18px; padding: 0 8px; border: 1px solid var(--rule); }
+  .trace.bad .flags span { color: #ff8a7a; border-color: rgba(255, 90, 60, .3); }
+  .trace.good .flags span { color: var(--osd); border-color: rgba(93, 255, 138, .3); }
+  .pipeline { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 30px; font-family: "VT323", monospace; font-size: 20px; }
+  .pipeline > span { border: 1px solid var(--rule); padding: 2px 10px; }
+  .pipeline > span.hl { background: var(--red); border-color: var(--red); color: #fff; }
+  .pipeline i { font-style: normal; color: var(--dim); }
+
+  /* ───────── Screens (reel) ───────── */
+  .reel { display: flex; gap: 22px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 10px var(--gutter) 30px; margin-top: 50px; scrollbar-width: none; }
+  .reel::-webkit-scrollbar { display: none; }
+  .reel figure { flex: 0 0 min(80vw, 820px); margin: 0; scroll-snap-align: center; }
+  .reel .frame { padding: 8px; background: linear-gradient(160deg, #2a2522, #0f0d0c 60%); box-shadow: 0 30px 60px -30px rgba(0, 0, 0, .9); transition: transform .5s cubic-bezier(.2, .8, .2, 1); }
+  .reel figure:hover .frame { transform: translateY(-6px); }
+  .reel img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+  .reel figcaption { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; margin-top: 16px; }
+  .reel figcaption .mono { color: var(--red); font-size: 22px; }
+  .reel figcaption b { font-weight: 800; font-stretch: 115%; text-transform: uppercase; letter-spacing: -.01em; }
+  .reel figcaption > span:last-child { color: var(--dim); font-size: 15px; }
+  .reel-nav { display: flex; gap: 8px; }
+  .reel-nav button { width: 52px; height: 52px; border: 1px solid var(--rule); background: none; color: var(--paper); cursor: pointer; font-size: 20px; transition: all .2s; }
+  .reel-nav button:hover { background: var(--paper); color: var(--ink); }
+
+  /* ───────── Install ───────── */
+  .install {
+    background:
+      radial-gradient(55% 45% at 100% 35%, rgba(229, 45, 39, .16), transparent 70%),
+      radial-gradient(50% 40% at 0% 100%, rgba(214, 36, 110, .12), transparent 70%);
+  }
+  .install-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, .75fr); gap: clamp(32px, 6vw, 90px); margin-top: 56px; }
+  .os { display: inline-flex; border: 1px solid var(--rule); margin-bottom: 14px; }
+  .os button { background: none; border: 0; color: var(--dim); padding: 10px 18px; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
+  .os button[aria-selected="true"] { background: var(--paper); color: var(--ink); }
+  .term { border: 1px solid var(--rule); background: #070606; }
+  .term-top { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--rule); font-family: "VT323", monospace; font-size: 18px; color: var(--dim); }
+  .term-top span:last-child { color: var(--red); }
+  .term-body { display: flex; gap: 14px; align-items: center; padding: 22px 18px; }
+  .term code { flex: 1; min-width: 0; min-height: 1.2em; font-family: "VT323", monospace; font-size: clamp(18px, 1.7vw, 23px); color: var(--osd); text-shadow: 0 0 8px rgba(93, 255, 138, .35); overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+  .term code::-webkit-scrollbar { display: none; }
+  .term code::before { content: attr(data-prompt); color: var(--dim); text-shadow: none; }
+  .term code .caret { display: inline-block; width: .55em; height: 1em; vertical-align: -.12em; background: var(--osd); animation: blink 1s steps(2) infinite; }
+  .copy { flex: none; border: 1px solid var(--rule); background: none; color: var(--paper); padding: 8px 14px; cursor: pointer; font: inherit; font-size: 14px; font-weight: 600; transition: all .2s; }
+  .copy:hover { background: var(--paper); color: var(--ink); }
+  .copy.done { background: var(--osd); border-color: var(--osd); color: var(--ink); }
+  .hint { color: var(--dim); font-size: 15px; margin: 12px 0 0; }
+  kbd { font-family: "VT323", monospace; font-size: 18px; border: 1px solid var(--rule); border-bottom-width: 3px; padding: 0 6px; color: var(--paper); }
+  code { font-family: "VT323", monospace; font-size: 1.1em; color: var(--paper); }
+
+  .steps { list-style: none; padding: 0; margin: 50px 0 0; }
+  .steps > li { display: grid; grid-template-columns: 64px 1fr; gap: 20px; padding: 22px 0; border-top: 1px solid var(--rule); }
+  .steps .key {
+    width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center;
+    background: radial-gradient(circle at 35% 30%, #3a3431, #161311 70%); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .6), 0 6px 14px -4px rgba(0, 0, 0, .8);
+    font-weight: 800; font-size: 19px; color: var(--paper);
+  }
+  .steps > li:last-child .key { background: radial-gradient(circle at 35% 30%, #ff6a5a, var(--red) 70%); }
+  .steps h4 { margin: 4px 0; font-weight: 800; font-stretch: 112%; font-size: 19px; text-transform: uppercase; }
+  .steps p, .steps ul { margin: 0; color: var(--dim); font-size: 16px; }
+  .steps ul { padding-left: 18px; }
+  .steps ul li { padding: 2px 0; }
+
+  .side { align-self: start; border-top: 1px solid var(--rule); }
+  .side > div { padding: 26px 0; border-bottom: 1px solid var(--rule); }
+  .side h4 { margin: 0 0 10px; font-family: "VT323", monospace; font-weight: 400; font-size: 22px; color: var(--red); }
+  .side p, .side li { color: var(--dim); font-size: 16px; margin: 0; }
+  .side ul { margin: 0; padding-left: 18px; }
+  .side li + li { margin-top: 6px; }
+  .side b { color: var(--paper); font-weight: 600; }
+
+  /* ───────── FAQ ───────── */
+  .faq-grid { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: clamp(32px, 6vw, 90px); }
+  details { border-top: 1px solid var(--rule); }
+  details:last-child { border-bottom: 1px solid var(--rule); }
+  summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; gap: 20px; padding: 22px 0; font-weight: 700; font-stretch: 108%; font-size: 18px; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; font-family: "VT323", monospace; font-size: 28px; line-height: .8; color: var(--red); transition: transform .3s; }
+  details[open] summary::after { transform: rotate(45deg); }
+  details p { margin: 0 0 22px; color: var(--dim); max-width: 640px; }
+
+  /* ───────── Footer ───────── */
+  .bars { display: grid; grid-template-columns: repeat(7, 1fr); height: 14px; }
+  .bars i:nth-child(1) { background: #c0c0c0; } .bars i:nth-child(2) { background: #c0c000; } .bars i:nth-child(3) { background: #00c0c0; }
+  .bars i:nth-child(4) { background: #00c000; } .bars i:nth-child(5) { background: #c000c0; } .bars i:nth-child(6) { background: #c00000; } .bars i:nth-child(7) { background: #0000c0; }
+  footer { padding: 70px 0 60px; }
+  .eot { font-family: "VT323", monospace; font-size: clamp(28px, 4vw, 52px); line-height: 1; margin: 0 0 40px; }
+  .eot span:first-child { color: var(--red); }
+  .foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 24px; color: var(--dim); font-size: 14px; }
+  .foot p { margin: 0; max-width: 560px; }
+  .foot nav { display: flex; flex-wrap: wrap; gap: 22px; }
+  .foot a { text-decoration: none; color: var(--paper); }
+  .foot a:hover { color: var(--red); }
+
+  /* ───────── Responsive ───────── */
+  @media (max-width: 960px) {
+    .bar nav { display: none; }
+    .lang { margin-left: auto; }
+    .hero { min-height: 0; padding-top: 100px; }
+    .hero-grid, .signal-grid, .install-grid, .faq-grid { grid-template-columns: minmax(0, 1fr); }
+    .tv { transform: none; }
+    .prog-head { grid-template-columns: 1fr; }
+    .prog-row { grid-template-columns: 56px minmax(0, 1fr); gap: 6px 16px; padding: 24px 0; }
+    .prog-row p { grid-column: 2; }
+    .prog-row .tag { grid-column: 2; justify-self: start; margin-top: 8px; }
+    .reel-nav { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    .reveal { opacity: 1; transform: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="bar" id="bar">
+  <div class="wrap">
+    <a class="logo" href="#top"><img src="logo.png" alt="">OmegaTube</a>
+    <nav>
+      <a href="#programme"><span data-l="en">Features</span><span data-l="fr">Fonctionnalités</span></a>
+      <a href="#signal"><span data-l="en">Why</span><span data-l="fr">Pourquoi</span></a>
+      <a href="#screens"><span data-l="en">Screens</span><span data-l="fr">Écrans</span></a>
+      <a href="#install"><span data-l="en">Install</span><span data-l="fr">Installer</span></a>
+      <a href="https://github.com/IIyn/omegatube">GitHub ↗</a>
+    </nav>
+    <div class="lang" role="group" aria-label="Language">
+      <button type="button" data-set-lang="en">EN</button>
+      <button type="button" data-set-lang="fr">FR</button>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ───────── Hero ───────── -->
+<section class="hero">
+  <div class="glow" aria-hidden="true"><i></i><i></i><i></i></div>
+  <div class="wrap hero-grid">
+    <div>
+      <div class="kicker"><span class="rec"></span><span data-l="en">FOR SAMSUNG TIZEN TVs</span><span data-l="fr">POUR TV SAMSUNG TIZEN</span></div>
+      <h1>
+        <span class="line"><span data-l="en">All of</span><span data-l="fr">Tout</span></span>
+        <span class="line"><span>YouTube.</span></span>
+        <span class="line"><span class="outline" data-l="en">None of</span><span class="outline" data-l="fr">Sans les</span></span>
+        <span class="line"><span data-l="en">the <s>ads</s>.</span><span data-l="fr"><s>pubs</s>.</span></span>
+      </h1>
+      <p class="lede">
+        <span data-l="en">OmegaTube is a native YouTube app for Samsung smart TVs. <b>SponsorBlock built in</b>, <b>smooth 4K</b> straight to the hardware decoder, your account and subscriptions. Free and open source.</span>
+        <span data-l="fr">OmegaTube est une app YouTube native pour les TV Samsung. <b>SponsorBlock intégré</b>, <b>4K fluide</b> envoyée directement au décodeur matériel, votre compte et vos abonnements. Libre et gratuite.</span>
+      </p>
+      <div class="actions">
+        <a class="btn" href="#install">
+          <svg viewBox="0 0 24 24"><path d="M12 16l-5-5h3V4h4v7h3l-5 5zm-7 2h14v2H5v-2z"/></svg>
+          <span data-l="en">Install on my TV</span><span data-l="fr">Installer sur ma TV</span>
+        </a>
+        <a class="link" href="https://github.com/IIyn/omegatube"><span data-l="en">Source code</span><span data-l="fr">Code source</span> ↗</a>
+        <a class="ver" id="version" href="https://github.com/IIyn/omegatube/releases/latest">v1.1.1</a>
+      </div>
+    </div>
+
+    <div class="tv-zone">
+      <div class="tv" id="tv">
+        <div class="tv-frame">
+          <div class="screen">
+            <div class="screen-in">
+              <img src="img/player.webp" alt="OmegaTube video player" class="on">
+              <img src="img/home.webp" alt="OmegaTube home screen">
+              <img src="img/search.webp" alt="OmegaTube search">
+              <img src="img/sponsorblock.webp" alt="OmegaTube SponsorBlock settings">
+              <img src="img/account.webp" alt="OmegaTube QR code sign-in">
+              <canvas width="160" height="90" aria-hidden="true"></canvas>
+              <div class="osd osd-ch" aria-hidden="true">CH 01</div>
+              <div class="osd osd-name" aria-hidden="true">PLAYER</div>
+            </div>
+          </div>
+        </div>
+        <div class="tv-stand"></div>
+      </div>
+      <div class="zapper" role="group" aria-label="Channels">
+        <button type="button" aria-current="true">01</button>
+        <button type="button">02</button>
+        <button type="button">03</button>
+        <button type="button">04</button>
+        <button type="button">05</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="ticker" aria-hidden="true"><div class="run" id="ticker"></div></div>
+</section>
+
+<!-- ───────── Programme ───────── -->
+<section id="programme">
+  <div class="wrap">
+    <div class="prog-head reveal">
+      <div>
+        <div class="label"><span data-l="en">TONIGHT'S PROGRAMME</span><span data-l="fr">AU PROGRAMME</span></div>
+        <h2><span data-l="en">Everything you<br>watch. <em>Nothing</em><br>you don't.</span><span data-l="fr">Tout ce que<br>vous regardez.<br><em>Rien</em> de plus.</span></h2>
+      </div>
+      <p><span data-l="en">A full YouTube experience designed for the remote, without the ads and without the stutter.</span><span data-l="fr">Une expérience YouTube complète pensée pour la télécommande, sans les pubs et sans les saccades.</span></p>
+    </div>
+
+    <div class="prog">
+      <div class="prog-row reveal">
+        <span class="ch">CH01</span>
+        <h3><span data-l="en">Zero ads</span><span data-l="fr">Zéro pub</span></h3>
+        <p><span data-l="en">The app streams the video files directly. There are simply no ads to show.</span><span data-l="fr">L'app lit directement les fichiers vidéo. Il n'y a tout simplement aucune pub à afficher.</span></p>
+        <span class="tag">NO ADS</span>
+      </div>
+      <div class="prog-row reveal">
+        <span class="ch">CH02</span>
+        <h3>SponsorBlock</h3>
+        <p><span data-l="en">Skips sponsors, intros, subscribe reminders and more. Auto, button or off, per category.</span><span data-l="fr">Saute sponsors, intros, rappels d'abonnement et plus. Auto, bouton ou désactivé, par catégorie.</span></p>
+        <span class="tag">SKIP ▶▶</span>
+      </div>
+      <div class="prog-row reveal">
+        <span class="ch">CH03</span>
+        <h3><span data-l="en">Native 4K</span><span data-l="fr">4K native</span></h3>
+        <p><span data-l="en">Up to 4K / 1440p in VP9 and 1080p60 in H.264, decoded by the TV's own hardware.</span><span data-l="fr">Jusqu'en 4K / 1440p en VP9 et 1080p60 en H.264, décodé par le matériel de la TV.</span></p>
+        <span class="tag">2160p</span>
+      </div>
+      <div class="prog-row reveal">
+        <span class="ch">CH04</span>
+        <h3><span data-l="en">Your account</span><span data-l="fr">Votre compte</span></h3>
+        <p><span data-l="en">QR code sign-in. Home feed, subscriptions, history, likes, and progress synced with your phone.</span><span data-l="fr">Connexion par QR code. Accueil, abonnements, historique, likes, progression synchronisée avec le téléphone.</span></p>
+        <span class="tag">QR ▣</span>
+      </div>
+      <div class="prog-row reveal">
+        <span class="ch">CH05</span>
+        <h3><span data-l="en">Subtitles &amp; audio</span><span data-l="fr">Sous-titres &amp; audio</span></h3>
+        <p><span data-l="en">Auto-translated captions with adjustable style, multi-language audio tracks, speed, loop.</span><span data-l="fr">Sous-titres traduits et personnalisables, pistes audio multilingues, vitesse, boucle.</span></p>
+        <span class="tag">CC</span>
+      </div>
+      <div class="prog-row reveal">
+        <span class="ch">CH06</span>
+        <h3><span data-l="en">Live &amp; playlists</span><span data-l="fr">Directs &amp; playlists</span></h3>
+        <p><span data-l="en">Live streams, playlists and mixes, with a "play next" countdown and dislike counts back.</span><span data-l="fr">Directs, playlists et mix, avec compte à rebours « suivante » et le retour des dislikes.</span></p>
+        <span class="tag">● LIVE</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────── Signal ───────── -->
+<section class="signal" id="signal">
+  <div class="wrap signal-grid">
+    <div class="signal-copy reveal">
+      <div class="label"><span data-l="en">SIGNAL CHECK</span><span data-l="fr">TEST DU SIGNAL</span></div>
+      <h2><span data-l="en">Built for<br><em>smooth.</em></span><span data-l="fr">Pensé pour<br>la <em>fluidité.</em></span></h2>
+      <p data-l="en">Samsung TVs run Tizen, not Android, so SmartTube doesn't exist there. Web-based alternatives play video through the TV's <b>old, closed browser engine</b>: stutter, audio dropouts and "thumps" that JavaScript can't fix.</p>
+      <p data-l="fr">Les TV Samsung tournent sous Tizen, pas Android : SmartTube n'y existe pas. Les alternatives web passent par le <b>vieux navigateur fermé</b> de la TV : saccades, coupures audio et « bruits sourds » impossibles à corriger en JavaScript.</p>
+      <p data-l="en">OmegaTube is a ground-up rewrite. A C++ core downloads and demuxes the streams itself, then <b>feeds them straight to the hardware decoders</b>. Playback is as smooth as the TV's own apps.</p>
+      <p data-l="fr">OmegaTube est réécrit de zéro. Un cœur C++ télécharge et démultiplexe les flux lui-même, puis <b>les envoie directement aux décodeurs matériels</b>. Aussi fluide que les apps de la TV.</p>
+      <div class="pipeline">
+        <span>YouTube</span><i>→</i><span>C++ core</span><i>→</i><span class="hl">ESPlayer</span><i>→</i><span><span data-l="en">TV hardware</span><span data-l="fr">Matériel TV</span></span>
+      </div>
+    </div>
+    <div class="scope reveal">
+      <div class="trace bad">
+        <header><b><span data-l="en">Web app in the TV browser</span><span data-l="fr">App web dans le navigateur</span></b><span>SIG ▼</span></header>
+        <svg viewBox="0 0 600 90" preserveAspectRatio="none"><g class="move"><path class="wave" id="wave-bad"/></g></svg>
+        <div class="flags"><span>STUTTER</span><span>AUDIO DROPOUT</span><span>THUMP</span></div>
+      </div>
+      <div class="trace good">
+        <header><b>OmegaTube</b><span>SIG ▲</span></header>
+        <svg viewBox="0 0 600 90" preserveAspectRatio="none"><g class="move"><path class="wave" id="wave-good"/></g></svg>
+        <div class="flags"><span>HW DECODE</span><span>A/V SYNC</span><span>BUFFER OK</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────── Screens ───────── -->
+<section id="screens" style="padding-bottom: 40px">
+  <div class="wrap prog-head reveal" style="margin-bottom: 0">
+    <div>
+      <div class="label"><span data-l="en">NOW SHOWING</span><span data-l="fr">À L'ÉCRAN</span></div>
+      <h2><span data-l="en">Made for<br>the <em>couch.</em></span><span data-l="fr">Fait pour<br>le <em>canapé.</em></span></h2>
+    </div>
+    <div class="reel-nav">
+      <button type="button" data-dir="-1" aria-label="Previous">←</button>
+      <button type="button" data-dir="1" aria-label="Next">→</button>
+    </div>
+  </div>
+  <div class="reel" id="reel">
+    <figure>
+      <div class="frame"><img src="img/player.webp" alt="" loading="lazy"></div>
+      <figcaption><span class="mono">01</span><b><span data-l="en">Player</span><span data-l="fr">Lecteur</span></b><span><span data-l="en">Likes, subscribe, SponsorBlock segments on the bar.</span><span data-l="fr">Likes, abonnement, segments SponsorBlock sur la barre.</span></span></figcaption>
+    </figure>
+    <figure>
+      <div class="frame"><img src="img/home.webp" alt="" loading="lazy"></div>
+      <figcaption><span class="mono">02</span><b><span data-l="en">Home</span><span data-l="fr">Accueil</span></b><span><span data-l="en">Your recommendations, remote-first.</span><span data-l="fr">Vos recommandations, pensées pour la télécommande.</span></span></figcaption>
+    </figure>
+    <figure>
+      <div class="frame"><img src="img/search.webp" alt="" loading="lazy"></div>
+      <figcaption><span class="mono">03</span><b><span data-l="en">Search</span><span data-l="fr">Recherche</span></b><span><span data-l="en">Live suggestions as you type.</span><span data-l="fr">Suggestions pendant la saisie.</span></span></figcaption>
+    </figure>
+    <figure>
+      <div class="frame"><img src="img/sponsorblock.webp" alt="" loading="lazy"></div>
+      <figcaption><span class="mono">04</span><b>SponsorBlock</b><span><span data-l="en">One setting per category.</span><span data-l="fr">Un réglage par catégorie.</span></span></figcaption>
+    </figure>
+    <figure>
+      <div class="frame"><img src="img/account.webp" alt="" loading="lazy"></div>
+      <figcaption><span class="mono">05</span><b><span data-l="en">Sign-in</span><span data-l="fr">Connexion</span></b><span><span data-l="en">Scan, confirm, done.</span><span data-l="fr">Scannez, confirmez, c'est fait.</span></span></figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ───────── Install ───────── -->
+<section class="install" id="install">
+  <div class="wrap">
+    <div class="reveal">
+      <div class="label"><span data-l="en">TUNING IN</span><span data-l="fr">RÉGLAGE DE LA CHAÎNE</span></div>
+      <h2><span data-l="en">One line.<br><em>Ten minutes.</em></span><span data-l="fr">Une ligne.<br><em>Dix minutes.</em></span></h2>
+    </div>
+
+    <div class="install-grid">
+      <div class="reveal">
+        <div class="os" role="tablist">
+          <button type="button" role="tab" data-os="win" aria-selected="true">Windows</button>
+          <button type="button" role="tab" data-os="unix" aria-selected="false">macOS · Linux</button>
+        </div>
+        <div class="term" data-os="win">
+          <div class="term-top"><span>PowerShell</span><span>● REC</span></div>
+          <div class="term-body">
+            <code data-prompt="> " data-cmd="irm https://raw.githubusercontent.com/IIyn/omegatube/main/scripts/install-tv.ps1 | iex"></code>
+            <button class="copy" type="button"><span data-l="en">Copy</span><span data-l="fr">Copier</span></button>
+          </div>
+        </div>
+        <div class="term" data-os="unix" hidden>
+          <div class="term-top"><span>Terminal</span><span>● REC</span></div>
+          <div class="term-body">
+            <code data-prompt="$ " data-cmd="curl -fsSL https://github.com/IIyn/omegatube/releases/latest/download/install.sh | bash"></code>
+            <button class="copy" type="button"><span data-l="en">Copy</span><span data-l="fr">Copier</span></button>
+          </div>
+        </div>
+        <p class="hint" data-os="win">
+          <span data-l="en">Right-click the Start button → <b>Terminal</b>, paste, press Enter.</span>
+          <span data-l="fr">Clic droit sur Démarrer → <b>Terminal</b>, collez, appuyez sur Entrée.</span>
+        </p>
+        <p class="hint" data-os="unix" hidden>
+          <span data-l="en">macOS: <kbd>⌘</kbd> <kbd>Space</kbd>, type <b>Terminal</b>. Linux: open your terminal. Paste, press Enter.</span>
+          <span data-l="fr">macOS : <kbd>⌘</kbd> <kbd>Espace</kbd>, tapez <b>Terminal</b>. Linux : ouvrez votre terminal. Collez, Entrée.</span>
+        </p>
+
+        <ol class="steps">
+          <li>
+            <span class="key">1</span>
+            <div>
+              <h4><span data-l="en">It fetches the tools</span><span data-l="fr">Il récupère les outils</span></h4>
+              <p data-l="en">Java and Samsung's TV tools, the first time only.</p>
+              <p data-l="fr">Java et les outils TV de Samsung, la première fois seulement.</p>
+            </div>
+          </li>
+          <li>
+            <span class="key">2</span>
+            <div>
+              <h4><span data-l="en">Developer Mode on the TV</span><span data-l="fr">Mode développeur sur la TV</span></h4>
+              <ul data-l="en">
+                <li>Open <b>Apps</b>, type <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd><kbd>5</kbd> on the remote.</li>
+                <li>Switch it <b>On</b>, enter the computer address the installer shows.</li>
+                <li>Restart the TV: hold power until the Samsung logo.</li>
+              </ul>
+              <ul data-l="fr">
+                <li>Ouvrez <b>Applications</b>, tapez <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd><kbd>5</kbd> sur la télécommande.</li>
+                <li>Passez-le sur <b>On</b>, entrez l'adresse de l'ordinateur affichée par l'installeur.</li>
+                <li>Redémarrez la TV : maintenez power jusqu'au logo Samsung.</li>
+              </ul>
+            </div>
+          </li>
+          <li>
+            <span class="key">3</span>
+            <div>
+              <h4><span data-l="en">The TV's address</span><span data-l="fr">L'adresse de la TV</span></h4>
+              <p data-l="en">Settings → General → Network → Network Status → IP Settings.</p>
+              <p data-l="fr">Paramètres → Général → Réseau → État du réseau → Paramètres IP.</p>
+            </div>
+          </li>
+          <li>
+            <span class="key">4</span>
+            <div>
+              <h4><span data-l="en">Samsung sign-in</span><span data-l="fr">Connexion Samsung</span></h4>
+              <p data-l="en">A browser page opens to create your TV's certificate. Once.</p>
+              <p data-l="fr">Une page s'ouvre pour créer le certificat de votre TV. Une seule fois.</p>
+            </div>
+          </li>
+          <li>
+            <span class="key">OK</span>
+            <div>
+              <h4><span data-l="en">You're on air</span><span data-l="fr">Vous êtes à l'antenne</span></h4>
+              <p data-l="en">OmegaTube opens. Go to <b>Account</b> and scan the QR code.</p>
+              <p data-l="fr">OmegaTube s'ouvre. Allez dans <b>Compte</b> et scannez le QR code.</p>
+            </div>
+          </li>
+        </ol>
+      </div>
+
+      <aside class="side reveal">
+        <div>
+          <h4><span data-l="en">YOU NEED</span><span data-l="fr">IL VOUS FAUT</span></h4>
+          <ul data-l="en">
+            <li>A Samsung TV on <b>Tizen 6.0+</b> (most 2021+ models)</li>
+            <li>A <b>Windows, macOS or Linux</b> computer on the same network</li>
+            <li>A free <b>Samsung account</b></li>
+          </ul>
+          <ul data-l="fr">
+            <li>Une TV Samsung sous <b>Tizen 6.0+</b> (la plupart des modèles 2021+)</li>
+            <li>Un ordinateur <b>Windows, macOS ou Linux</b> sur le même réseau</li>
+            <li>Un <b>compte Samsung</b> gratuit</li>
+          </ul>
+        </div>
+        <div>
+          <h4><span data-l="en">UPDATING</span><span data-l="fr">METTRE À JOUR</span></h4>
+          <p data-l="en">Run the same line again. Certificate, settings and YouTube account are kept.</p>
+          <p data-l="fr">Relancez la même ligne. Certificat, réglages et compte YouTube sont conservés.</p>
+        </div>
+        <div>
+          <h4><span data-l="en">MANUAL</span><span data-l="fr">MANUEL</span></h4>
+          <p>
+            <span data-l="en">Grab <code>install.sh</code>, <code>install.ps1</code> or the <code>.tpk</code> from the</span>
+            <span data-l="fr">Récupérez <code>install.sh</code>, <code>install.ps1</code> ou le <code>.tpk</code> sur la</span>
+            <a href="https://github.com/IIyn/omegatube/releases/latest" style="color:var(--paper)"><span data-l="en">latest release</span><span data-l="fr">dernière release</span></a>.
+          </p>
+        </div>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<!-- ───────── FAQ ───────── -->
+<section id="faq">
+  <div class="wrap faq-grid">
+    <div class="reveal">
+      <div class="label">FAQ</div>
+      <h2><span data-l="en">Before you<br><em>switch on.</em></span><span data-l="fr">Avant<br>d'<em>allumer.</em></span></h2>
+      <p style="color: var(--dim); margin-top: 24px">
+        <span data-l="en">More in the</span><span data-l="fr">Plus de détails dans le</span>
+        <a href="https://github.com/IIyn/omegatube#troubleshooting" style="color: var(--paper)"><span data-l="en">troubleshooting guide</span><span data-l="fr">guide de dépannage</span></a>.
+      </p>
+    </div>
+    <div class="reveal">
+      <details>
+        <summary><span data-l="en">Why isn't it on the Samsung store?</span><span data-l="fr">Pourquoi pas sur le store Samsung ?</span></summary>
+        <p data-l="en">Samsung's store doesn't accept apps like this one. Apps from outside the store must be signed with a certificate made for your TV, which needs a free Samsung account. The installer handles it.</p>
+        <p data-l="fr">Le store Samsung n'accepte pas ce genre d'app. Les apps hors store doivent être signées avec un certificat propre à votre TV, ce qui demande un compte Samsung gratuit. L'installeur s'en charge.</p>
+      </details>
+      <details>
+        <summary><span data-l="en">Which TVs are supported?</span><span data-l="fr">Quelles TV sont compatibles ?</span></summary>
+        <p data-l="en">Samsung smart TVs on Tizen 6.0 or newer, most models from 2021 onwards. Developed on a 2021 AU series; other models should work but are less tested. Feedback is welcome in the issues.</p>
+        <p data-l="fr">Les TV Samsung sous Tizen 6.0 ou plus, soit la plupart des modèles depuis 2021. Développée sur une série AU de 2021 ; les autres modèles devraient fonctionner mais sont moins testés. Les retours sont bienvenus dans les issues.</p>
+      </details>
+      <details>
+        <summary><span data-l="en">"The TV did not answer"</span><span data-l="fr">« La TV n'a pas répondu »</span></summary>
+        <p data-l="en">Check that Developer Mode is On with your computer's address, that the TV was fully restarted, and that both are on the same network. A VPN can also block it.</p>
+        <p data-l="fr">Vérifiez que le mode développeur est activé avec l'adresse de votre ordinateur, que la TV a bien redémarré, et que les deux sont sur le même réseau. Un VPN peut aussi bloquer.</p>
+      </details>
+      <details>
+        <summary><span data-l="en">My Samsung certificate expired</span><span data-l="fr">Mon certificat Samsung a expiré</span></summary>
+        <p data-l="en">Certificates last one year. Run the installer again to make a new one. If the install is refused, uninstall OmegaTube first.</p>
+        <p data-l="fr">Les certificats durent un an. Relancez l'installeur pour en créer un nouveau. Si l'installation est refusée, désinstallez d'abord OmegaTube.</p>
+      </details>
+      <details>
+        <summary><span data-l="en">A video won't play</span><span data-l="fr">Une vidéo ne se lance pas</span></summary>
+        <p data-l="en">YouTube changes its API often. Open an issue with the link: many fixes ship through a remote config and need no reinstall.</p>
+        <p data-l="fr">YouTube change souvent son API. Ouvrez une issue avec le lien : beaucoup de corrections passent par une config distante, sans réinstallation.</p>
+      </details>
+      <details>
+        <summary><span data-l="en">Is it safe? Is it free?</span><span data-l="fr">C'est sûr ? C'est gratuit ?</span></summary>
+        <p data-l="en">Free and open source under the GNU GPL v3, with no data collection. All the code, installer scripts included, is on GitHub.</p>
+        <p data-l="fr">Libre et gratuit sous GNU GPL v3, sans collecte de données. Tout le code, scripts d'installation compris, est sur GitHub.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<div class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+<footer>
+  <div class="wrap">
+    <p class="eot"><span>■</span> <span data-l="en">END OF TRANSMISSION</span><span data-l="fr">FIN DES PROGRAMMES</span></p>
+    <div class="foot">
+      <p>
+        <span data-l="en">OmegaTube is an independent project, not affiliated with Google, YouTube or Samsung. YouTube is a trademark of Google LLC. Screenshots show third-party videos for illustration.</span>
+        <span data-l="fr">OmegaTube est un projet indépendant, non affilié à Google, YouTube ou Samsung. YouTube est une marque de Google LLC. Les captures montrent des vidéos de tiers à titre d'illustration.</span>
+      </p>
+      <nav>
+        <a href="https://github.com/IIyn/omegatube">GitHub</a>
+        <a href="https://github.com/IIyn/omegatube/issues">Issues</a>
+        <a href="https://github.com/IIyn/omegatube/releases">Releases</a>
+        <a href="https://github.com/IIyn/omegatube/blob/main/LICENSE">GPL-3.0</a>
+      </nav>
+    </div>
+  </div>
+</footer>
+
+<script>
+  const root = document.documentElement;
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ── Language: saved choice, else browser language
+  function setLang(lang) {
+    root.dataset.lang = lang;
+    root.lang = lang;
+    document.querySelectorAll("[data-set-lang]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.setLang === lang)));
+    try { localStorage.setItem("lang", lang); } catch (e) {}
+  }
+  let saved = null;
+  try { saved = localStorage.getItem("lang"); } catch (e) {}
+  setLang(saved || ((navigator.language || "").toLowerCase().startsWith("fr") ? "fr" : "en"));
+  document.querySelectorAll("[data-set-lang]").forEach(b => b.addEventListener("click", () => setLang(b.dataset.setLang)));
+
+  // ── Top bar turns solid once scrolled
+  const bar = document.getElementById("bar");
+  const onScroll = () => bar.classList.toggle("solid", scrollY > 40);
+  addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  // ── Ticker (content twice for a seamless loop)
+  const items = ["No ads", "SponsorBlock", "4K VP9", "1080p60", "QR sign-in", "Subtitles", "Audio tracks", "Dislikes", "Live", "Playlists", "EN · FR · ES", "GPL-3.0"];
+  const half = items.map(t => `<span>${t}</span><span class="sep">Ω</span>`).join("");
+  document.getElementById("ticker").innerHTML = half + half;
+
+  // ── TV: channel zapping through static
+  const shots = [...document.querySelectorAll(".screen img")];
+  const names = ["PLAYER", "HOME", "SEARCH", "SPONSORBLOCK", "SIGN-IN"];
+  const noise = document.querySelector(".screen canvas");
+  const nctx = noise.getContext("2d");
+  const osdCh = document.querySelector(".osd-ch"), osdName = document.querySelector(".osd-name");
+  const zapBtns = [...document.querySelectorAll(".zapper button")];
+  let current = 0, timer = null;
+
+  function staticBurst(ms) {
+    return new Promise(done => {
+      if (reduced) return done();
+      noise.classList.add("on");
+      const img = nctx.createImageData(160, 90);
+      const end = performance.now() + ms;
+      (function frame(t) {
+        for (let i = 0; i < img.data.length; i += 4) {
+          const v = Math.random() * 255 | 0;
+          img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+          img.data[i + 3] = 255;
+        }
+        nctx.putImageData(img, 0, 0);
+        if (t < end) requestAnimationFrame(frame); else { noise.classList.remove("on"); done(); }
+      })(performance.now());
+    });
+  }
+  function showOsd(i) {
+    osdCh.textContent = "CH " + String(i + 1).padStart(2, "0");
+    osdName.textContent = names[i];
+    [osdCh, osdName].forEach(el => { el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); });
+  }
+  async function zap(i) {
+    if (i === current) return;
+    current = i;
+    zapBtns.forEach((b, k) => b.setAttribute("aria-current", String(k === i)));
+    const burst = staticBurst(220);
+    setTimeout(() => shots.forEach((s, k) => s.classList.toggle("on", k === i)), 110);
+    await burst;
+    showOsd(i);
+  }
+  function autoZap() {
+    clearInterval(timer);
+    if (!reduced) timer = setInterval(() => zap((current + 1) % shots.length), 4200);
+  }
+  zapBtns.forEach((b, i) => b.addEventListener("click", () => { zap(i); autoZap(); }));
+  setTimeout(() => showOsd(0), 1400);
+  autoZap();
+
+  // The TV leans toward the pointer
+  const tv = document.getElementById("tv");
+  if (!reduced && matchMedia("(pointer: fine) and (min-width: 961px)").matches) {
+    document.querySelector(".hero").addEventListener("pointermove", e => {
+      const x = e.clientX / innerWidth - .5, y = e.clientY / innerHeight - .5;
+      tv.style.transform = `rotateY(${-9 + x * 8}deg) rotateX(${3 - y * 6}deg)`;
+    });
+  }
+
+  // ── Oscilloscope traces: two identical 600-unit periods, scrolled by half for a seamless loop
+  function wavePath(glitchy) {
+    const bumps = [];
+    for (let k = 0; k < 6; k++) bumps.push((Math.random() - .5) * 80);
+    let d = "", pen = false;
+    for (let x = 0; x <= 1200; x += 3) {
+      const local = x % 600, t = local / 600 * Math.PI * 2;
+      let y = 45 + Math.sin(t * 6) * 22 + Math.sin(t * 18) * 6;
+      if (glitchy) {
+        if ((local > 140 && local < 176) || (local > 390 && local < 410)) { pen = false; continue; }   // dropouts
+        if (local > 250 && local < 268) y = 45 + bumps[Math.floor((local - 250) / 3)];                  // thump
+        if (local > 470 && local < 520) y += Math.sin(local * 1.7) * 9;                                // stutter
+      }
+      d += (pen ? "L" : "M") + x + " " + y.toFixed(1);
+      pen = true;
+    }
+    return d;
+  }
+  document.getElementById("wave-good").setAttribute("d", wavePath(false));
+  document.getElementById("wave-bad").setAttribute("d", wavePath(true));
+
+  // ── Screens reel arrows
+  const reel = document.getElementById("reel");
+  document.querySelectorAll(".reel-nav button").forEach(b => b.addEventListener("click", () => {
+    reel.scrollBy({ left: Number(b.dataset.dir) * (reel.querySelector("figure").offsetWidth + 22), behavior: "smooth" });
+  }));
+
+  // ── Install: OS tabs (preselected from the platform), command typed once the section shows
+  let installSeen = false;
+  function typeCmd(code) {
+    const cmd = code.dataset.cmd;
+    if (reduced || code.dataset.typed) { code.textContent = cmd; return; }
+    code.dataset.typed = "1";
+    let n = 0;
+    (function step() {
+      n = Math.min(cmd.length, n + 2);
+      code.textContent = cmd.slice(0, n);
+      code.insertAdjacentHTML("beforeend", '<span class="caret"></span>');
+      if (n < cmd.length) setTimeout(step, 16);
+    })();
+  }
+  function setOs(os) {
+    document.querySelectorAll(".os [data-os]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.os === os)));
+    document.querySelectorAll(".term[data-os], .hint[data-os]").forEach(el => el.hidden = el.dataset.os !== os);
+    if (installSeen) typeCmd(document.querySelector(`.term[data-os="${os}"] code`));
+  }
+  document.querySelectorAll(".os [data-os]").forEach(b => b.addEventListener("click", () => setOs(b.dataset.os)));
+  setOs(/win/i.test(navigator.userAgentData?.platform || navigator.platform || "") ? "win" : "unix");
+  document.querySelectorAll(".copy").forEach(btn => btn.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(btn.parentElement.querySelector("code").dataset.cmd); } catch (e) { return; }
+    const html = btn.innerHTML;
+    btn.classList.add("done");
+    btn.textContent = root.dataset.lang === "fr" ? "Copié ✓" : "Copied ✓";
+    setTimeout(() => { btn.classList.remove("done"); btn.innerHTML = html; }, 1600);
+  }));
+
+  // ── Scroll reveals
+  const io = new IntersectionObserver(entries => entries.forEach(e => {
+    if (!e.isIntersecting) return;
+    e.target.classList.add("in");
+    io.unobserve(e.target);
+  }), { threshold: .15 });
+  document.querySelectorAll(".reveal").forEach(el => io.observe(el));
+  document.querySelectorAll(".prog-row").forEach((el, i) => el.style.transitionDelay = i * 60 + "ms");
+  new IntersectionObserver((entries, obs) => entries.forEach(e => {
+    if (!e.isIntersecting) return;
+    installSeen = true;
+    typeCmd(document.querySelector(".term:not([hidden]) code"));
+    obs.disconnect();
+  }), { threshold: .3 }).observe(document.getElementById("install"));
+
+  // ── Latest release tag
+  fetch("https://api.github.com/repos/IIyn/omegatube/releases/latest")
+    .then(r => r.ok ? r.json() : null)
+    .then(j => { if (j && j.tag_name) document.getElementById("version").textContent = j.tag_name; })
+    .catch(() => {});
+</script>
+</body>
+</html>
