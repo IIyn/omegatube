@@ -11,10 +11,12 @@ namespace OmegaTube.Ui
     // The home as YouTube's TV app shows it: titled rows by topic ("Recommandations", "Jeux vidéo"...), each a
     // horizontally scrolling FeedRow, stacked vertically with the focused row at the top. More rows load as the
     // focus nears the last one; a row asks for more of its own items as its focus nears its end.
-    public class ShelfList : View
+    // Card filling is ordered here for all rows: the focused row, then the one below, above, and so on.
+    public class ShelfList : View, IFeedView
     {
         private const int RowsAround = 2;   // rows kept shown above / below the focused one
         private const int PrefetchRows = 3;
+        private static readonly int[] FillOrder = { 0, 1, -1, 2, 3, -2 };   // offsets from the focused row
 
         public int Count => rows.Count;
         public VideoItem FocusedItem => rows.Count > 0 ? rows[focus].FocusedItem : null;
@@ -28,11 +30,13 @@ namespace OmegaTube.Ui
         private bool fresh, loading, focused;
         private int focus;
         private int generation;
+        private readonly Func<bool> pump;
         private Animation scroll;
 
         public ShelfList(int width, int height)
         {
             this.width = width;
+            pump = BuildNext;
             Size = new Size(width, height);
             ClippingMode = ClippingModeType.ClipChildren;
             content = new View { Size = new Size(width, 100000) };
@@ -56,14 +60,60 @@ namespace OmegaTube.Ui
             focus = 0;
             content.PositionY = 0;
             status.Text = T("Loading…");
-            FeedPage cached = cacheKey != null ? LocalStore.LoadFeed(cacheKey) : null;
-            if (cached != null && cached.Shelves.Count > 0)
+            if (cacheKey != null)
             {
-                AddShelves(cached.Shelves, seedContinuations: false);
-                status.Text = "";
+                _ = ShowCached(cacheKey, generation);
+            }
+            _ = Load();
+        }
+
+        // The cached rows, read and parsed off the UI thread, shown unless the network was faster.
+        private async Task ShowCached(string key, int gen)
+        {
+            FeedPage cached = await Task.Run(() => LocalStore.LoadFeed(key));
+            if (cached == null || cached.Shelves.Count == 0 || gen != generation || disposed || fresh)
+            {
+                return;
+            }
+            AddShelves(cached.Shelves, seedContinuations: false);
+            status.Text = "";
+            AfterChange();
+        }
+
+        public void Wake()
+        {
+            UiWork.Request(pump);
+        }
+
+        // Asks the first rows again (new recommendations), back at the top right away so they do not land
+        // under the focus. Rows and cards still showing the same thing are kept. A next page on its way is
+        // dropped (generation).
+        public void Refresh()
+        {
+            if (loader == null)
+            {
+                return;
+            }
+            generation++;
+            loading = false;
+            fresh = false;
+            if (rows.Count > 0)
+            {
+                rows[focus].SetFocused(false);
+                focus = 0;
+                foreach (FeedRow r in rows)
+                {
+                    r.ResetFocus();
+                }
                 AfterChange();
             }
             _ = Load();
+        }
+
+        protected override void Dispose(DisposeTypes type)
+        {
+            UiWork.Cancel(pump);
+            base.Dispose(type);
         }
 
         private void Clear()
@@ -76,18 +126,30 @@ namespace OmegaTube.Ui
             rows.Clear();
         }
 
-        private void AddShelves(List<Shelf> shelves, bool seedContinuations)
+        // `reuse`: rows shown from the cache, recycled when the shelf at the same place has the same title.
+        private void AddShelves(List<Shelf> shelves, bool seedContinuations, List<FeedRow> reuse = null)
         {
             foreach (Shelf s in shelves)
             {
-                // Items beyond the shelf's first ones: the same browse call with the row's continuation.
-                var row = new FeedRow(s.Title.Length > 0 ? s.Title : T("Recommended"), c => YouTube.Browse("", c), width)
+                string title = s.Title.Length > 0 ? s.Title : T("Recommended");
+                int i = rows.Count;
+                FeedRow row = reuse != null && i < reuse.Count && reuse[i]?.Title == title ? reuse[i] : null;
+                if (row != null)
                 {
-                    Position = new Position(0, rows.Count * Theme.RowHeight),
-                };
-                row.Seed(s.Items, seedContinuations ? s.Continuation : "");
+                    reuse[i] = null;
+                }
+                else
+                {
+                    // Items beyond the shelf's first ones: the same browse call with the row's continuation.
+                    row = new FeedRow(title, c => YouTube.Browse("", c), width)
+                    {
+                        Position = new Position(0, i * Theme.RowHeight),
+                        RequestWork = () => UiWork.Request(pump),
+                    };
+                    content.Add(row);
+                }
                 rows.Add(row);
-                content.Add(row);
+                row.Seed(s.Items, seedContinuations ? s.Continuation : "");
             }
         }
 
@@ -100,7 +162,7 @@ namespace OmegaTube.Ui
             loading = true;
             int gen = generation;
             FeedPage page = await loader(fresh ? continuation : "");
-            if (gen != generation)
+            if (gen != generation || disposed)
             {
                 return;
             }
@@ -113,18 +175,30 @@ namespace OmegaTube.Ui
                 }
                 return;
             }
+            List<FeedRow> reuse = null;
             if (!fresh)
             {
-                // The first network page replaces the cached rows (keeping the focused row index).
+                // The first network page replaces the cached rows (keeping the focused row index, and the rows
+                // and cards that show the same thing).
                 fresh = true;
-                Clear();
+                reuse = new List<FeedRow>(rows);
+                rows.Clear();
                 if (cacheKey != null)
                 {
-                    LocalStore.SaveFeed(cacheKey, page);
+                    string key = cacheKey;
+                    _ = Task.Run(() => LocalStore.SaveFeed(key, page));
                 }
             }
             continuation = page.Continuation;
-            AddShelves(page.Shelves, seedContinuations: true);
+            AddShelves(page.Shelves, seedContinuations: true, reuse);
+            foreach (FeedRow r in reuse ?? new List<FeedRow>())
+            {
+                if (r != null)
+                {
+                    content.Remove(r);
+                    r.Dispose();
+                }
+            }
             focus = Math.Min(focus, Math.Max(0, rows.Count - 1));
             status.Text = rows.Count == 0 ? T("No videos") : "";
             AfterChange();
@@ -205,8 +279,31 @@ namespace OmegaTube.Ui
             scroll = Widgets.Slide(content, 0, -focus * Theme.RowHeight, scroll);
             for (int i = 0; i < rows.Count; i++)
             {
-                Widgets.SetVisible(rows[i], i >= focus - RowsAround && i <= focus + RowsAround + 1);
+                bool near = i >= focus - RowsAround && i <= focus + RowsAround + 1;
+                if (near != rows[i].Visibility)
+                {
+                    Widgets.SetVisible(rows[i], near);
+                }
             }
+            UiWork.Request(pump);
+        }
+
+        // One card filled per call, in the rows around the focus (see FillOrder).
+        private bool BuildNext()
+        {
+            if (disposed || !Visibility)
+            {
+                return false;   // a hidden feed (other menu entry): Wake() when shown again
+            }
+            foreach (int d in FillOrder)
+            {
+                int i = focus + d;
+                if (i >= 0 && i < rows.Count && rows[i].BuildNext())
+                {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 }

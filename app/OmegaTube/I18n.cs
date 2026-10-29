@@ -233,6 +233,11 @@ namespace OmegaTube
             ["Up next in the mix"] = "À suivre dans le mix",
             ["Up next in the playlist"] = "À suivre dans la playlist",
             ["Up to date"] = "À jour",
+            ["What's new in {0}"] = "Nouveautés de la version {0}",
+            ["Release notes of the new version"] = "Notes de version de la nouvelle version",
+            ["No release notes."] = "Aucune note de version.",
+            ["To install it, run the install script again or reinstall by following the README."] =
+                "Pour l'installer, relancez le même script d'installation ou refaites l'installation en suivant le README.",
             ["Version"] = "Version",
             ["Version {0} available"] = "Version {0} disponible",
             ["Version, license and credits"] = "Version, licence et crédits",
@@ -491,6 +496,11 @@ namespace OmegaTube
             ["Up next in the mix"] = "A continuación en el mix",
             ["Up next in the playlist"] = "A continuación en la lista",
             ["Up to date"] = "Actualizado",
+            ["What's new in {0}"] = "Novedades de la versión {0}",
+            ["Release notes of the new version"] = "Notas de la nueva versión",
+            ["No release notes."] = "No hay notas de la versión.",
+            ["To install it, run the install script again or reinstall by following the README."] =
+                "Para instalarla, vuelve a ejecutar el mismo script de instalación o reinstala siguiendo el README.",
             ["Version"] = "Versión",
             ["Version {0} available"] = "Versión {0} disponible",
             ["Version, license and credits"] = "Versión, licencia y créditos",

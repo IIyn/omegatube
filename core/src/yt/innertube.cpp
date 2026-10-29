@@ -708,7 +708,25 @@ bool Client::playlist_page(const std::string& playlist_id, const std::string& co
     return true;
 }
 
-bool Client::related(const std::string& video_id, Feed& out, std::string& error) {
+bool Client::related(const std::string& video_id, const std::string& access_token, Feed& out, std::string& error) {
+    // Signed in: the TV "next" answer as the account, i.e. YouTube's suggestions for this viewer (the anonymous
+    // WEB one only knows the video's topic). Its shelves of tiles: Up next, from the channel, recommended...
+    if (!access_token.empty()) {
+        net::Response tv = post_as_account("next", {{"videoId", video_id}}, access_token);
+        json t = tv.ok() ? json::parse(tv.body, nullptr, false) : json();
+        if (t.is_object()) {
+            out = Feed{};
+            collect(t, out);
+            out.continuation.clear();
+            out.items.erase(std::remove_if(out.items.begin(), out.items.end(),
+                                           [&](const FeedItem& i) { return i.video_id == video_id; }),
+                            out.items.end());
+            OLOG("yt: related %s (account) -> %zu items", video_id.c_str(), out.items.size());
+            if (!out.items.empty()) return true;
+        } else {
+            OLOG("yt: related %s: %s", video_id.c_str(), http_error("tv next", tv).c_str());
+        }
+    }
     if (!ensure_visitor(error)) return false;
     ClientDef def = client_def("search", visitor_data_, web_client_version_);
     json body = {{"context", {{"client", def.client}}}, {"videoId", video_id}};

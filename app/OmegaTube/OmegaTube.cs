@@ -14,6 +14,8 @@ namespace OmegaTube
 
         public AppConfig Config { get; private set; }
         public HomeScreen Home { get; private set; }
+        // Latest GitHub release when newer than this build ({"version","url","notes"...}), else null.
+        public object NewRelease { get; set; }
         public IntPtr EcoreWindow { get; private set; }
 
         protected override void OnCreate()
@@ -73,6 +75,7 @@ namespace OmegaTube
             object update = await System.Threading.Tasks.Task.Run(() => YouTube.Call(NativeCore.UpdateCheck()));
             if (Util.Json.Bool(update, "available"))
             {
+                NewRelease = update;
                 Home.ShowUpdate(Util.Json.Str(update, "version"), Util.Json.Str(update, "url"));
             }
         }
@@ -168,6 +171,7 @@ namespace OmegaTube
                 return;
             }
             string key = e.Key.KeyPressedName;
+            UiWork.KeyPressed();   // deferred card filling yields to navigation
             if (dialog != null)
             {
                 dialog.OnKey(key);

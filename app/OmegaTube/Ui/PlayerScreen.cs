@@ -20,7 +20,8 @@ namespace OmegaTube.Ui
     //  - focus rows, top to bottom: actions / seek bar (◀ ▶ seek) / buttons / suggestions (Up and Down move between them);
     //    the suggestions row slides the whole block up;
     //  - subtitles are drawn by the app (YouTube json3 tracks), above the controls while they are shown;
-    //  - at the end: next in the playlist, or (autoplay) the first suggestion after a short countdown.
+    //  - at the end: next in the playlist, (autoplay) the first suggestion after a short countdown, or the
+    //    controls stay up on the finished video.
     public class PlayerScreen : Screen
     {
         // Player teardown joins native threads: serialise create/destroy so two players never coexist
@@ -960,7 +961,9 @@ namespace OmegaTube.Ui
             }
             else
             {
-                App.Pop();
+                // Stays on the finished video with its info and controls (replay, suggestions); Back leaves.
+                buttonIndex = buttons.IndexOf(playButton);
+                ShowChrome(Focus.Buttons);
             }
         }
 
@@ -1846,7 +1849,7 @@ namespace OmegaTube.Ui
             }
         }
 
-        private static float EstimateTextHeight(string text, int width, float pixelSize)
+        public static float EstimateTextHeight(string text, int width, float pixelSize)
         {
             int perLine = Math.Max(1, (int)(width / (pixelSize * 0.52f)));
             int lines = 0;

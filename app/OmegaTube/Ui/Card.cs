@@ -8,23 +8,26 @@ namespace OmegaTube.Ui
 {
     // SmartTube-style card: rounded 16:9 thumbnail, info box under it that lights up when focused,
     // duration badge bottom right, red progress bar for started videos.
+    // Built in two steps for smooth scrolling: the constructor only makes the cheap frame (grey thumbnail and
+    // info box); Fill() adds the texts and starts the thumbnail, when the card is about to be seen (UiWork).
     public class Card : View
     {
-        public VideoItem Item { get; }
+        public VideoItem Item { get; private set; }
+        public bool Filled { get; private set; }
 
-        private readonly int width;
+        private readonly int width, thumbH;
         private readonly ImageView thumb;
         private readonly View info, infoTopPatch;
-        private readonly TextLabel title, meta;
         private readonly View progress;
-        private bool imageLoaded;
+        private TextLabel title, meta;
+        private bool focused;
         private Animation zoom;
 
         public Card(VideoItem item, int width = Theme.CardWidth)
         {
             Item = item;
             this.width = width;
-            int thumbH = Theme.ThumbHeight(width);
+            thumbH = Theme.ThumbHeight(width);
             Size = new Size(width, Theme.CardHeight(width));
             // Scale around the centre so neighbours are overlapped evenly.
             PivotPoint = Tizen.NUI.PivotPoint.Center;
@@ -40,19 +43,6 @@ namespace OmegaTube.Ui
                 CornerRadius = Theme.CardRadius,
             };
             Add(thumb);
-
-            string badge = item.Live ? T("LIVE") : item.Duration;
-            if (!string.IsNullOrEmpty(badge))
-            {
-                var duration = Widgets.Label(" " + badge + " ", Theme.SmallSize - 2, Theme.Text);
-                duration.BackgroundColor = item.Live ? Theme.Accent : new Color(0, 0, 0, 0.82f);
-                duration.CornerRadius = 4;
-                duration.ParentOrigin = Tizen.NUI.ParentOrigin.TopLeft;
-                duration.PivotPoint = Tizen.NUI.PivotPoint.BottomRight;
-                duration.PositionUsesPivotPoint = true;
-                duration.Position = new Position(width - 8, thumbH - 10);
-                thumb.Add(duration);
-            }
 
             info = new View
             {
@@ -70,12 +60,59 @@ namespace OmegaTube.Ui
             progress.Position = new Position(0, thumbH - 5);
             Add(progress);
             UpdateProgress();
+        }
 
-            title = Widgets.Label(item.Title, Theme.BodySize, Theme.Text, width - 24, 62);
+        // Texts, duration badge and thumbnail. Text labels are what costs (shaping on the UI thread).
+        public void Fill()
+        {
+            if (Filled)
+            {
+                return;
+            }
+            Filled = true;
+            string badge = Item.Live ? T("LIVE") : Item.Duration;
+            if (!string.IsNullOrEmpty(badge))
+            {
+                var duration = Widgets.Label(" " + badge + " ", Theme.SmallSize - 2, Theme.Text);
+                duration.BackgroundColor = Item.Live ? Theme.Accent : new Color(0, 0, 0, 0.82f);
+                duration.CornerRadius = 4;
+                duration.ParentOrigin = Tizen.NUI.ParentOrigin.TopLeft;
+                duration.PivotPoint = Tizen.NUI.PivotPoint.BottomRight;
+                duration.PositionUsesPivotPoint = true;
+                duration.Position = new Position(width - 8, thumbH - 10);
+                thumb.Add(duration);
+            }
+
+            title = Widgets.Label(Item.Title, Theme.BodySize, Theme.Text, width - 24, 62);
             title.MultiLine = true;
             title.Position = new Position(12, 8);
             info.Add(title);
 
+            meta = Widgets.Label(MetaLine(Item), Theme.SmallSize, Theme.TextDim, width - 24);
+            meta.Position = new Position(12, 70);
+            info.Add(meta);
+            ApplyFocusColors();
+
+            if (!string.IsNullOrEmpty(Item.Thumbnail))
+            {
+                thumb.ResourceUrl = Item.Thumbnail;
+            }
+        }
+
+        // The same video in a fresher page (network after cache): keeps the card and its loaded thumbnail.
+        public void Rebind(VideoItem item)
+        {
+            Item = item;
+            if (Filled)
+            {
+                title.Text = item.Title;
+                meta.Text = MetaLine(item);
+            }
+            UpdateProgress();
+        }
+
+        private static string MetaLine(VideoItem item)
+        {
             string line = item.Channel;
             if (!string.IsNullOrEmpty(item.Views))
             {
@@ -85,9 +122,7 @@ namespace OmegaTube.Ui
             {
                 line += " • " + item.Published;
             }
-            meta = Widgets.Label(line, Theme.SmallSize, Theme.TextDim, width - 24);
-            meta.Position = new Position(12, 70);
-            info.Add(meta);
+            return line;
         }
 
         public void UpdateProgress()
@@ -98,22 +133,14 @@ namespace OmegaTube.Ui
             Widgets.SetVisible(progress, p > 0.01);
         }
 
-        // Thumbnails are fetched only when the card is about to be visible.
-        public void LoadImage()
-        {
-            if (!imageLoaded && !string.IsNullOrEmpty(Item.Thumbnail))
-            {
-                imageLoaded = true;
-                thumb.ResourceUrl = Item.Thumbnail;
-            }
-        }
-
         public void SetFocused(bool focused)
         {
-            info.BackgroundColor = focused ? Theme.CardInfoFocused : Theme.CardInfo;
-            infoTopPatch.BackgroundColor = info.BackgroundColor;
-            title.TextColor = focused ? Theme.CardTextFocused : Theme.Text;
-            meta.TextColor = focused ? Theme.CardTextFocused : Theme.TextDim;
+            if (focused == this.focused)
+            {
+                return;   // grids refresh every card's state after a page: no animation for unchanged ones
+            }
+            this.focused = focused;
+            ApplyFocusColors();
             zoom?.Stop();
             zoom = new Animation(140);
             float s = focused ? Theme.FocusScale : 1f;
@@ -122,6 +149,17 @@ namespace OmegaTube.Ui
             if (focused)
             {
                 RaiseToTop();
+            }
+        }
+
+        private void ApplyFocusColors()
+        {
+            info.BackgroundColor = focused ? Theme.CardInfoFocused : Theme.CardInfo;
+            infoTopPatch.BackgroundColor = info.BackgroundColor;
+            if (Filled)
+            {
+                title.TextColor = focused ? Theme.CardTextFocused : Theme.Text;
+                meta.TextColor = focused ? Theme.CardTextFocused : Theme.TextDim;
             }
         }
     }

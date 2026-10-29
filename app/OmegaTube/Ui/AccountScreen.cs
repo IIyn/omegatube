@@ -197,10 +197,15 @@ namespace OmegaTube.Ui
             signOutButton.Text = T("Sign out");
             signOutButton.SetFocused(true);
             help.Text = T("OK sign out    Back leave");
-            nameLabel.Text = T("YouTube account");
-            handleLabel.Text = "";
+            if (!profileLoaded)
+            {
+                nameLabel.Text = T("YouTube account");   // until the profile arrives (kept for later openings)
+                handleLabel.Text = "";
+            }
             _ = LoadProfile(generation);
         }
+
+        private bool profileLoaded;
 
         private async Task LoadProfile(int gen)
         {
@@ -209,6 +214,7 @@ namespace OmegaTube.Ui
             {
                 return;
             }
+            profileLoaded = true;
             if (!string.IsNullOrEmpty(info.Name))
             {
                 nameLabel.Text = info.Name;

@@ -14,6 +14,9 @@ namespace OmegaTube.Ui
     // after a short pause; Right / OK enters it, Left from its left edge or Back comes back to the rail.
     // Home shows YouTube's rows by topic, feeds a grid; Search, Account and Settings are whole screens hosted
     // beside the rail (scaled down a little, so their 1920-wide layouts fit).
+    // Switching entries must not stall the remote: each entry keeps its own view once built (switching is a
+    // show / hide; Home and Subscriptions refresh in the background each time, other feeds once older than
+    // StaleAfter), and while the remote rests the entries not opened yet are built ahead (Prewarm).
     public class HomeScreen : Screen
     {
         private class Section
@@ -21,6 +24,7 @@ namespace OmegaTube.Ui
             public string Key, Title, Icon, CacheKey, EmptyText;
             public Func<string, Task<FeedPage>> Loader;   // null: nothing to show (signed out) or a hosted screen
             public bool Shelves;                          // rows by topic (Home) instead of a grid
+            public bool RefreshOnOpen;                    // new content each time it is opened (recommendations)
             public Func<Screen> Embed;                    // a screen shown beside the rail
         }
 
@@ -28,17 +32,21 @@ namespace OmegaTube.Ui
         private const int GridTop = 110;
         private const int OpenDelayMs = 350;   // pause on a rail entry before it opens
         private const float EmbedScale = (1920f - Theme.RailWidth) / 1920f;
+        private static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(5);
+        private const int PrewarmIdleMs = 1500;   // remote untouched that long: build one entry ahead
 
         private readonly List<Section> sections = new List<Section>();
         private readonly Dictionary<string, Screen> embedded = new Dictionary<string, Screen>();
         private readonly TextLabel header;
-        private readonly FeedGrid grid;
-        private readonly ShelfList shelves;
+        private readonly Dictionary<string, View> feeds = new Dictionary<string, View>();   // FeedGrid / ShelfList
+        private readonly Dictionary<string, DateTime> loadedAt = new Dictionary<string, DateTime>();
+        private readonly View feedHost;
+        private View feedView;     // feed on display, if any
         private readonly View embedHost;
         private Rail rail;
         private TextLabel updateBanner;
         private Screen shown;      // hosted screen on display, if any
-        private Timer openTimer;
+        private Timer openTimer, prewarmTimer;
         private string signature;  // sections as last built: rebuild the rail only when they change
         private int current;       // section shown beside the rail
         private bool inRail;
@@ -50,11 +58,8 @@ namespace OmegaTube.Ui
             header = Widgets.Label("", Theme.TitleSize + 2, Theme.Text, 1200);
             header.Position = new Position(ContentX + Theme.FocusMargin, 44);
             Root.Add(header);
-            grid = new FeedGrid(1920 - ContentX, 1080 - GridTop) { Position = new Position(ContentX, GridTop) };
-            Root.Add(grid);
-            shelves = new ShelfList(1920 - ContentX, 1080 - GridTop + 20) { Position = new Position(ContentX, GridTop - 20) };
-            shelves.Hide();
-            Root.Add(shelves);
+            feedHost = new View { Size = new Size(1920, 1080) };   // under the rail, which is added last
+            Root.Add(feedHost);
             embedHost = new View { Position = new Position(Theme.RailWidth, 0), Size = new Size(1920 - Theme.RailWidth, 1080),
                                    ClippingMode = ClippingModeType.ClipChildren };
             embedHost.Hide();
@@ -73,6 +78,20 @@ namespace OmegaTube.Ui
                 Root.Add(updateBanner);
             }
             updateBanner.Text = "  " + T("New version {0} available: {1}", version, url.Replace("https://", "")) + "  ";
+            // A Settings built ahead lacks the "What's new" row: built again when next opened.
+            if (embedded.TryGetValue("settings", out Screen settings) && settings != shown)
+            {
+                DropEmbedded("settings");
+            }
+        }
+
+        private IFeedView Feed => feedView as IFeedView;
+
+        private void DropEmbedded(string key)
+        {
+            embedHost.Remove(embedded[key].Root);
+            embedded[key].Root.Dispose();
+            embedded.Remove(key);
         }
 
         // Sections or the account changed: rebuild the rail and reload at the next safe point.
@@ -116,16 +135,24 @@ namespace OmegaTube.Ui
             }
             else
             {
-                grid.RefreshProgress();
-                shelves.RefreshProgress();
+                // Back from another screen (often a video just watched): History has changed.
+                loadedAt.Remove("history");
+                if (sections[current].Key == "history")
+                {
+                    ShowSection(current);
+                }
+                Feed?.RefreshProgress();
                 shown?.OnShow();
             }
             UpdateFocus();
+            StartPrewarm();
         }
 
         public override void OnHide()
         {
             openTimer?.Stop();
+            prewarmTimer?.Stop();
+            prewarmTimer = null;
             shown?.OnHide();
         }
 
@@ -142,9 +169,14 @@ namespace OmegaTube.Ui
                 return;
             }
             dirty = false;
-            if (!Rebuild() && reloadFeed && sections[current].Embed == null)
+            if (!Rebuild() && reloadFeed)
             {
-                ShowSection(current);
+                // Same entries, but their content changed (subscription, account): every feed is outdated.
+                loadedAt.Clear();
+                if (sections[current].Embed == null)
+                {
+                    ShowSection(current);
+                }
             }
         }
 
@@ -155,7 +187,7 @@ namespace OmegaTube.Ui
             {
                 new Section
                 {
-                    Key = "home", Title = T("Home"), Icon = "home", CacheKey = "home-shelves", Shelves = true,
+                    Key = "home", Title = T("Home"), Icon = "home", CacheKey = "home-shelves", Shelves = true, RefreshOnOpen = true,
                     Loader = signedIn ? (Func<string, Task<FeedPage>>)(c => YouTube.Browse("FEwhat_to_watch", c)) : null,
                     EmptyText = T("Sign in to your account (Account menu) to see your recommendations, or use Search and the menu sections."),
                 },
@@ -163,6 +195,7 @@ namespace OmegaTube.Ui
                 new Section
                 {
                     Key = "subscriptions", Title = T("Subscriptions"), Icon = "subscriptions", CacheKey = "subscriptions",
+                    RefreshOnOpen = true,
                     Loader = signedIn ? (Func<string, Task<FeedPage>>)(c => YouTube.Browse("FEsubscriptions", c)) : null,
                     EmptyText = T("Sign in to your account (Account menu) to see the videos of your subscriptions."),
                 },
@@ -214,11 +247,18 @@ namespace OmegaTube.Ui
             {
                 if (embedded[key] != shown)
                 {
-                    embedHost.Remove(embedded[key].Root);
-                    embedded[key].Root.Dispose();
-                    embedded.Remove(key);
+                    DropEmbedded(key);
                 }
             }
+            // Feeds too (signed in / out, language, section list): built again when opened.
+            foreach (View v in feeds.Values)
+            {
+                feedHost.Remove(v);
+                v.Dispose();
+            }
+            feeds.Clear();
+            loadedAt.Clear();
+            feedView = null;
 
             if (rail != null)
             {
@@ -268,15 +308,9 @@ namespace OmegaTube.Ui
             rail.Select(index);
             if (s.Embed != null)
             {
-                if (!embedded.TryGetValue(s.Key, out Screen screen))
-                {
-                    screen = s.Embed();
-                    embedded[s.Key] = screen;
-                    Host(screen);
-                }
+                Screen screen = EmbeddedFor(s);
                 header.Hide();
-                grid.Hide();
-                shelves.Hide();
+                ShowFeed(null);
                 if (shown != screen)
                 {
                     HideEmbedded();
@@ -291,17 +325,113 @@ namespace OmegaTube.Ui
             embedHost.Hide();
             header.Show();
             header.Text = s.Title;
-            bool rows = s.Shelves && s.Loader != null;
-            Widgets.SetVisible(shelves, rows);
-            Widgets.SetVisible(grid, !rows);
-            if (rows)
+            bool built = feeds.ContainsKey(s.Key);
+            View v = FeedFor(s);
+            ShowFeed(v);
+            if (built)
             {
-                shelves.Show(s.Loader, s.CacheKey);
+                Feed.RefreshProgress();
+                if (s.RefreshOnOpen || !loadedAt.TryGetValue(s.Key, out DateTime at) || DateTime.Now - at > StaleAfter)
+                {
+                    loadedAt[s.Key] = DateTime.Now;
+                    Feed.Refresh();
+                }
+            }
+        }
+
+        private void ShowFeed(View v)
+        {
+            if (feedView == v)
+            {
+                return;
+            }
+            if (feedView != null)
+            {
+                Feed.SetFocused(false);
+                feedView.Hide();
+            }
+            feedView = v;
+            if (v != null)
+            {
+                v.Show();
+                Feed.Wake();
+            }
+        }
+
+        // The entry's feed view, built (hidden) and loading on first use.
+        private View FeedFor(Section s)
+        {
+            if (feeds.TryGetValue(s.Key, out View v))
+            {
+                return v;
+            }
+            if (s.Shelves && s.Loader != null)
+            {
+                var list = new ShelfList(1920 - ContentX, 1080 - GridTop + 20) { Position = new Position(ContentX, GridTop - 20) };
+                list.Show(s.Loader, s.CacheKey);
+                v = list;
             }
             else
             {
+                var grid = new FeedGrid(1920 - ContentX, 1080 - GridTop) { Position = new Position(ContentX, GridTop) };
                 grid.Show(s.Loader, s.CacheKey, s.EmptyText);
+                v = grid;
             }
+            v.Hide();
+            feedHost.Add(v);
+            feeds[s.Key] = v;
+            loadedAt[s.Key] = DateTime.Now;
+            return v;
+        }
+
+        private Screen EmbeddedFor(Section s)
+        {
+            if (!embedded.TryGetValue(s.Key, out Screen screen))
+            {
+                screen = s.Embed();
+                embedded[s.Key] = screen;
+                Host(screen);
+                screen.Root.Hide();
+            }
+            return screen;
+        }
+
+        // While the remote rests, builds one entry not opened yet per tick: the hosted screens (whose
+        // construction is the heavy part of their first opening), then the account feeds. Search sections
+        // are left to be opened (each would cost a search request).
+        private void StartPrewarm()
+        {
+            if (prewarmTimer != null)
+            {
+                return;
+            }
+            prewarmTimer = new Timer(500);
+            prewarmTimer.Tick += (sender, e) =>
+            {
+                if (!UiWork.IdleFor(PrewarmIdleMs))
+                {
+                    return true;
+                }
+                foreach (Section s in sections)
+                {
+                    if (s.Embed != null && !embedded.ContainsKey(s.Key))
+                    {
+                        EmbeddedFor(s);
+                        return true;
+                    }
+                }
+                foreach (Section s in sections)
+                {
+                    if (s.Embed == null && s.Loader != null && !s.Key.StartsWith("search:") && !feeds.ContainsKey(s.Key))
+                    {
+                        FeedFor(s);
+                        return true;
+                    }
+                }
+                prewarmTimer = null;
+                return false;
+            };
+            prewarmTimer.Start();
         }
 
         private void HideEmbedded()
@@ -339,15 +469,13 @@ namespace OmegaTube.Ui
             {
                 return true;
             }
-            return s.Shelves && s.Loader != null ? shelves.Count > 0 : grid.Count > 0;
+            return Feed != null && Feed.Count > 0;
         }
 
         private void UpdateFocus()
         {
             rail.SetFocused(inRail);
-            bool rows = shelves.Visibility;
-            grid.SetFocused(!inRail && !rows && shown == null);
-            shelves.SetFocused(!inRail && rows && shown == null);
+            Feed?.SetFocused(!inRail && shown == null);
         }
 
         public override bool OnKey(string key)
@@ -399,14 +527,14 @@ namespace OmegaTube.Ui
             }
             else if (key == "Return")
             {
-                VideoItem item = shelves.Visibility ? shelves.FocusedItem : grid.FocusedItem;
+                VideoItem item = Feed?.FocusedItem;
                 if (item != null)
                 {
                     App.Play(item);
                 }
                 return true;
             }
-            else if (shelves.Visibility ? !shelves.Move(key) && key == "Left" : !grid.Move(key) && key == "Left")
+            else if (Feed != null && !Feed.Move(key) && key == "Left")
             {
                 inRail = true;
             }

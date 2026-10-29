@@ -115,8 +115,9 @@ public:
     // A whole playlist (WEB browse VL<id>), in order, paged; the first page also gives its title.
     bool playlist_page(const std::string& playlist_id, const std::string& continuation, Feed& out,
                        std::string& title, std::string& error);
-    // Related videos of a watch page (WEB client "next" endpoint), for the player's suggestions row.
-    bool related(const std::string& video_id, Feed& out, std::string& error);
+    // Related videos of a watch page, for the player's suggestions row: with an access token the account's
+    // suggestions (TV "next"), else (or if that fails) the anonymous WEB "next" ones.
+    bool related(const std::string& video_id, const std::string& access_token, Feed& out, std::string& error);
     // Watch-page details (WEB "next"): date, channel; plus, with an access token, the account's like and
     // subscription state (TV "next").
     bool details(const std::string& video_id, const std::string& access_token, struct VideoDetails& out,

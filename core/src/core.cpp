@@ -392,7 +392,10 @@ char* omega_yt_playlist_page(const char* playlist_id, const char* continuation) 
 char* omega_yt_related(const char* video_id) {
     omega::yt::Feed feed;
     std::string error;
-    if (!omega::yt::shared_client().related(video_id ? video_id : "", feed, error)) return to_c_json({{"error", error}});
+    std::string token = omega::yt::shared_auth().signed_in() ? omega::yt::shared_auth().access_token(error) : "";
+    error.clear();
+    if (!omega::yt::shared_client().related(video_id ? video_id : "", token, feed, error))
+        return to_c_json({{"error", error}});
     return to_c_json(feed_json(feed));
 }
 
