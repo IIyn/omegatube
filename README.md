@@ -8,8 +8,9 @@
 <h1 align="center">OmegaTube</h1>
 
 <p align="center">
-  An ad-free YouTube client for Samsung smart TVs (Tizen) with SponsorBlock built in<br>
-  and a <b>native video player</b> for smooth 4K playback.
+  A native YouTube client for Samsung smart TVs (Tizen) with SponsorBlock built in<br>
+  and its <b>own video player</b> for smooth 4K playback.<br>
+  <sub>Independent project, not affiliated with Google, YouTube or Samsung.</sub>
 </p>
 
 ---
@@ -20,13 +21,14 @@
 - [Why OmegaTube?](#why-omegatube)
 - [How it works](#how-it-works)
 - [Install it on your TV (step by step)](#install-it-on-your-tv-step-by-step)
+- [Install it with Apps2Samsung](#install-it-with-apps2samsung)
 - [Troubleshooting](#troubleshooting)
 - [Development](#development)
 - [Credits and license](#credits-and-license)
 
 ## Features
 
-- **No ads.** The app streams the video files directly, so there are no ads to show.
+- **No interruptions.** The app's own player reads the video streams directly, so playback runs uninterrupted.
 - **SponsorBlock**: skips sponsors, intros, reminders to subscribe and more, one setting per category (auto skip, skip button or off).
 - **Native playback**: up to **4K / 1440p (VP9)** and 1080p60 (H.264), with a choice of codec. AV1 is experimental.
 - **Your Google account**: sign in with a QR code. You get your home feed, subscriptions, history, likes and subscriptions, and your watch progress is kept in sync with your other devices.
@@ -39,9 +41,9 @@
 
 ## Why OmegaTube?
 
-On Android TV, [SmartTube](https://github.com/yuliskov/SmartTube) is the reference for watching YouTube without ads. **Samsung TVs don't run Android but Tizen**, and SmartTube doesn't exist for Tizen.
+On Android TV, [SmartTube](https://github.com/yuliskov/SmartTube) is the reference YouTube client. **Samsung TVs don't run Android but Tizen**, and SmartTube doesn't exist for Tizen.
 
-The best Tizen option so far is [TizenTube](https://github.com/reisxd/TizenTube), loaded through TizenBrew. It runs YouTube's own TV web app and patches it to remove ads and add SponsorBlock. It works, but I kept hitting playback bugs:
+The best Tizen option so far is [TizenTube](https://github.com/reisxd/TizenTube), loaded through TizenBrew. It runs YouTube's own TV web app and adds features such as SponsorBlock to it. It works, but I kept hitting playback bugs:
 stuttering video, audio dropouts, and audible "thumps" when the audio buffer runs dry.
 
 Those bugs can't be fixed from TizenTube. A web app plays video through the **TV's built-in browser engine** (HTML5 `<video>` + Media Source Extensions). On these TVs that engine is old and closed, and the JavaScript has no control over how it buffers and decodes. A smooth player had to bypass the browser entirely.
@@ -163,6 +165,16 @@ The installer only writes in these folders, which you can delete once OmegaTube 
 ### Without the one-liner
 
 You can also download `install.ps1` (Windows) or `install.sh` (macOS, Linux) from the [latest release](https://github.com/IIyn/omegatube/releases/latest) and run it, optionally with the TV address to skip the questions: `bash install.sh 192.168.1.9`, or in PowerShell `powershell -ExecutionPolicy Bypass -File install.ps1 192.168.1.9`.
+
+## Install it with Apps2Samsung
+
+Prefer an app with buttons over a terminal? OmegaTube is in the community catalog of [Apps2Samsung](https://github.com/Apps2Samsung/Apps2Samsung), a free installer for Windows, macOS and Linux that handles Developer Mode, the Samsung certificate and the install for you.
+
+1. Download Apps2Samsung from its [releases page](https://github.com/Apps2Samsung/Apps2Samsung/releases) and open it.
+2. Turn on **Developer Mode** on the TV as described in step 3 above, with the address of the computer running Apps2Samsung.
+3. In Apps2Samsung, pick your TV, choose **OmegaTube** in the app list (category *Streaming*) and install.
+
+The catalog picks up each new OmegaTube release within a day: install it again from Apps2Samsung to update. Best stick to one installer: each one signs the app with its own certificate, so switching from one to the other may need an uninstall first (see the *signature* error below).
 
 ## Troubleshooting
 
