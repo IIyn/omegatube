@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OmegaTube — YouTube for Samsung TVs, without the ads</title>
-<meta name="description" content="OmegaTube is a free, open source YouTube client for Samsung smart TVs (Tizen): no ads, SponsorBlock built in, smooth native 4K playback.">
+<title>OmegaTube — A native YouTube client for Samsung TVs</title>
+<meta name="description" content="OmegaTube is a free, open source YouTube client for Samsung smart TVs (Tizen): a native player for smooth 4K playback, SponsorBlock built in, your account and subscriptions.">
 <meta property="og:title" content="OmegaTube">
-<meta property="og:description" content="All of YouTube on your Samsung TV. None of the ads.">
+<meta property="og:description" content="A native YouTube client for Samsung TVs. Smooth 4K, SponsorBlock, open source.">
 <meta property="og:image" content="https://iiyn.github.io/omegatube/img/og.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#0c0a09">
@@ -92,7 +92,7 @@
   @keyframes blink { 50% { opacity: 0; } }
   h1 {
     margin: 0; font-weight: 900; font-stretch: 125%; line-height: .9; letter-spacing: -.035em;
-    font-size: clamp(40px, 6.2vw, 104px); text-transform: uppercase;
+    font-size: clamp(40px, 5.7vw, 96px); text-transform: uppercase;
   }
   h1 .line { display: block; overflow: hidden; padding-bottom: .06em; white-space: nowrap; }
   h1 .line > span { display: inline-block; transform: translateY(105%); animation: rise .9s cubic-bezier(.2, .8, .2, 1) forwards; }
@@ -101,12 +101,15 @@
   h1 .line:nth-child(4) > span { animation-delay: .3s; }
   @keyframes rise { to { transform: none; } }
   h1 .outline { color: transparent; -webkit-text-stroke: 2px var(--paper); }
-  h1 s { text-decoration: none; position: relative; color: var(--red); }
-  h1 s::after {
-    content: ""; position: absolute; left: -4%; right: -4%; top: 52%; height: .11em; background: var(--paper);
-    transform: scaleX(0) rotate(-4deg); transform-origin: left; animation: strike .5s 1.1s cubic-bezier(.7, 0, .3, 1) forwards;
+  h1 em { font-style: normal; position: relative; color: var(--red); }
+  /* a player progress bar fills under the red word */
+  h1 .line:has(em) { padding-bottom: .2em; }
+  h1 em::before { content: ""; position: absolute; left: 0; right: 0; bottom: -.12em; height: .07em; background: rgba(244, 236, 226, .18); }
+  h1 em::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -.12em; height: .07em; background: var(--paper);
+    transform: scaleX(0); transform-origin: left; animation: progress 1.4s 1s cubic-bezier(.6, 0, .2, 1) forwards;
   }
-  @keyframes strike { to { transform: scaleX(1) rotate(-4deg); } }
+  @keyframes progress { to { transform: none; } }
   .lede { max-width: 470px; color: var(--dim); font-size: clamp(17px, 1.4vw, 19px); margin: 28px 0 34px; opacity: 0; animation: fade .8s .5s forwards; }
   .lede b { color: var(--paper); font-weight: 600; }
   @keyframes fade { to { opacity: 1; } }
@@ -370,14 +373,13 @@
     <div>
       <div class="kicker"><span class="rec"></span><span data-l="en">FOR SAMSUNG TIZEN TVs</span><span data-l="fr">POUR TV SAMSUNG TIZEN</span></div>
       <h1>
-        <span class="line"><span data-l="en">All of</span><span data-l="fr">Tout</span></span>
-        <span class="line"><span>YouTube.</span></span>
-        <span class="line"><span class="outline" data-l="en">None of</span><span class="outline" data-l="fr">Sans les</span></span>
-        <span class="line"><span data-l="en">the <s>ads</s>.</span><span data-l="fr"><s>pubs</s>.</span></span>
+        <span class="line"><span>YouTube,</span></span>
+        <span class="line"><span class="outline" data-l="en">finally</span><span class="outline" data-l="fr">enfin</span></span>
+        <span class="line"><span data-l="en"><em>smooth</em>.</span><span data-l="fr"><em>fluide</em>.</span></span>
       </h1>
       <p class="lede">
-        <span data-l="en">OmegaTube is a native YouTube app for Samsung smart TVs. <b>SponsorBlock built in</b>, <b>smooth 4K</b> straight to the hardware decoder, your account and subscriptions. Free and open source.</span>
-        <span data-l="fr">OmegaTube est une app YouTube native pour les TV Samsung. <b>SponsorBlock intégré</b>, <b>4K fluide</b> envoyée directement au décodeur matériel, votre compte et vos abonnements. Libre et gratuite.</span>
+        <span data-l="en">OmegaTube is a native YouTube client for Samsung smart TVs. Its own player feeds video <b>straight to the hardware decoder</b>: <b>smooth 4K</b>, no stutter. SponsorBlock, your account and subscriptions included. Free and open source.</span>
+        <span data-l="fr">OmegaTube est un client YouTube natif pour les TV Samsung. Son propre lecteur envoie la vidéo <b>directement au décodeur matériel</b> : <b>4K fluide</b>, sans saccades. SponsorBlock, votre compte et vos abonnements inclus. Libre et gratuit.</span>
       </p>
       <div class="actions">
         <a class="btn" href="#install">
@@ -428,15 +430,15 @@
         <div class="label"><span data-l="en">TONIGHT'S PROGRAMME</span><span data-l="fr">AU PROGRAMME</span></div>
         <h2><span data-l="en">Everything you<br>watch. <em>Nothing</em><br>you don't.</span><span data-l="fr">Tout ce que<br>vous regardez.<br><em>Rien</em> de plus.</span></h2>
       </div>
-      <p><span data-l="en">A full YouTube experience designed for the remote, without the ads and without the stutter.</span><span data-l="fr">Une expérience YouTube complète pensée pour la télécommande, sans les pubs et sans les saccades.</span></p>
+      <p><span data-l="en">A full YouTube experience designed for the remote, with playback that never stutters.</span><span data-l="fr">Une expérience YouTube complète pensée pour la télécommande, avec une lecture qui ne saccade jamais.</span></p>
     </div>
 
     <div class="prog">
       <div class="prog-row reveal">
         <span class="ch">CH01</span>
-        <h3><span data-l="en">Zero ads</span><span data-l="fr">Zéro pub</span></h3>
-        <p><span data-l="en">The app streams the video files directly. There are simply no ads to show.</span><span data-l="fr">L'app lit directement les fichiers vidéo. Il n'y a tout simplement aucune pub à afficher.</span></p>
-        <span class="tag">NO ADS</span>
+        <h3><span data-l="en">Native 4K</span><span data-l="fr">4K native</span></h3>
+        <p><span data-l="en">Up to 4K / 1440p in VP9 and 1080p60 in H.264, decoded by the TV's own hardware.</span><span data-l="fr">Jusqu'en 4K / 1440p en VP9 et 1080p60 en H.264, décodé par le matériel de la TV.</span></p>
+        <span class="tag">2160p</span>
       </div>
       <div class="prog-row reveal">
         <span class="ch">CH02</span>
@@ -446,27 +448,27 @@
       </div>
       <div class="prog-row reveal">
         <span class="ch">CH03</span>
-        <h3><span data-l="en">Native 4K</span><span data-l="fr">4K native</span></h3>
-        <p><span data-l="en">Up to 4K / 1440p in VP9 and 1080p60 in H.264, decoded by the TV's own hardware.</span><span data-l="fr">Jusqu'en 4K / 1440p en VP9 et 1080p60 en H.264, décodé par le matériel de la TV.</span></p>
-        <span class="tag">2160p</span>
-      </div>
-      <div class="prog-row reveal">
-        <span class="ch">CH04</span>
         <h3><span data-l="en">Your account</span><span data-l="fr">Votre compte</span></h3>
         <p><span data-l="en">QR code sign-in. Home feed, subscriptions, history, likes, and progress synced with your phone.</span><span data-l="fr">Connexion par QR code. Accueil, abonnements, historique, likes, progression synchronisée avec le téléphone.</span></p>
         <span class="tag">QR ▣</span>
       </div>
       <div class="prog-row reveal">
-        <span class="ch">CH05</span>
+        <span class="ch">CH04</span>
         <h3><span data-l="en">Subtitles &amp; audio</span><span data-l="fr">Sous-titres &amp; audio</span></h3>
         <p><span data-l="en">Auto-translated captions with adjustable style, multi-language audio tracks, speed, loop.</span><span data-l="fr">Sous-titres traduits et personnalisables, pistes audio multilingues, vitesse, boucle.</span></p>
         <span class="tag">CC</span>
       </div>
       <div class="prog-row reveal">
-        <span class="ch">CH06</span>
+        <span class="ch">CH05</span>
         <h3><span data-l="en">Live &amp; playlists</span><span data-l="fr">Directs &amp; playlists</span></h3>
         <p><span data-l="en">Live streams, playlists and mixes, with a "play next" countdown and dislike counts back.</span><span data-l="fr">Directs, playlists et mix, avec compte à rebours « suivante » et le retour des dislikes.</span></p>
         <span class="tag">● LIVE</span>
+      </div>
+      <div class="prog-row reveal">
+        <span class="ch">CH06</span>
+        <h3><span data-l="en">No interruptions</span><span data-l="fr">Sans interruption</span></h3>
+        <p><span data-l="en">Streams are read directly by the app's own player, so playback runs uninterrupted.</span><span data-l="fr">Les flux sont lus directement par le lecteur de l'app : la lecture n'est pas interrompue.</span></p>
+        <span class="tag">▶ ▶ ▶</span>
       </div>
     </div>
   </div>
@@ -748,7 +750,7 @@
   onScroll();
 
   // ── Ticker (content twice for a seamless loop)
-  const items = ["No ads", "SponsorBlock", "4K VP9", "1080p60", "QR sign-in", "Subtitles", "Audio tracks", "Dislikes", "Live", "Playlists", "EN · FR · ES", "GPL-3.0"];
+  const items = ["4K VP9", "Native player", "1080p60", "SponsorBlock", "QR sign-in", "Subtitles", "Audio tracks", "Dislikes", "Live", "Playlists", "EN · FR · ES", "GPL-3.0"];
   const half = items.map(t => `<span>${t}</span><span class="sep">Ω</span>`).join("");
   document.getElementById("ticker").innerHTML = half + half;
 
