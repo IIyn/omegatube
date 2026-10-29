@@ -97,7 +97,11 @@
   h1 {
     margin: 0; font-weight: 900; font-stretch: 125%; line-height: .9; letter-spacing: -.035em;
     font-size: clamp(40px, 5.7vw, 96px); text-transform: uppercase;
+    /* the column stops growing with the page: "YouTube," must fit its width, not the viewport's */
+    font-size: min(clamp(40px, 5.7vw, 96px), 13.5cqi);
   }
+  .hero-copy { container-type: inline-size; }
+  .hero-grid { width: 100%; }   /* centred flex item: without it, it shrinks to the (contained) copy's width */
   h1 .line { display: block; overflow: hidden; padding-bottom: .06em; white-space: nowrap; }
   h1 .line > span { display: inline-block; transform: translateY(105%); animation: rise .9s cubic-bezier(.2, .8, .2, 1) forwards; }
   h1 .line:nth-child(2) > span { animation-delay: .1s; }
@@ -374,7 +378,7 @@
 <section class="hero">
   <div class="glow" aria-hidden="true"><i></i><i></i><i></i></div>
   <div class="wrap hero-grid">
-    <div>
+    <div class="hero-copy">
       <div class="kicker"><span class="rec"></span><span data-l="en">FOR SAMSUNG TIZEN TVs</span><span data-l="fr">POUR TV SAMSUNG TIZEN</span></div>
       <h1>
         <span class="line"><span>YouTube,</span></span>
@@ -391,7 +395,7 @@
           <span data-l="en">Install on my TV</span><span data-l="fr">Installer sur ma TV</span>
         </a>
         <a class="link" href="https://github.com/IIyn/omegatube"><span data-l="en">Source code</span><span data-l="fr">Code source</span> ↗</a>
-        <a class="ver" id="version" href="https://github.com/IIyn/omegatube/releases/latest">v1.1.1</a>
+        <a class="ver" id="version" href="https://github.com/IIyn/omegatube/releases/latest">v1.2.0</a>
       </div>
     </div>
 
@@ -634,6 +638,11 @@
 
       <aside class="side reveal">
         <div>
+          <h4><span data-l="en">NO TERMINAL?</span><span data-l="fr">PAS DE TERMINAL ?</span></h4>
+          <p data-l="en">OmegaTube is also in the catalog of <a href="https://github.com/Apps2Samsung/Apps2Samsung" style="color:var(--paper)">Apps2Samsung</a>, a free installer with a window and buttons (Windows, macOS, Linux). Turn on Developer Mode, pick your TV, then <b>OmegaTube</b> in <b>Streaming</b>.</p>
+          <p data-l="fr">OmegaTube est aussi dans le catalogue d'<a href="https://github.com/Apps2Samsung/Apps2Samsung" style="color:var(--paper)">Apps2Samsung</a>, un installeur gratuit avec fenêtre et boutons (Windows, macOS, Linux). Activez le mode développeur, choisissez votre TV, puis <b>OmegaTube</b> dans <b>Streaming</b>.</p>
+        </div>
+        <div>
           <h4><span data-l="en">YOU NEED</span><span data-l="fr">IL VOUS FAUT</span></h4>
           <ul data-l="en">
             <li>A Samsung TV on <b>Tizen 6.0+</b> (most 2021+ models)</li>
@@ -678,8 +687,8 @@
     <div class="reveal">
       <details>
         <summary><span data-l="en">Why isn't it on the Samsung store?</span><span data-l="fr">Pourquoi pas sur le store Samsung ?</span></summary>
-        <p data-l="en">Samsung's store doesn't accept apps like this one. Apps from outside the store must be signed with a certificate made for your TV, which needs a free Samsung account. The installer handles it.</p>
-        <p data-l="fr">Le store Samsung n'accepte pas ce genre d'app. Les apps hors store doivent être signées avec un certificat propre à votre TV, ce qui demande un compte Samsung gratuit. L'installeur s'en charge.</p>
+        <p data-l="en">Samsung's store doesn't accept apps like this one. Apps from outside the store must be signed with a certificate made for your TV, which needs a free Samsung account. The installer, or Apps2Samsung, handles it.</p>
+        <p data-l="fr">Le store Samsung n'accepte pas ce genre d'app. Les apps hors store doivent être signées avec un certificat propre à votre TV, ce qui demande un compte Samsung gratuit. L'installeur, ou Apps2Samsung, s'en charge.</p>
       </details>
       <details>
         <summary><span data-l="en">Which TVs are supported?</span><span data-l="fr">Quelles TV sont compatibles ?</span></summary>
