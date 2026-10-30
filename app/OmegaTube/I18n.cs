@@ -298,14 +298,14 @@ namespace OmegaTube
             ["Quit"] = "Quitter",
             ["Close"] = "Fermer",
             ["A free GitHub account is needed to send the issue."] = "Un compte GitHub gratuit est nécessaire pour envoyer le ticket.",
-            ["The full log is posted to paste.rs, a public text sharing site, after removing account data and addresses."] = "Le journal complet est publié sur paste.rs, un site public de partage de texte, après suppression des données de compte et des adresses.",
+            ["The full log is sent to OmegaTube's server and kept 90 days, after removing account data, addresses, titles and searches. Anyone with the link can read it."] = "Le journal complet est envoyé au serveur d'OmegaTube et gardé 90 jours, après suppression des données de compte, des adresses, des titres et des recherches. Toute personne ayant le lien peut le lire.",
             ["Scan with your phone's camera"] = "Scannez avec l'appareil photo du téléphone",
             ["Uploading the log…"] = "Envoi du journal…",
             ["Upload failed: {0}"] = "Échec de l'envoi : {0}",
             ["The QR code now includes the link to the full log."] = "Le QR code contient maintenant le lien vers le journal complet.",
             ["A QR code opens a GitHub issue filled in with this TV's details and the log"] = "Un QR code ouvre un ticket GitHub rempli avec les infos du téléviseur et le journal",
-            ["paste.rs only accepts a few uploads in a row: try again in a minute. The QR code also works without the full log."] = "paste.rs n'accepte que quelques envois d'affilée : réessayez dans une minute. Le QR code fonctionne aussi sans le journal complet.",
-            ["The log was too long for paste.rs: only its beginning is attached. The QR code now includes the link."] = "Le journal était trop long pour paste.rs : seul son début est joint. Le QR code contient maintenant le lien.",
+            ["The log could not be sent: try again later. The QR code also works without the full log."] = "Le journal n'a pas pu être envoyé : réessayez plus tard. Le QR code fonctionne aussi sans le journal complet.",
+            ["The log was too long: only its beginning is attached. The QR code now includes the link."] = "Le journal était trop long : seul son début est joint. Le QR code contient maintenant le lien.",
         };
 
         private static readonly Dictionary<string, string> Es = new Dictionary<string, string>
@@ -580,14 +580,14 @@ namespace OmegaTube
             ["Quit"] = "Salir",
             ["Close"] = "Cerrar",
             ["A free GitHub account is needed to send the issue."] = "Se necesita una cuenta gratuita de GitHub para enviar la incidencia.",
-            ["The full log is posted to paste.rs, a public text sharing site, after removing account data and addresses."] = "El registro completo se publica en paste.rs, un sitio público para compartir texto, tras eliminar los datos de la cuenta y las direcciones.",
+            ["The full log is sent to OmegaTube's server and kept 90 days, after removing account data, addresses, titles and searches. Anyone with the link can read it."] = "El registro completo se envía al servidor de OmegaTube y se guarda 90 días, tras eliminar los datos de la cuenta, las direcciones, los títulos y las búsquedas. Cualquiera con el enlace puede leerlo.",
             ["Scan with your phone's camera"] = "Escanee con la cámara del teléfono",
             ["Uploading the log…"] = "Enviando el registro…",
             ["Upload failed: {0}"] = "Error al enviar: {0}",
             ["The QR code now includes the link to the full log."] = "El código QR ahora incluye el enlace al registro completo.",
             ["A QR code opens a GitHub issue filled in with this TV's details and the log"] = "Un código QR abre una incidencia de GitHub con los datos del televisor y el registro",
-            ["paste.rs only accepts a few uploads in a row: try again in a minute. The QR code also works without the full log."] = "paste.rs solo acepta unos pocos envíos seguidos: vuelva a intentarlo en un minuto. El código QR también funciona sin el registro completo.",
-            ["The log was too long for paste.rs: only its beginning is attached. The QR code now includes the link."] = "El registro era demasiado largo para paste.rs: solo se adjunta el principio. El código QR ahora incluye el enlace.",
+            ["The log could not be sent: try again later. The QR code also works without the full log."] = "No se pudo enviar el registro: vuelva a intentarlo más tarde. El código QR también funciona sin el registro completo.",
+            ["The log was too long: only its beginning is attached. The QR code now includes the link."] = "El registro era demasiado largo: solo se adjunta el principio. El código QR ahora incluye el enlace.",
         };
     }
 }

@@ -167,8 +167,11 @@ namespace OmegaTube.Ui
             return sb.ToString().TrimEnd('\n');
         }
 
-        // QR modules drawn as horizontal runs of black views on a white `host` of size x size (few hundred
-        // views); replaces the previous code. Hides the host when there is nothing to draw.
+        private static int qrSerial;
+
+        // QR code on a white `host` of size x size (which gives the quiet zone and the rounded corners);
+        // replaces the previous code. Hides the host when there is nothing to draw. One bitmap rather than a
+        // view per run of dark modules: a bug report URL makes ~3000 runs, seconds of UI thread on the TV.
         public static void DrawQr(View host, int size, System.Collections.Generic.List<string> rows)
         {
             foreach (View child in new System.Collections.Generic.List<View>(host.Children))
@@ -183,28 +186,54 @@ namespace OmegaTube.Ui
             }
             int quiet = 3;
             int module = size / (rows.Count + 2 * quiet);
-            int offset = (size - module * rows.Count) / 2;
-            for (int y = 0; y < rows.Count; y++)
+            int side = module * rows.Count;
+            var image = new ImageView { ResourceUrl = WriteQrBitmap(rows, module), Size = new Size(side, side) };
+            image.Position = new Position((size - side) / 2, (size - side) / 2);
+            host.Add(image);
+            host.Show();
+        }
+
+        // 24-bit BMP, `module` pixels per module (no scaling, so no blur), in the app's cache folder. A new
+        // name each time: NUI caches images by URL.
+        private static string WriteQrBitmap(System.Collections.Generic.List<string> rows, int module)
+        {
+            string dir = Tizen.Applications.Application.Current.DirectoryInfo.Cache;
+            foreach (string old in System.IO.Directory.GetFiles(dir, "qr-*.bmp"))
             {
-                string row = rows[y];
-                for (int x = 0; x < row.Length; x++)
+                System.IO.File.Delete(old);
+            }
+            int side = module * rows.Count;
+            int stride = (side * 3 + 3) & ~3;
+            var bmp = new byte[54 + stride * side];
+            void Put(int at, int value)
+            {
+                System.BitConverter.GetBytes(value).CopyTo(bmp, at);
+            }
+            bmp[0] = (byte)'B';
+            bmp[1] = (byte)'M';
+            Put(2, bmp.Length);
+            Put(10, 54);
+            Put(14, 40);
+            Put(18, side);
+            Put(22, side);   // positive: rows bottom-up
+            bmp[26] = 1;
+            bmp[28] = 24;
+            Put(34, stride * side);
+            for (int py = 0; py < side; py++)
+            {
+                string row = rows[(side - 1 - py) / module];
+                int line = 54 + py * stride;
+                for (int px = 0; px < side; px++)
                 {
-                    if (row[x] != '1')
-                    {
-                        continue;
-                    }
-                    int run = 1;
-                    while (x + run < row.Length && row[x + run] == '1')
-                    {
-                        run++;
-                    }
-                    var dark = Box(Color.Black, run * module, module);
-                    dark.Position = new Position(offset + x * module, offset + y * module);
-                    host.Add(dark);
-                    x += run - 1;
+                    byte v = row[px / module] == '1' ? (byte)0 : (byte)255;
+                    bmp[line + px * 3] = v;
+                    bmp[line + px * 3 + 1] = v;
+                    bmp[line + px * 3 + 2] = v;
                 }
             }
-            host.Show();
+            string path = System.IO.Path.Combine(dir, "qr-" + ++qrSerial + ".bmp");
+            System.IO.File.WriteAllBytes(path, bmp);
+            return path;
         }
 
         // Smoothly moves a view; returns the animation so callers can stop a running one.

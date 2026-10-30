@@ -20,6 +20,8 @@ OMEGA_API char* omega_config_refresh(void);
 OMEGA_API void omega_set_locale(const char* language, const char* region);
 // Network: latest GitHub release vs. this build: {"available","version","url","tpk","notes"} or {"error"}.
 OMEGA_API char* omega_update_check(void);
+// 1 when remote-config.json names a log service (reports.paste): "Attach the full log" is offered.
+OMEGA_API int omega_report_available(void);
 // Network: posts a bug report text to the paste service of the remote config: {"url","partial"} or {"error"}
 // (partial: the service kept only the beginning).
 OMEGA_API char* omega_report_upload(const char* text);

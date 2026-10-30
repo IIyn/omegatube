@@ -503,18 +503,51 @@ void omega_set_locale(const char* language, const char* region) {
 
 char* omega_update_check(void) { return to_c_json(omega::cfg::check_update(kVersion)); }
 
+namespace {
+std::string form_escape(const std::string& s) {
+    std::string out;
+    for (unsigned char c : s) {
+        if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+            out += static_cast<char>(c);
+        } else {
+            char hex[4];
+            snprintf(hex, sizeof(hex), "%%%02X", c);
+            out += hex;
+        }
+    }
+    return out;
+}
+}  // namespace
+
+int omega_report_available(void) { return omega::cfg::str({"reports", "paste"}).empty() ? 0 : 1; }
+
+// reports.paste: the service's URL (OmegaTube's own Worker, github.com/IIyn/omegatube-logs). reports.field
+// empty: the text is the raw body; otherwise a form with the text in that field plus reports.params.
+// Either way the service must answer with the paste's https URL.
 char* omega_report_upload(const char* text) {
     omega::net::Request req;
     req.method = "POST";
-    req.url = omega::cfg::str({"reports", "paste"}, "https://paste.rs/");
-    req.headers = {{"User-Agent", "OmegaTube"}, {"Content-Type", "text/plain; charset=utf-8"}};
-    req.body = text ? text : "";
+    req.url = omega::cfg::str({"reports", "paste"});
+    if (req.url.empty()) return to_c_json({{"error", "no log service configured"}});
+    std::string field = omega::cfg::str({"reports", "field"});
+    if (field.empty()) {
+        req.headers = {{"User-Agent", "OmegaTube"}, {"Content-Type", "text/plain; charset=utf-8"}};
+        req.body = text ? text : "";
+    } else {
+        req.headers = {{"User-Agent", "OmegaTube"}, {"Content-Type", "application/x-www-form-urlencoded"}};
+        req.body = field + "=" + form_escape(text ? text : "");
+        std::string params = omega::cfg::str({"reports", "params"});
+        if (!params.empty()) req.body += "&" + params;
+    }
     omega::net::Response res = omega::net::fetch(req);
-    if (!res.ok()) return to_c_json({{"error", res.error.empty() ? "HTTP " + std::to_string(res.status) : res.error}});
+    if (!res.ok()) {
+        OLOG("report upload: HTTP %d %s", res.status, res.error.c_str());
+        return to_c_json({{"error", res.error.empty() ? "HTTP " + std::to_string(res.status) : res.error}});
+    }
     std::string url = res.body;
     while (!url.empty() && isspace(static_cast<unsigned char>(url.back()))) url.pop_back();
     if (url.rfind("https://", 0) != 0) return to_c_json({{"error", "unexpected answer"}});
-    // paste.rs: 201 the whole text, 206 cut at its size limit.
+    // 206: some services (paste.rs) keep only the beginning of a text over their size limit.
     return to_c_json({{"url", url}, {"partial", res.status == 206}});
 }
 

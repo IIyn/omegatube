@@ -54,8 +54,10 @@ namespace OmegaTube.Ui
             device.Position = new Position(TextX, 480);
             Root.Add(device);
 
+            // The upload goes through the core's HTTPS stack, to the service named by the remote config.
+            bool canUpload = BugReport.CoreLoaded && NativeCore.ReportAvailable() != 0;
             int x = TextX;
-            if (BugReport.CoreLoaded)
+            if (canUpload)
             {
                 attach = new Widgets.PillButton(T("Attach the full log"), null, 460);
                 attach.Position = new Position(x, 790);
@@ -71,7 +73,7 @@ namespace OmegaTube.Ui
             Root.Add(close);
 
             status = Widgets.Label(T("A free GitHub account is needed to send the issue.")
-                                   + (BugReport.CoreLoaded ? "\n" + T("The full log is posted to paste.rs, a public text sharing site, after removing account data and addresses.") : ""),
+                                   + (canUpload ? "\n" + T("The full log is sent to OmegaTube's server and kept 90 days, after removing account data, addresses, titles and searches. Anyone with the link can read it.") : ""),
                                    Theme.SmallSize, Theme.TextDim, TextW, 110);
             status.MultiLine = true;
             status.Ellipsis = false;
@@ -123,7 +125,7 @@ namespace OmegaTube.Ui
             if (url == null)
             {
                 status.Text = T("Upload failed: {0}", Json.Str(res, "error")) + "\n"
-                              + T("paste.rs only accepts a few uploads in a row: try again in a minute. The QR code also works without the full log.");
+                              + T("The log could not be sent: try again later. The QR code also works without the full log.");
                 return;
             }
             fullLogUrl = url;
@@ -137,7 +139,7 @@ namespace OmegaTube.Ui
             onClose = true;
             Refresh();
             status.Text = Json.Bool(res, "partial")
-                ? T("The log was too long for paste.rs: only its beginning is attached. The QR code now includes the link.")
+                ? T("The log was too long: only its beginning is attached. The QR code now includes the link.")
                 : T("The QR code now includes the link to the full log.");
             DrawQr();
         }
