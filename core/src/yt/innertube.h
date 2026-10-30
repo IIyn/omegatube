@@ -79,6 +79,7 @@ struct VideoInfo {
     int64_t length_s = 0;
     bool is_live = false;  // broadcasting now: formats are numbered-segment streams (net::LiveReader)
     std::string user_agent;  // of the client that resolved the formats (stream requests must send it)
+    std::string client;      // its clientName
     std::vector<Format> formats;  // directly playable adaptive formats only
     std::vector<CaptionTrack> captions;
     // Languages a translatable caption track can be machine-translated to: (code, name).
@@ -100,9 +101,11 @@ struct ChannelInfo {
 // non-throttled) stream URLs without PO token. See tools/yt-probe/probe.py to re-check.
 class Client {
 public:
-    // Tries the player clients of remote-config innertube.playerClients in order (the one that last worked
-    // first), like yt-dlp's client list; only_client: that clientName alone (dev tooling).
+    // Tries the player clients of remote-config innertube.playerClients in order, like yt-dlp's client list;
+    // only_client: that clientName alone (dev tooling).
     bool player(const std::string& video_id, VideoInfo& out, std::string& error, const std::string& only_client = "");
+    // Leaves that client out of the following player() calls (its streams were refused).
+    void skip_client(const std::string& name) { skipped_clients_.push_back(name); }
     // HTTP headers the googlevideo stream requests must carry (same User-Agent as the player request).
     net::Headers stream_headers() const;
 
@@ -147,6 +150,7 @@ private:
     bool ensure_visitor(std::string& error);
     std::string last_response_;
     Refusal refusal_;
+    std::vector<std::string> skipped_clients_;
     std::mutex mutex_;  // guards the lazily fetched session data below
     std::string visitor_data_;
     std::string web_client_version_;

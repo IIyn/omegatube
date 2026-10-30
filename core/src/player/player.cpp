@@ -90,6 +90,14 @@ bool Player::start() {
         Track& t = *src.track;
         if (cfg_.live) src.http = std::make_unique<net::LiveReader>(t.url, cfg_.stream_headers, live_seq);
         else src.http = std::make_unique<net::RangeReader>(t.url, cfg_.stream_headers);
+        if (!cfg_.live) {
+            // Opening: fresh URLs on 403/410, but give up soon if the stream stays refused (the caller then
+            // tries another player client); start_track() puts the playback hooks back.
+            net::StreamSource::Hooks hooks;
+            hooks.refresh_url = [this, &t] { return fresh_url(t); };
+            hooks.refusal_budget_ms = 20000;
+            src.http->set_hooks(std::move(hooks));
+        }
         net::StreamSource* http = src.http.get();
         src.reader = media::open_demuxer([http, &t](void* dst, size_t n) {
             size_t got = http->read(dst, n);
@@ -97,6 +105,7 @@ bool Player::start() {
             return got;
         });
         if (!src.reader->read_header()) {
+            stream_refused_ = http->refused();
             error_ = std::string(stream_name(t.type)) + " demux: " + src.reader->error() +
                      (http->error().empty() ? "" : " / http: " + http->error());
             return false;

@@ -246,6 +246,9 @@ bool JsSolver::solve(const char* type, const std::string& challenge, std::string
         error = "solver not loaded";
         return false;
     }
+    // QuickJS measures its stack limit from the thread that created the runtime; each video asks from
+    // another thread, whose stack can sit anywhere: without this, spurious "Maximum call stack size exceeded".
+    JS_UpdateStackTop(rt_);
     JSValue global = JS_GetGlobalObject(ctx_);
     JSValue fns = JS_GetPropertyStr(ctx_, global, "_fns");
     JSValue fn = JS_GetPropertyStr(ctx_, fns, type);

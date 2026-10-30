@@ -97,7 +97,9 @@ namespace {
 
 omega_player* start_youtube(void* window, int width, int height, omega::yt::Client& client,
                             const omega::yt::VideoInfo& info, const omega::yt::Format* video,
-                            const omega::yt::Format* audio, int64_t start_ms) {
+                            const omega::yt::Format* audio, int64_t start_ms,
+                            const std::vector<std::string>& skipped_clients, bool& stream_refused) {
+    stream_refused = false;
     OLOG("youtube: video itag %d %dx%d@%d %s %lld kb/s, audio itag %d %s %d Hz", video->itag, video->width,
          video->height, video->fps, video->codecs.c_str(), static_cast<long long>(video->bitrate / 1000), audio->itag,
          audio->codecs.c_str(), audio->audio_sample_rate);
@@ -120,8 +122,9 @@ omega_player* start_youtube(void* window, int width, int height, omega::yt::Clie
     // Expired URLs (403/410): ask InnerTube again and keep the same formats (and audio language).
     std::string id = info.id, audio_track = audio->audio_track_id;
     int video_itag = video->itag, audio_itag = audio->itag;
-    cfg.refresh_urls = [id, video_itag, audio_itag, audio_track](std::string& v, std::string& a) {
+    cfg.refresh_urls = [id, video_itag, audio_itag, audio_track, skipped_clients](std::string& v, std::string& a) {
         omega::yt::Client fresh_client;
+        for (const auto& name : skipped_clients) fresh_client.skip_client(name);
         omega::yt::VideoInfo fresh;
         std::string err;
         if (!fresh_client.player(id, fresh, err)) {
@@ -139,6 +142,7 @@ omega_player* start_youtube(void* window, int width, int height, omega::yt::Clie
     auto* p = new omega_player(std::move(cfg));
     if (!p->impl.start()) {
         OLOG("player start failed: %s", p->impl.error().c_str());
+        stream_refused = p->impl.stream_refused();
         delete p;
         return nullptr;
     }
@@ -212,52 +216,71 @@ omega_player* omega_player_create_youtube(void* window, int width, int height, c
         return nullptr;
     }
     std::vector<std::string> prefs = omega::yt::parse_codec_list(codecs && *codecs ? codecs : "avc1,vp9");
-    std::vector<const omega::yt::Format*> videos =
-        omega::yt::rank_videos(info, max_height > 0 ? max_height : 1080, prefs);
-    const omega::yt::Format* audio = omega::yt::pick_audio(info, audio_track ? audio_track : "");
-    if (videos.empty() || !audio) {
-        OLOG("youtube %s: no playable video (%s) / AAC audio format", video_id, codecs ? codecs : "-");
-        set_play_error("formats", "", "", videos.empty() ? "no video format for " + std::string(codecs ? codecs : "-")
-                                                          : "no AAC audio format");
-        return nullptr;
-    }
-    // A codec the TV refuses (ESPlayer rejects its stream info) is dropped and the next best format tried.
-    std::vector<std::string> refused;
-    for (const omega::yt::Format* video : videos) {
-        if (std::find(refused.begin(), refused.end(), video->video_codec()) != refused.end()) continue;
-        if (omega_player* p = start_youtube(window, width, height, client, info, video, audio, start_ms)) {
-            // What the quality panel offers: the format each height cap would pick (codecs the TV refused aside).
-            auto entry = [](const omega::yt::Format* f) {
-                return nlohmann::json{
-                    {"width", f->width}, {"height", f->height}, {"fps", f->fps}, {"codec", f->video_codec()}};
-            };
-            nlohmann::json available = nlohmann::json::array();
-            int last_height = -1;
-            for (const omega::yt::Format* f : omega::yt::rank_videos(info, INT32_MAX, prefs)) {
-                if (f->height == last_height ||
-                    std::find(refused.begin(), refused.end(), f->video_codec()) != refused.end())
-                    continue;
-                last_height = f->height;
-                available.push_back(entry(f));
-            }
-            p->formats = {{"current", entry(video)},  {"available", available}, {"live", info.is_live},
-                          {"title", info.title}, {"author", info.author}, {"description", info.description},
-                          {"views", info.views}, {"channelId", info.channel_id}, {"audioTrack", audio->audio_track_id}};
-            p->formats["audioTracks"] = audio_tracks_json(info);
-            nlohmann::json captions = nlohmann::json::array(), translations = nlohmann::json::array();
-            for (const auto& c : info.captions)
-                captions.push_back({{"url", c.url}, {"lang", c.lang}, {"name", c.name}, {"auto", c.automatic},
-                                    {"translatable", c.translatable}});
-            for (const auto& t : info.translations) translations.push_back({{"code", t.first}, {"name", t.second}});
-            p->formats["captions"] = captions;
-            p->formats["translations"] = translations;
-            return p;
+    // Clients whose streams googlevideo refused (403 even with fresh URLs: our IP flagged as a bot).
+    std::vector<std::string> skipped_clients;
+    for (;;) {
+        std::vector<const omega::yt::Format*> videos =
+            omega::yt::rank_videos(info, max_height > 0 ? max_height : 1080, prefs);
+        const omega::yt::Format* audio = omega::yt::pick_audio(info, audio_track ? audio_track : "");
+        if (videos.empty() || !audio) {
+            OLOG("youtube %s: no playable video (%s) / AAC audio format", video_id, codecs ? codecs : "-");
+            set_play_error("formats", "", "", videos.empty() ? "no video format for " + std::string(codecs ? codecs : "-")
+                                                              : "no AAC audio format");
+            return nullptr;
         }
-        refused.push_back(video->video_codec());
+        // A codec the TV refuses (ESPlayer rejects its stream info) is dropped and the next best format tried.
+        std::vector<std::string> refused;
+        bool stream_refused = false;
+        for (const omega::yt::Format* video : videos) {
+            if (std::find(refused.begin(), refused.end(), video->video_codec()) != refused.end()) continue;
+            omega_player* p = start_youtube(window, width, height, client, info, video, audio, start_ms,
+                                            skipped_clients, stream_refused);
+            if (p) {
+                // What the quality panel offers: the format each height cap would pick (codecs the TV refused aside).
+                auto entry = [](const omega::yt::Format* f) {
+                    return nlohmann::json{
+                        {"width", f->width}, {"height", f->height}, {"fps", f->fps}, {"codec", f->video_codec()}};
+                };
+                nlohmann::json available = nlohmann::json::array();
+                int last_height = -1;
+                for (const omega::yt::Format* f : omega::yt::rank_videos(info, INT32_MAX, prefs)) {
+                    if (f->height == last_height ||
+                        std::find(refused.begin(), refused.end(), f->video_codec()) != refused.end())
+                        continue;
+                    last_height = f->height;
+                    available.push_back(entry(f));
+                }
+                p->formats = {{"current", entry(video)},  {"available", available}, {"live", info.is_live},
+                              {"title", info.title}, {"author", info.author}, {"description", info.description},
+                              {"views", info.views}, {"channelId", info.channel_id}, {"audioTrack", audio->audio_track_id}};
+                p->formats["audioTracks"] = audio_tracks_json(info);
+                nlohmann::json captions = nlohmann::json::array(), translations = nlohmann::json::array();
+                for (const auto& c : info.captions)
+                    captions.push_back({{"url", c.url}, {"lang", c.lang}, {"name", c.name}, {"auto", c.automatic},
+                                        {"translatable", c.translatable}});
+                for (const auto& t : info.translations) translations.push_back({{"code", t.first}, {"name", t.second}});
+                p->formats["captions"] = captions;
+                p->formats["translations"] = translations;
+                return p;
+            }
+            if (stream_refused) break;  // not the codec: the other formats of this client would be refused too
+            refused.push_back(video->video_codec());
+        }
+        if (!stream_refused) {
+            std::vector<std::string> last = omega::log::tail(1);  // "player start failed: ..."
+            set_play_error("player", "", "", last.empty() ? "" : last.back());
+            return nullptr;
+        }
+        OLOG("youtube %s: streams refused for %s, trying another player client", video_id, info.client.c_str());
+        skipped_clients.push_back(info.client);
+        client.skip_client(info.client);
+        if (!client.player(video_id, info, error)) {
+            OLOG("youtube %s: %s", video_id, error.c_str());
+            // Shown like a bot check: same cause (flagged IP), same advice.
+            set_play_error("login", "STREAM_REFUSED", "", "YouTube refused the video streams");
+            return nullptr;
+        }
     }
-    std::vector<std::string> last = omega::log::tail(1);  // "player start failed: ..."
-    set_play_error("player", "", "", last.empty() ? "" : last.back());
-    return nullptr;
 }
 
 void omega_player_toggle_pause(omega_player* p) {

@@ -62,7 +62,7 @@
         "auth": "retry"
       },
       {
-        "_comment": "Candidate from yt-dlp's android_vr client (direct URLs). Untested here: check with CLIENT=ANDROID_VR ./ytcheck <id> 1, then enable.",
+        "_comment": "Candidate from yt-dlp's android_vr client (direct URLs, no account). 2026-10-30 from a bot-flagged IP: LOGIN_REQUIRED (bot check). Recheck from a clean IP with CLIENT=ANDROID_VR ./ytcheck <id> 1 before enabling.",
         "enabled": false,
         "clientName": "ANDROID_VR",
         "clientVersion": "1.65.10",
@@ -76,6 +76,18 @@
           "osName": "Android",
           "osVersion": "12L"
         }
+      },
+      {
+        "_comment": "Candidate from yt-dlp's tv_simply client (TVHTML5_SIMPLY: needs the player JS, no PO token). 2026-10-30 from a bot-flagged IP: UNPLAYABLE with the bot-check reason. Recheck from a clean IP with CLIENT=TVHTML5_SIMPLY ./ytcheck <id> 1 before enabling.",
+        "enabled": false,
+        "clientName": "TVHTML5_SIMPLY",
+        "clientVersion": "1.0",
+        "clientNameId": 75,
+        "userAgent": "Mozilla/5.0 (SMART-TV; Linux; Tizen 2.4.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/2.4.0 TV Safari/538.1",
+        "context": {
+          "userAgent": "Mozilla/5.0 (SMART-TV; Linux; Tizen 2.4.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/2.4.0 TV Safari/538.1"
+        },
+        "decipher": true
       }
     ],
     "browse": {

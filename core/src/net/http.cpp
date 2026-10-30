@@ -515,6 +515,15 @@ bool RangeReader::recover() {
     constexpr int kMaxFailures = 40;  // ~3 minutes of retrying
     if (++failures_ > kMaxFailures) return false;
     if (hooks_.aborted && hooks_.aborted()) return false;
+    bool refusal = last_status_ == 403 || last_status_ == 410;
+    refusals_ = refusal ? refusals_ + 1 : 0;
+    if (refusals_ == 1) first_refusal_ = std::chrono::steady_clock::now();
+    if (hooks_.refusal_budget_ms > 0 && refusals_ > 1 &&
+        std::chrono::steady_clock::now() - first_refusal_ > std::chrono::milliseconds(hooks_.refusal_budget_ms)) {
+        OLOG("range: stream still refused (http %d) after %d retries, giving up", last_status_, refusals_ - 1);
+        refused_ = true;
+        return false;
+    }
     if (hooks_.on_recovering) hooks_.on_recovering(true);
     OLOG("range: %s at byte %llu (http %d), retry %d", error_.c_str(), static_cast<unsigned long long>(pos_),
          last_status_, failures_);
@@ -523,7 +532,8 @@ bool RangeReader::recover() {
         std::string fresh = hooks_.refresh_url();
         if (!fresh.empty()) url_ = fresh;
     }
-    int wait_ms = std::min(5000, 250 << std::min(failures_, 5));
+    // Refusals: short waits, a refused stream sometimes opens a few seconds later (seen with TVHTML5 URLs).
+    int wait_ms = std::min(refusal ? 2000 : 5000, 250 << std::min(failures_, 5));
     for (int waited = 0; waited < wait_ms; waited += 100) {
         if (hooks_.aborted && hooks_.aborted()) return false;
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -554,6 +564,7 @@ size_t RangeReader::read(void* dst, size_t n) {
         if (failures_ > 0) {
             OLOG("range: recovered at byte %llu after %d retries", static_cast<unsigned long long>(pos_), failures_);
             failures_ = 0;
+            refusals_ = 0;
             if (hooks_.on_recovering) hooks_.on_recovering(false);
         }
         total += got;

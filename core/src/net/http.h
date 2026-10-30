@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -91,6 +92,11 @@ public:
         std::function<bool()> aborted;             // stop retrying (seek / player teardown)
         std::function<std::string()> refresh_url;  // new URL for an expired one ("" = none)
         std::function<void(bool)> on_recovering;  // true while retrying, false once data flows again
+        // > 0: give up once 403/410 (fresh URLs included) have lasted that long. An expired URL is cured by
+        // the first refresh; TVHTML5 URLs are often refused for ~10 s after being issued, then open; a stream
+        // still refused after that is YouTube blocking us (bot flag): retrying for minutes only keeps the
+        // spinner up.
+        int refusal_budget_ms = 0;
     };
     virtual ~StreamSource() = default;
 
@@ -99,6 +105,8 @@ public:
     virtual int64_t total_size() const = 0;  // -1: unknown / unbounded
     virtual const std::string& url() const = 0;  // to reopen the stream later (after redirects)
     virtual const std::string& error() const = 0;
+    // Gave up because the server kept refusing the stream (Hooks::max_refusals).
+    virtual bool refused() const { return false; }
     void set_hooks(Hooks hooks) { hooks_ = std::move(hooks); }
 
 protected:
@@ -118,6 +126,7 @@ public:
     int64_t total_size() const override { return total_; }
     const std::string& url() const override { return url_; }
     const std::string& error() const override { return error_; }
+    bool refused() const override { return refused_; }
 
 private:
     bool open_next();
@@ -135,6 +144,9 @@ private:
     std::string error_;
     int last_status_ = 0;
     int failures_ = 0;  // consecutive
+    int refusals_ = 0;  // consecutive 403/410
+    std::chrono::steady_clock::time_point first_refusal_;
+    bool refused_ = false;
 };
 
 // A YouTube live track: numbered, self-contained fMP4 segments (url&sq=N, each ftyp+moov+moof+mdat with

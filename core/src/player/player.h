@@ -69,6 +69,8 @@ public:
     // 0 while preparing, 1 prepared, -1 prepare failed.
     int prepare_result() const { return prepared_ ? 1 : (prepare_failed_ ? -1 : 0); }
     const std::string& error() const { return error_; }
+    // start() failed because YouTube kept refusing a stream (403/410), not a network or codec issue.
+    bool stream_refused() const { return stream_refused_; }
 
 private:
     struct Track {
@@ -113,6 +115,7 @@ private:
     const esp::Api* api_ = nullptr;
     esp::Handle handle_ = nullptr;
     std::string error_;
+    bool stream_refused_ = false;
 
     Track video_, audio_;
     std::atomic<bool> running_{false};

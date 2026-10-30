@@ -3,7 +3,6 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
-#include <atomic>
 #include <cstring>
 #include <functional>
 #include <mutex>
@@ -446,8 +445,6 @@ std::vector<json> player_clients(bool include_disabled) {
     return out;
 }
 
-std::atomic<int> g_last_good_client{-1};  // index of the client that last worked: tried first
-
 }  // namespace
 
 bool Client::player(const std::string& video_id, VideoInfo& out, std::string& error, const std::string& only_client) {
@@ -456,22 +453,20 @@ bool Client::player(const std::string& video_id, VideoInfo& out, std::string& er
         refusal_ = {"NETWORK", error};
         return false;
     }
+    // Always in the config's order, not the last client that worked first: after one video only TVHTML5 could
+    // play, every video went through it (player JS + googlevideo refusing its URLs for ~5 s) while VISIONOS,
+    // ~1 s, would have played them. A refused VISIONOS costs ~0.2 s.
     std::vector<json> clients = player_clients(!only_client.empty());
-    std::vector<size_t> order;
-    int good = g_last_good_client.load();
-    if (good >= 0 && static_cast<size_t>(good) < clients.size()) order.push_back(static_cast<size_t>(good));
-    for (size_t i = 0; i < clients.size(); i++)
-        if (static_cast<int>(i) != good) order.push_back(i);
-
     std::string errors;
-    for (size_t i : order) {
+    for (size_t i = 0; i < clients.size(); i++) {
         const json& c = clients[i];
         std::string name = c.value("clientName", "");
         if (!only_client.empty() && name != only_client) continue;
+        if (std::find(skipped_clients_.begin(), skipped_clients_.end(), name) != skipped_clients_.end()) continue;
         std::string err;
         if (try_client(c, video_id, out, err)) {
-            if (static_cast<int>(i) != good) OLOG("yt: %s played through %s", video_id.c_str(), name.c_str());
-            g_last_good_client = static_cast<int>(i);
+            out.client = name;
+            if (i > 0) OLOG("yt: %s played through %s", video_id.c_str(), name.c_str());
             return true;
         }
         OLOG("yt: %s via %s: %s", video_id.c_str(), name.c_str(), err.c_str());
