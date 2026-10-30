@@ -1,0 +1,50 @@
+# The app's report screen (Settings > About > Report a problem, or after a crash) opens this form through a
+# QR code, with the fields below pre-filled from the URL: ?template=bug.yml&title=…&version=…&device=…&log=…&fulllog=…
+# Keep the ids in sync with app/OmegaTube/BugReport.cs.
+name: Bug report
+description: Something doesn't work on your TV
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The easiest way to fill this in: on the TV, open **Settings → About → Report a problem** (or the screen shown after a crash) and scan the QR code. The fields below are then already filled in.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, what you got instead. For a video problem, add the video link.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: OmegaTube version
+      placeholder: "1.2.1"
+    validations:
+      required: true
+  - type: textarea
+    id: device
+    attributes:
+      label: TV
+      description: Model and Tizen version (Settings → Support → About This TV on the TV).
+      placeholder: |
+        Model: UE65AU6905K
+        Tizen: 6.0
+    validations:
+      required: true
+  - type: input
+    id: install
+    attributes:
+      label: How did you install it?
+      placeholder: install script, Apps2Samsung, TizenBrew…
+  - type: textarea
+    id: log
+    attributes:
+      label: Error / end of the log
+      render: text
+  - type: input
+    id: fulllog
+    attributes:
+      label: Full log
+      description: Link added by the app when you choose "Attach the full log".
