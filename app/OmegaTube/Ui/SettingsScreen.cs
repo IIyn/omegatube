@@ -377,6 +377,13 @@ namespace OmegaTube.Ui
                     Activate = OpenNotes,
                 });
             }
+            l.Add(new Row
+            {
+                Title = T("Report a problem"),
+                Hint = T("A QR code opens a GitHub issue filled in with this TV's details and the log"),
+                Value = () => "",
+                Activate = () => App.Push(new ReportScreen(App, null, false)),
+            });
             l.Add(new Row { Title = T("License"), Hint = T("Free software, no ads and no data collection"), Value = () => "GPL-3.0" });
             l.Add(new Row { Title = T("Credits"), Hint = T("Interface inspired by SmartTube · SponsorBlock segments · SmartTube and Material icons"),
                             Value = () => "" });

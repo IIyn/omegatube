@@ -113,5 +113,9 @@
   },
   "updates": {
     "repo": "IIyn/omegatube"
+  },
+  "reports": {
+    "_comment": "Bug reports: the QR code opens a pre-filled issue in updates.repo; the full log, when the user attaches it, is posted as text/plain to this paste service, which must answer with the paste's https URL.",
+    "paste": "https://paste.rs/"
   }
 }

@@ -167,6 +167,46 @@ namespace OmegaTube.Ui
             return sb.ToString().TrimEnd('\n');
         }
 
+        // QR modules drawn as horizontal runs of black views on a white `host` of size x size (few hundred
+        // views); replaces the previous code. Hides the host when there is nothing to draw.
+        public static void DrawQr(View host, int size, System.Collections.Generic.List<string> rows)
+        {
+            foreach (View child in new System.Collections.Generic.List<View>(host.Children))
+            {
+                host.Remove(child);
+                child.Dispose();
+            }
+            if (rows.Count == 0)
+            {
+                host.Hide();
+                return;
+            }
+            int quiet = 3;
+            int module = size / (rows.Count + 2 * quiet);
+            int offset = (size - module * rows.Count) / 2;
+            for (int y = 0; y < rows.Count; y++)
+            {
+                string row = rows[y];
+                for (int x = 0; x < row.Length; x++)
+                {
+                    if (row[x] != '1')
+                    {
+                        continue;
+                    }
+                    int run = 1;
+                    while (x + run < row.Length && row[x + run] == '1')
+                    {
+                        run++;
+                    }
+                    var dark = Box(Color.Black, run * module, module);
+                    dark.Position = new Position(offset + x * module, offset + y * module);
+                    host.Add(dark);
+                    x += run - 1;
+                }
+            }
+            host.Show();
+        }
+
         // Smoothly moves a view; returns the animation so callers can stop a running one.
         public static Animation Slide(View view, float x, float y, Animation previous, int ms = 180)
         {

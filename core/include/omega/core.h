@@ -11,7 +11,8 @@ extern "C" {
 // App version (repo VERSION file), e.g. "0.4.0".
 OMEGA_API const char* omega_version(void);
 
-// Call first. data_dir: app data folder (keeps the cached remote config and the account token).
+// Call first. data_dir: app data folder (keeps the cached remote config, the account token and the log
+// files omega.log / omega.log.prev for bug reports).
 OMEGA_API void omega_init(const char* data_dir);
 // Network: fetches the repo's remote-config.json (InnerTube clients, OAuth fallback...). {"ok"} or {"error"}.
 OMEGA_API char* omega_config_refresh(void);
@@ -19,6 +20,9 @@ OMEGA_API char* omega_config_refresh(void);
 OMEGA_API void omega_set_locale(const char* language, const char* region);
 // Network: latest GitHub release vs. this build: {"available","version","url","tpk","notes"} or {"error"}.
 OMEGA_API char* omega_update_check(void);
+// Network: posts a bug report text to the paste service of the remote config: {"url","partial"} or {"error"}
+// (partial: the service kept only the beginning).
+OMEGA_API char* omega_report_upload(const char* text);
 
 // Sanity check run by the shell at startup: exercises the C++ runtime
 // (std::string, exceptions, threads) and returns 0 when everything works.

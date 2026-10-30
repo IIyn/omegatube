@@ -1,6 +1,7 @@
 #include "omega/core.h"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <climits>
 #include <cstdlib>
@@ -12,6 +13,7 @@
 #include <string>
 #include <thread>
 
+#include "net/http.h"
 #include "player/player.h"
 #include "yt/auth.h"
 #include "yt/innertube.h"
@@ -482,6 +484,8 @@ char* omega_sb_segments(const char* video_id) {
 void omega_init(const char* data_dir) {
     std::string dir = data_dir ? data_dir : "";
     if (!dir.empty() && dir.back() != '/') dir += '/';
+    if (!dir.empty()) omega::log::init_file(dir + "omega.log");
+    OLOG("omegacore %s", kVersion);
     omega::cfg::init(dir + "remote-config.json");
     omega::yt::shared_auth().init(dir + "auth.json");
     if (!dir.empty()) omega::yt::shared_decipher().set_cache_dir(dir.substr(0, dir.size() - 1));
@@ -498,6 +502,21 @@ void omega_set_locale(const char* language, const char* region) {
 }
 
 char* omega_update_check(void) { return to_c_json(omega::cfg::check_update(kVersion)); }
+
+char* omega_report_upload(const char* text) {
+    omega::net::Request req;
+    req.method = "POST";
+    req.url = omega::cfg::str({"reports", "paste"}, "https://paste.rs/");
+    req.headers = {{"User-Agent", "OmegaTube"}, {"Content-Type", "text/plain; charset=utf-8"}};
+    req.body = text ? text : "";
+    omega::net::Response res = omega::net::fetch(req);
+    if (!res.ok()) return to_c_json({{"error", res.error.empty() ? "HTTP " + std::to_string(res.status) : res.error}});
+    std::string url = res.body;
+    while (!url.empty() && isspace(static_cast<unsigned char>(url.back()))) url.pop_back();
+    if (url.rfind("https://", 0) != 0) return to_c_json({{"error", "unexpected answer"}});
+    // paste.rs: 201 the whole text, 206 cut at its size limit.
+    return to_c_json({{"url", url}, {"partial", res.status == 206}});
+}
 
 void omega_auth_init(const char* token_path) { omega::yt::shared_auth().init(token_path ? token_path : ""); }
 

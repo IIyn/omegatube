@@ -106,6 +106,11 @@ namespace OmegaTube
         [DllImport(Lib, EntryPoint = "omega_update_check")]
         public static extern IntPtr UpdateCheck();
 
+        [DllImport(Lib, EntryPoint = "omega_report_upload")]
+        private static extern IntPtr ReportUploadRaw(byte[] text);
+
+        public static IntPtr ReportUpload(string text) => ReportUploadRaw(Utf8z(text));
+
         [DllImport(Lib, EntryPoint = "omega_auth_status")]
         public static extern IntPtr AuthStatus();
 

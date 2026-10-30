@@ -329,44 +329,9 @@ namespace OmegaTube.Ui
             return string.Join(" ", parts);
         }
 
-        // QR modules drawn as horizontal runs of black views on the white panel (few hundred views).
         private void DrawQr(string text)
         {
-            foreach (View child in new List<View>(qrHost.Children))
-            {
-                qrHost.Remove(child);
-                child.Dispose();
-            }
-            List<string> qrRows = YouTube.Qr(text);
-            if (qrRows.Count == 0)
-            {
-                qrHost.Hide();
-                return;
-            }
-            int quiet = 3;
-            int module = QrSize / (qrRows.Count + 2 * quiet);
-            int offset = (QrSize - module * qrRows.Count) / 2;
-            for (int y = 0; y < qrRows.Count; y++)
-            {
-                string row = qrRows[y];
-                for (int x = 0; x < row.Length; x++)
-                {
-                    if (row[x] != '1')
-                    {
-                        continue;
-                    }
-                    int run = 1;
-                    while (x + run < row.Length && row[x + run] == '1')
-                    {
-                        run++;
-                    }
-                    var dark = Widgets.Box(Color.Black, run * module, module);
-                    dark.Position = new Position(offset + x * module, offset + y * module);
-                    qrHost.Add(dark);
-                    x += run - 1;
-                }
-            }
-            qrHost.Show();
+            Widgets.DrawQr(qrHost, QrSize, YouTube.Qr(text));
         }
 
         public override bool OnKey(string key)

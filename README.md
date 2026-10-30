@@ -23,6 +23,7 @@
 - [Install it on your TV (step by step)](#install-it-on-your-tv-step-by-step)
 - [Install it with Apps2Samsung](#install-it-with-apps2samsung)
 - [Troubleshooting](#troubleshooting)
+- [Reporting a bug](#reporting-a-bug)
 - [Development](#development)
 - [Credits and license](#credits-and-license)
 
@@ -188,7 +189,20 @@ The catalog picks up each new OmegaTube release within a day: install it again f
 | The app disappeared after a few days | This shouldn't happen with Developer Mode on. Run the installer again. |
 | Another tool (e.g. TizenBrew) needs a different *Host PC IP* | You can change it back after installing. OmegaTube keeps working; the address only matters while installing. |
 | Your Samsung certificate expired (after one year) | Run the installer again to create a new one. If the install is refused, uninstall OmegaTube first (you will have to sign in to YouTube again). |
-| A video won't play / YouTube changed something | Open an [issue](https://github.com/IIyn/omegatube/issues) with the video link. Many fixes arrive through `remote-config.json` and need no reinstall. |
+| A video won't play / YouTube changed something | [Report it](#reporting-a-bug) with the video link. Many fixes arrive through `remote-config.json` and need no reinstall. |
+| The app opens, goes black and closes | Update to the latest version and open it again: instead of closing, it now shows what went wrong with a QR code to [report it](#reporting-a-bug). |
+
+## Reporting a bug
+
+OmegaTube runs on many TV models and Tizen versions that we can't all test, so reports from your TV are very welcome. The app fills them in for you:
+
+1. On the TV, open **Settings → About → Report a problem**. After a crash, or when OmegaTube can't start on your TV, this screen shows up by itself.
+2. Scan the QR code with your phone's camera. It opens a [GitHub issue](https://github.com/IIyn/omegatube/issues/new?template=bug.yml) already filled in with the app version, the TV model, the Tizen version and the error or the end of the log.
+3. Add a few words about what you were doing (and the video link for a playback problem), then send it. You need a free GitHub account.
+
+**Attach the full log** (on the same screen) adds a link to the whole log of this session and the previous one. It is posted to [paste.rs](https://paste.rs), a public text sharing site, after OmegaTube removes account tokens, stream links, e-mail and IP addresses, video titles and searches. Nothing is sent unless you press it.
+
+No QR code? Open an [issue](https://github.com/IIyn/omegatube/issues/new?template=bug.yml) by hand with your TV model (Settings → Support → About This TV), the Tizen version and what happened.
 
 ## Development
 
@@ -226,6 +240,8 @@ scripts/serve-test-media.sh                            # prints the TV's log lin
 ```
 
 Never publish a build made with `OMEGA_DEV_LOG`. A plain `scripts/build-app.sh` removes it.
+
+Every build also writes the log to `omega.log` in the app's data folder (the previous session is kept as `omega.log.prev`); that's what users attach from the [report screen](#reporting-a-bug). The issue form is `.github/ISSUE_TEMPLATE/bug.yml`: its field ids must match the URL built in `app/OmegaTube/BugReport.cs`.
 
 ### Testing on the PC
 

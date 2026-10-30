@@ -22,11 +22,7 @@ namespace OmegaTube
         protected override void OnCreate()
         {
             base.OnCreate();
-            EnableDevLog();
-            NativeCore.Init(DirectoryInfo.Data);
-            Config = AppConfig.Load(DirectoryInfo.Data);
-            LocalStore.Init(DirectoryInfo.Data);
-            NativeCore.SetLocale(Config.Language, Config.Region);
+            BugReport.Init(DirectoryInfo.Data);
 
             Window window = Window.Instance;
             // The video plane sits below the UI plane: screens paint their own opaque background,
@@ -34,12 +30,39 @@ namespace OmegaTube
             window.SetTransparency(true);
             window.BackgroundColor = Color.Transparent;
             window.KeyEvent += OnKeyEvent;
-            EcoreWindow = GetEcoreWindow(window);
 
-            Home = new HomeScreen(this);
-            Push(Home);
+            try
+            {
+                // Managed first: the UI language for the report screen if the core does not load.
+                Config = AppConfig.Load(DirectoryInfo.Data);
+                EnableDevLog();
+                NativeCore.Init(DirectoryInfo.Data);
+                BugReport.CoreLoaded = true;
+                LocalStore.Init(DirectoryInfo.Data);
+                NativeCore.SetLocale(Config.Language, Config.Region);
+                EcoreWindow = GetEcoreWindow(window);
+                Home = new HomeScreen(this);
+                Push(Home);
+            }
+            catch (Exception e)
+            {
+                // Typically libomegacore.so failing to load on a TV we never tested: say so instead of
+                // dropping back to the TV's menu.
+                Tizen.Log.Error("OmegaTube", "startup: " + e);
+                Push(new ReportScreen(this, BugReport.Describe(e), true));
+                return;
+            }
+
+            string crash = BugReport.TakeCrash();
             splash = new Splash(() => Home.HasContent);
-            splash.Closed += () => splash = null;
+            splash.Closed += () =>
+            {
+                splash = null;
+                if (crash != null)
+                {
+                    Push(new ReportScreen(this, crash, false));
+                }
+            };
             window.Add(splash);
             _ = RefreshRemote();
         }

@@ -1,6 +1,7 @@
 #include "yt/watch.h"
 
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <random>
 #include <utility>
@@ -28,9 +29,11 @@ std::string make_cpn() {
     return out;
 }
 
+// "12.345". Not printf("%.3f"): that follows the process locale and gives "12,345" on a French TV.
 std::string seconds_text(double s) {
+    long long ms = s < 0 ? 0 : std::llround(s * 1000);
     char buf[32];
-    snprintf(buf, sizeof(buf), "%.3f", s < 0 ? 0 : s);
+    snprintf(buf, sizeof(buf), "%lld.%03lld", ms / 1000, ms % 1000);
     return buf;
 }
 

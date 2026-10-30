@@ -167,7 +167,7 @@ bool Auth::begin(DeviceCode& out, std::string& error) {
     out.verification_url = j.value("verification_url", "https://www.google.com/device");
     out.interval_s = j.value("interval", 5);
     out.expires_in_s = j.value("expires_in", 1800);
-    OLOG("auth: device code issued (%s)", out.user_code.c_str());
+    OLOG("auth: device code issued");  // not the code itself: logs end up in public bug reports
     return true;
 }
 
