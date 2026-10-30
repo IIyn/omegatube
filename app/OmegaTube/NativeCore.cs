@@ -39,6 +39,9 @@ namespace OmegaTube
         [DllImport(Lib, EntryPoint = "omega_log_init_udp")]
         public static extern void LogInitUdp(string host, int port);
 
+        [DllImport(Lib, EntryPoint = "omega_log_line")]
+        public static extern void Log(string text);
+
         [DllImport(Lib, EntryPoint = "omega_log_tail")]
         private static extern int LogTail(byte[] buf, int bufSize, int maxLines);
 

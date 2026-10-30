@@ -49,6 +49,10 @@ namespace OmegaTube
                 // Typically libomegacore.so failing to load on a TV we never tested: say so instead of
                 // dropping back to the TV's menu.
                 Tizen.Log.Error("OmegaTube", "startup: " + e);
+                if (BugReport.CoreLoaded)
+                {
+                    NativeCore.Log("startup: " + e);
+                }
                 Push(new ReportScreen(this, BugReport.Describe(e), true));
                 return;
             }

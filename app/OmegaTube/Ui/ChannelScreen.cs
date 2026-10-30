@@ -34,7 +34,7 @@ namespace OmegaTube.Ui
             var avatarBack = Widgets.Rounded(Theme.Surface, 120, 120, 60);
             avatarBack.Position = new Position(80, 50);
             Root.Add(avatarBack);
-            avatar = new ImageView { Size = new Size(120, 120), CornerRadius = 60, Position = new Position(80, 50) };
+            avatar = Widgets.Round(new ImageView { Size = new Size(120, 120), Position = new Position(80, 50) }, 60);
             if (!string.IsNullOrEmpty(avatarUrl))
             {
                 avatar.ResourceUrl = avatarUrl;

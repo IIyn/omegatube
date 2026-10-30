@@ -62,6 +62,10 @@ void omega_log_init_udp(const char* host, int port) {
     OLOG("omegacore %s: log sink %s:%d", kVersion, host ? host : "-", port);
 }
 
+void omega_log_line(const char* text) {
+    OLOG("app: %s", text ? text : "");
+}
+
 int omega_log_tail(char* buf, int buf_size, int max_lines) {
     if (!buf || buf_size <= 0) return 0;
     std::string joined;

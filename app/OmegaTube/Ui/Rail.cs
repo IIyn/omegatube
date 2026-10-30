@@ -49,8 +49,8 @@ namespace OmegaTube.Ui
                 {
                     Position = new Position(14, i * ItemHeight),
                     Size = new Size(Theme.RailWidth - 28, ItemHeight - 12),
-                    CornerRadius = (ItemHeight - 12) / 2,
                 };
+                Widgets.Round(item, (ItemHeight - 12) / 2);
                 var icon = new ImageView { ResourceUrl = Theme.Icon(entries[i].Icon), Size = new Size(40, 40), Position = new Position(21, 12) };
                 item.Add(icon);
                 var label = Widgets.Label(entries[i].Label, Theme.BodySize + 2, Theme.Text, 200, ItemHeight - 12);

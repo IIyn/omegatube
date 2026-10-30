@@ -17,7 +17,26 @@ namespace OmegaTube.Ui
             {
                 label.Size = new Size(width, height > 0 ? height : pixelSize * 1.5f);
             }
+            else
+            {
+                // Fits its text (badges, toasts): the default up to API 8, but later TizenFX stretch it to the parent.
+                label.WidthResizePolicy = ResizePolicyType.UseNaturalSize;
+                label.HeightResizePolicy = ResizePolicyType.UseNaturalSize;
+            }
             return label;
+        }
+
+        // View.CornerRadius is a float up to API 8 and a Vector4 after (the float setter is gone on
+        // Tizen 7+), so it is set through whichever type the running TizenFX has.
+        private static readonly System.Reflection.PropertyInfo cornerRadius = typeof(View).GetProperty("CornerRadius");
+
+        public static T Round<T>(T view, float radius) where T : View
+        {
+            object value = cornerRadius.PropertyType == typeof(float)
+                ? radius
+                : System.Activator.CreateInstance(cornerRadius.PropertyType, radius, radius, radius, radius);
+            cornerRadius.SetValue(view, value);
+            return view;
         }
 
         public static View Box(Color color, int width, int height)
@@ -51,12 +70,12 @@ namespace OmegaTube.Ui
                 var d = new View
                 {
                     Size = new Size(dot, dot),
-                    CornerRadius = dot / 2f,
                     BackgroundColor = new Color(color.R, color.G, color.B, 0.15f + 0.85f * i / (Dots - 1)),
                     Position = new Position(size / 2f + r * (float)System.Math.Cos(a) - dot / 2f,
                                             size / 2f + r * (float)System.Math.Sin(a) - dot / 2f),
                     PositionUsesPivotPoint = false,
                 };
+                Round(d, dot / 2f);
                 ring.Add(d);
             }
             spin = new Animation(900) { Looping = true };
@@ -72,7 +91,7 @@ namespace OmegaTube.Ui
 
         public static View Rounded(Color color, int width, int height, float radius)
         {
-            return new View { BackgroundColor = color, Size = new Size(width, height), CornerRadius = radius };
+            return Round(new View { BackgroundColor = color, Size = new Size(width, height) }, radius);
         }
 
         // On/off switch (settings rows). Update with SetSwitch.
@@ -101,7 +120,7 @@ namespace OmegaTube.Ui
             public PillButton(string text, string iconName, int width, int height = 76)
             {
                 Size = new Size(width, height);
-                CornerRadius = height / 2f;
+                Round(this, height / 2f);
                 int x = 34;
                 if (iconName != null)
                 {

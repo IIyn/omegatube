@@ -256,7 +256,7 @@ namespace OmegaTube.Ui
 
             tooltip = Widgets.Label("", Theme.SmallSize + 1, Theme.CardTextFocused);
             tooltip.BackgroundColor = Theme.CardInfoFocused;
-            tooltip.CornerRadius = 8;
+            Widgets.Round(tooltip, 8);
             tooltip.ParentOrigin = Tizen.NUI.ParentOrigin.TopLeft;
             tooltip.PivotPoint = Tizen.NUI.PivotPoint.TopCenter;
             tooltip.PositionUsesPivotPoint = true;
@@ -269,14 +269,14 @@ namespace OmegaTube.Ui
             statsLabel = Widgets.Label("", Theme.SmallSize, Theme.Text, 820, 270);
             statsLabel.MultiLine = true;
             statsLabel.BackgroundColor = Theme.Scrim;
-            statsLabel.CornerRadius = 10;
+            Widgets.Round(statsLabel, 10);
             statsLabel.Position = new Position(60, 60);
             Widgets.SetVisible(statsLabel, app.Config.Player.ShowStats);
             Root.Add(statsLabel);
 
             toast = Widgets.Label("", Theme.TitleSize - 2, Theme.Text, 0, 0);
             toast.BackgroundColor = new Color(0.09f, 0.09f, 0.09f, 0.9f);
-            toast.CornerRadius = 12;
+            Widgets.Round(toast, 12);
             toast.ParentOrigin = Tizen.NUI.ParentOrigin.TopLeft;
             toast.PivotPoint = Tizen.NUI.PivotPoint.TopCenter;
             toast.PositionUsesPivotPoint = true;
@@ -301,9 +301,10 @@ namespace OmegaTube.Ui
 
         private Button MakeButton(Action action, string icon, int x)
         {
-            var view = new View { Position = new Position(x, ButtonsY), Size = new Size(ButtonSize, ButtonSize), CornerRadius = ButtonSize / 2,
+            var view = new View { Position = new Position(x, ButtonsY), Size = new Size(ButtonSize, ButtonSize),
                                   BackgroundColor = Theme.GlassButton, PivotPoint = Tizen.NUI.PivotPoint.Center,
                                   PositionUsesPivotPoint = false };
+            Widgets.Round(view, ButtonSize / 2);
             var img = new ImageView { ResourceUrl = Theme.Icon(icon), Size = new Size(44, 44), Position = new Position(14, 14) };
             view.Add(img);
             chrome.Add(view);
@@ -319,9 +320,10 @@ namespace OmegaTube.Ui
         // "Skip <segment>" pill, only present while a manual SponsorBlock segment is offered.
         private Button AddSkipButton()
         {
-            var view = new View { Position = new Position(0, ButtonsY), Size = new Size(320, ButtonSize), CornerRadius = ButtonSize / 2,
+            var view = new View { Position = new Position(0, ButtonsY), Size = new Size(320, ButtonSize),
                                   BackgroundColor = Theme.GlassButton, PivotPoint = Tizen.NUI.PivotPoint.Center,
                                   PositionUsesPivotPoint = false };
+            Widgets.Round(view, ButtonSize / 2);
             var img = new ImageView { ResourceUrl = Theme.Icon("skip_segment"), Size = new Size(40, 40), Position = new Position(20, 16) };
             view.Add(img);
             var label = Widgets.Label(T("Skip"), Theme.BodySize, Theme.Text, 236, ButtonSize);
@@ -559,12 +561,13 @@ namespace OmegaTube.Ui
 
         private Chip AddChip(Social kind, string icon, string text)
         {
-            var view = new View { Size = new Size(200, ChipH), CornerRadius = ChipH / 2f, Position = new Position(0, ActionsY),
+            var view = new View { Size = new Size(200, ChipH), Position = new Position(0, ActionsY),
                                   PivotPoint = Tizen.NUI.PivotPoint.Center, PositionUsesPivotPoint = false };
+            Widgets.Round(view, ChipH / 2f);
             ImageView image = null;
             if (kind == Social.Channel)
             {
-                image = new ImageView { Size = new Size(48, 48), CornerRadius = 24, Position = new Position(8, 8), BackgroundColor = Theme.SurfaceHigh };
+                image = Widgets.Round(new ImageView { Size = new Size(48, 48), Position = new Position(8, 8), BackgroundColor = Theme.SurfaceHigh }, 24);
             }
             else if (icon != null)
             {
@@ -574,8 +577,7 @@ namespace OmegaTube.Ui
             {
                 view.Add(image);
             }
-            var label = Widgets.Label(text, Theme.BodySize + 1, Theme.Text, 0, 0);
-            label.Size = new Size(600, ChipH);
+            var label = Widgets.Label(text, Theme.BodySize + 1, Theme.Text, 600, ChipH);
             label.VerticalAlignment = VerticalAlignment.Center;
             label.Position = new Position(image != null ? (kind == Social.Channel ? 70 : 68) : 30, 0);
             view.Add(label);
@@ -1876,8 +1878,8 @@ namespace OmegaTube.Ui
                 upNext.Remove(v);
                 v.Dispose();
             }
-            var thumb = new ImageView { Size = new Size(480, 270), Position = new Position(40, 40), CornerRadius = 14,
-                                        BackgroundColor = Theme.Surface, ResourceUrl = next.Thumbnail };
+            var thumb = Widgets.Round(new ImageView { Size = new Size(480, 270), Position = new Position(40, 40),
+                                                      BackgroundColor = Theme.Surface, ResourceUrl = next.Thumbnail }, 14);
             upNext.Add(thumb);
             var heading = Widgets.Label(T("Up next"), Theme.BodySize, Theme.Accent, 600);
             heading.Position = new Position(560, 44);

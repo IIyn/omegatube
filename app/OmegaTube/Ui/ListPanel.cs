@@ -28,7 +28,7 @@ namespace OmegaTube.Ui
         public ListPanel()
         {
             BackgroundColor = new Color(0.09f, 0.09f, 0.09f, 0.96f);
-            CornerRadius = Theme.PanelRadius;
+            Widgets.Round(this, Theme.PanelRadius);
             title = Widgets.Label("", Theme.BodySize + 2, Theme.Text, 600, 60);
             title.VerticalAlignment = VerticalAlignment.Center;
             title.Position = new Position(32, 14);

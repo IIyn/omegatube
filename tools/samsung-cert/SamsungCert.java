@@ -3,6 +3,7 @@
 // Samsung account sign-in -> author cert -> distributor cert bound to the TV DUID(s).
 //
 // Usage: java -cp <plugin classes + libs> SamsungCert.java <outDir> <authorName> <duid>[,<duid>...]
+//        java ... SamsungCert.java --distributor <outDir> <duid>[,<duid>...]  (new distributor only, author kept)
 //        java -cp <...> SamsungCert.java --repack <outDir>   (rebuild the .p12 files from .pri/.crt)
 
 import com.sun.net.httpserver.HttpServer;
@@ -46,6 +47,14 @@ public class SamsungCert {
             System.out.println("[ok] repacked author.p12 and distributor.p12");
             return;
         }
+        if (args.length == 3 && args[0].equals("--distributor")) {
+            Path out = Paths.get(args[1]).toAbsolutePath();
+            String password = Files.readAllLines(out.resolve("passwords.txt")).get(0).replaceFirst("^author=", "");
+            Map<String, String> account = signIn();
+            System.out.println("[ok] signed in as " + account.get("inputEmailID"));
+            distributor(out, password, args[2].split(","), account);
+            return;
+        }
         if (args.length != 3) {
             System.err.println("usage: SamsungCert <outDir> <authorName> <duid>[,<duid>...]");
             System.exit(2);
@@ -74,15 +83,19 @@ public class SamsungCert {
         writeP12(out, "author", password, authorCrt, "vd_tizen_dev_author_ca.cer");
         System.out.println("[ok] author.p12");
 
-        // Distributor (bound to the TV DUIDs)
+        distributor(out, password, duids, account);
+        System.out.println("[ok] passwords in " + pwFile);
+    }
+
+    // Distributor (bound to the TV DUIDs)
+    static void distributor(Path out, String password, String[] duids, Map<String, String> account) throws Exception {
         CSRGeneratorForTizen.generateCSRDistribute(new String[]{"TizenSDK", "", "", "", "", ""}, "distributor", password,
-                out.toString(), duids, email);
-        String distCrt = request(DISTRIBUTOR_URL, accessToken, userId, out.resolve("distributor.csr"),
-                linked("privilege_level", "Public", "developer_type", "Individual"));
+                out.toString(), duids, account.get("inputEmailID"));
+        String distCrt = request(DISTRIBUTOR_URL, account.get("access_token"), account.get("userId"),
+                out.resolve("distributor.csr"), linked("privilege_level", "Public", "developer_type", "Individual"));
         Files.writeString(out.resolve("distributor.crt"), distCrt);
         writeP12(out, "distributor", password, distCrt, "vd_tizen_dev_public2.crt");
         System.out.println("[ok] distributor.p12 (DUID: " + String.join(", ", duids) + ")");
-        System.out.println("[ok] passwords in " + pwFile);
     }
 
     // Opens the Samsung sign-in page and waits for the OAuth callback on localhost:4794.

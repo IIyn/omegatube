@@ -73,7 +73,7 @@ namespace OmegaTube.Ui
             {
                 updateBanner = Widgets.Label("", Theme.SmallSize, Theme.Text, 0, 0);
                 updateBanner.BackgroundColor = Theme.Accent;
-                updateBanner.CornerRadius = 6;
+                Widgets.Round(updateBanner, 6);
                 updateBanner.Position = new Position(1000, 50);
                 Root.Add(updateBanner);
             }

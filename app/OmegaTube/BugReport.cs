@@ -37,6 +37,10 @@ namespace OmegaTube
             try
             {
                 string text = Describe(e);
+                if (CoreLoaded)
+                {
+                    NativeCore.Log("crash: " + e);
+                }
                 string log = CoreLoaded ? RedactLog(NativeCore.RecentLog(40)) : "";
                 File.WriteAllText(CrashPath, log.Length > 0 ? text + "\n\n" + log : text);
             }

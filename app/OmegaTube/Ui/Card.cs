@@ -40,8 +40,8 @@ namespace OmegaTube.Ui
             {
                 Size = new Size(width, thumbH + Theme.CardRadius),
                 BackgroundColor = Theme.Surface,
-                CornerRadius = Theme.CardRadius,
             };
+            Widgets.Round(thumb, Theme.CardRadius);
             Add(thumb);
 
             info = new View
@@ -49,8 +49,8 @@ namespace OmegaTube.Ui
                 Position = new Position(0, thumbH),
                 Size = new Size(width, Theme.CardInfoHeight),
                 BackgroundColor = Theme.CardInfo,
-                CornerRadius = Theme.CardRadius,
             };
+            Widgets.Round(info, Theme.CardRadius);
             Add(info);
             infoTopPatch = Widgets.Box(Theme.CardInfo, width, Theme.CardRadius);
             info.Add(infoTopPatch);
@@ -75,7 +75,7 @@ namespace OmegaTube.Ui
             {
                 var duration = Widgets.Label(" " + badge + " ", Theme.SmallSize - 2, Theme.Text);
                 duration.BackgroundColor = Item.Live ? Theme.Accent : new Color(0, 0, 0, 0.82f);
-                duration.CornerRadius = 4;
+                Widgets.Round(duration, 4);
                 duration.ParentOrigin = Tizen.NUI.ParentOrigin.TopLeft;
                 duration.PivotPoint = Tizen.NUI.PivotPoint.BottomRight;
                 duration.PositionUsesPivotPoint = true;

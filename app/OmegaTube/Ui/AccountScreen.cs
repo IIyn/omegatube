@@ -117,7 +117,7 @@ namespace OmegaTube.Ui
             var person = Widgets.Icon("person", 120);
             person.Position = new Position(35, 35);
             avatarBack.Add(person);
-            avatar = new ImageView { Size = new Size(190, 190), CornerRadius = 95, Position = new Position(50, 50) };
+            avatar = Widgets.Round(new ImageView { Size = new Size(190, 190), Position = new Position(50, 50) }, 95);
             profile.Add(avatar);
             nameLabel = Widgets.Label("", Theme.TitleSize + 8, Theme.Text, 740, 64);
             nameLabel.Position = new Position(280, 62);
@@ -127,7 +127,7 @@ namespace OmegaTube.Ui
             profile.Add(handleLabel);
             var badge = Widgets.Label("  ●  " + T("Signed in") + "  ", Theme.SmallSize + 1, Theme.Text, 0, 0);
             badge.BackgroundColor = Theme.Success;
-            badge.CornerRadius = 18;
+            Widgets.Round(badge, 18);
             badge.Position = new Position(280, 190);
             profile.Add(badge);
 

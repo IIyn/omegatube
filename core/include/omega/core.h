@@ -32,6 +32,8 @@ OMEGA_API int omega_selftest(void);
 
 // Mirrors every log line to UDP host:port (dev PC) in addition to the in-memory ring.
 OMEGA_API void omega_log_init_udp(const char* host, int port);
+// Adds a line from the shell (managed exceptions...) to the core log.
+OMEGA_API void omega_log_line(const char* text);
 // Copies the last `max_lines` log lines, '\n'-separated, into buf. Returns the length written.
 OMEGA_API int omega_log_tail(char* buf, int buf_size, int max_lines);
 
