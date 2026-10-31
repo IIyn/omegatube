@@ -1387,6 +1387,21 @@ namespace OmegaTube.Ui
             {
                 return true;   // volume: the TV handles it, the controls stay as they are
             }
+            // Remote play/pause (Samsung sends XF86PlayBack) works whatever has the focus.
+            if (key == "XF86PlayBack" || key == "XF86AudioPlay" || key == "XF86AudioPause")
+            {
+                TogglePause();
+                if (focus == Focus.Hidden)
+                {
+                    buttonIndex = buttons.IndexOf(playButton);
+                    ShowChrome(Focus.Buttons);
+                }
+                else if (focus != Focus.Panel && focus != Focus.Info && focus != Focus.UpNext)
+                {
+                    ShowChrome(Focus.Hidden);
+                }
+                return true;
+            }
             switch (focus)
             {
                 case Focus.Hidden:
@@ -1394,7 +1409,7 @@ namespace OmegaTube.Ui
                     {
                         return false;
                     }
-                    if (key == "Return" || key == "XF86AudioPlay" || key == "XF86AudioPause")
+                    if (key == "Return")
                     {
                         TogglePause();
                         buttonIndex = buttons.IndexOf(playButton);
