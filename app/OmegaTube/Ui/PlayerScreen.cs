@@ -121,6 +121,7 @@ namespace OmegaTube.Ui
         private List<SkipSegment> segments = new List<SkipSegment>();
         private SkipSegment offered;       // manual segment currently offered with the skip button
         private bool marksDrawn;
+        private bool playbackStarted;      // the OSD timeout counts from the first frame, not from the loading screen
         private DateTime noSkipUntil;      // let a just-issued seek settle before checking segments
         private long resumeMs;             // position to start at
         private int maxHeight;
@@ -898,6 +899,11 @@ namespace OmegaTube.Ui
                 {
                     HideLoading();
                 }
+                if (stats.State == 3 && !playbackStarted)
+                {
+                    playbackStarted = true;
+                    chromeUntil = now.AddSeconds(App.Config.Player.OsdTimeoutSeconds);
+                }
                 if (stats.State == 3 && (now - lastSave).TotalSeconds > 10)
                 {
                     lastSave = now;
@@ -911,7 +917,7 @@ namespace OmegaTube.Ui
             CheckSegments(now);
             DrawMarks();
             // Controls hide on their own while playing (not while paused, nor in a panel / the suggestions).
-            if ((focus == Focus.Actions || focus == Focus.Timeline || focus == Focus.Buttons) && stats.State == 3 && now > chromeUntil && pendingSeekMs < 0)
+            if ((focus == Focus.Hidden || focus == Focus.Actions || focus == Focus.Timeline || focus == Focus.Buttons) && chrome.Visibility && stats.State == 3 && now > chromeUntil && pendingSeekMs < 0)
             {
                 HideChrome();
             }
@@ -1205,6 +1211,7 @@ namespace OmegaTube.Ui
                     offered = null;
                     skipButton.Available = false;
                     LayoutRightButtons();
+                    SyncSkipPill();
                     if (focus == Focus.Buttons && buttons[buttonIndex] == skipButton)
                     {
                         buttonIndex = buttons.IndexOf(playButton);
@@ -1222,14 +1229,37 @@ namespace OmegaTube.Ui
             }
             else if (offered != current && focus != Focus.Panel && focus != Focus.Info)
             {
-                // SmartTube shows the controls with the focus on "Skip".
+                // Controls up: the focus jumps to "Skip"; otherwise the pill floats alone over the video.
                 offered = current;
                 skipButton.Label.Text = T("Skip: {0}", label);
                 skipButton.Available = true;
                 LayoutRightButtons();
-                ShowChrome(Focus.Buttons);
-                buttonIndex = buttons.IndexOf(skipButton);
-                RefreshButtons();
+                if (chrome.Visibility)
+                {
+                    ShowChrome(Focus.Buttons);
+                    buttonIndex = buttons.IndexOf(skipButton);
+                    RefreshButtons();
+                }
+                SyncSkipPill();
+            }
+        }
+
+        // Without the controls, the skip pill sits alone over the video at its usual place (OK skips);
+        // with them, it goes back among the buttons.
+        private void SyncSkipPill()
+        {
+            bool floating = offered != null && !chrome.Visibility && focus == Focus.Hidden;
+            View pill = skipButton.View;
+            View parent = floating ? Root : chrome;
+            if (pill.GetParent() != parent)
+            {
+                pill.Unparent();
+                parent.Add(pill);
+            }
+            if (floating)
+            {
+                pill.BackgroundColor = Theme.Accent;
+                pill.Scale = Vector3.One;
             }
         }
 
@@ -1239,6 +1269,7 @@ namespace OmegaTube.Ui
             offered = null;
             skipButton.Available = false;
             LayoutRightButtons();
+            SyncSkipPill();
             noSkipUntil = DateTime.Now.AddSeconds(1.5);
             long target = Math.Min(s.EndMs, Math.Max(0, stats.DurationMs - 1000));
             Seek(target);
@@ -1267,6 +1298,7 @@ namespace OmegaTube.Ui
         private void ShowChrome(Focus target)
         {
             chrome.Show();
+            SyncSkipPill();
             chromeUntil = DateTime.Now.AddSeconds(App.Config.Player.OsdTimeoutSeconds);
             if (target != Focus.Hidden)
             {
@@ -1291,6 +1323,7 @@ namespace OmegaTube.Ui
             chrome.PositionY = 0;
             tooltip.Hide();
             suggestions?.SetFocused(false);
+            SyncSkipPill();
         }
 
         private void RefreshButtons()
@@ -1409,7 +1442,11 @@ namespace OmegaTube.Ui
                     {
                         return false;
                     }
-                    if (key == "Return")
+                    if (key == "Return" && offered != null)
+                    {
+                        Activate(Action.Skip);
+                    }
+                    else if (key == "Return")
                     {
                         TogglePause();
                         buttonIndex = buttons.IndexOf(playButton);
@@ -1426,7 +1463,7 @@ namespace OmegaTube.Ui
                     }
                     else
                     {
-                        buttonIndex = buttons.IndexOf(playButton);
+                        buttonIndex = buttons.IndexOf(offered != null ? skipButton : playButton);
                         ShowChrome(Focus.Buttons);
                     }
                     return true;
@@ -1842,6 +1879,7 @@ namespace OmegaTube.Ui
             tooltip.Hide();
             chrome.Hide();
             focus = Focus.Info;
+            SyncSkipPill();
         }
 
         private void InfoKey(string key)
