@@ -30,6 +30,7 @@ namespace OmegaTube
             window.SetTransparency(true);
             window.BackgroundColor = Color.Transparent;
             window.KeyEvent += OnKeyEvent;
+            MediaKeyGrabber.GrabMediaKeys(window);
 
             try
             {
@@ -225,6 +226,7 @@ namespace OmegaTube
 
         protected override void OnTerminate()
         {
+            MediaKeyGrabber.ReleaseMediaKeys();
             while (stack.Count > 1)
             {
                 Pop();   // never reaches the quit question (the last screen stays)

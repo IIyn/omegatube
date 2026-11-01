@@ -10,5 +10,6 @@
   </ui-application>
   <privileges>
     <privilege>http://tizen.org/privilege/internet</privilege>
+    <privilege>http://tizen.org/privilege/tv.inputdevice</privilege>
   </privileges>
 </manifest>
