@@ -25,6 +25,7 @@
 - [Troubleshooting](#troubleshooting)
 - [Reporting a bug](#reporting-a-bug)
 - [Suggesting a feature](#suggesting-a-feature)
+- [Contributing code](#contributing-code)
 - [Development](#development)
 - [Credits and license](#credits-and-license)
 
@@ -213,7 +214,37 @@ Have an idea for OmegaTube? Anyone can suggest a new feature, a change to how so
 - Check the [existing issues](https://github.com/IIyn/omegatube/issues) first: if someone already suggested it, add a 👍 or a comment there. Votes help choose what comes next.
 - Explain what it would change for you, not only what to add: the problem behind an idea often matters more than the exact solution.
 
-Want to build it yourself? Say so in the issue, then see [Development](#development).
+Want to build it yourself? Say so in the issue, then see [Contributing code](#contributing-code).
+
+## Contributing code
+
+Pull requests are welcome. To make them easy to review:
+
+1. For anything bigger than a small fix, open or comment on an [issue](https://github.com/IIyn/omegatube/issues) first, so we agree on the approach before you spend time on it.
+2. Fork the repository, create a branch from `main` (e.g. `fix/12-subtitles-offset`) and keep the PR to one topic.
+3. Open the pull request and fill in the template: what it changes, the issue it fixes, and how you tested it (TV model and Tizen version, emulator or PC tools).
+
+**Automatic checks.** Every pull request runs the [CI workflow](.github/workflows/ci.yml) on GitHub Actions:
+
+| Check | What it does |
+| --- | --- |
+| Checks | `VERSION` format, valid JSON (`remote-config.json`), valid YAML (issue templates, workflows), bug report fields in sync with `BugReport.cs`, shell scripts parse (`bash -n`, `shellcheck`). |
+| Core + PC tools | Builds the C++ core with `ytcheck` and `mp4dump` natively. |
+| TV package | Runs the full build (Docker toolchain + .NET) and attaches the `.tpk` to the run, under *Artifacts*. |
+
+All three must pass before a merge. On a first contribution, GitHub asks the maintainer to approve the run before it starts.
+
+**Testing a PR on a TV.** Download the `omegatube-pr<number>` artifact from the PR's *Checks* tab, unzip it, sign it for your TV and install it:
+
+```sh
+TPK=$(ls org.omegatube.app-*.tpk)
+~/tizen-studio/tools/ide/bin/tizen package -t tpk -s omegatube -- "$TPK"
+~/tizen-studio/tools/ide/bin/tizen install -n "$TPK" -t <device> -- .   # device name: 3rd column of `sdb devices`
+```
+
+Or check out the branch (`gh pr checkout <number>`) and use `scripts/build-app.sh` + `scripts/deploy.sh` as usual.
+
+**Review.** The maintainer is asked to review automatically (`.github/CODEOWNERS`). Comments are answered by pushing new commits to the same branch; the checks run again. Once approved and green, the PR is merged with *Squash and merge*.
 
 ## Development
 

@@ -1,0 +1,99 @@
+# Runs on every pull request (and on pushes to main): quick checks, a native build of the core
+# with the PC tools, and the full .tpk build, attached to the run so reviewers can install the PR on a TV.
+# Uses `pull_request` (not `pull_request_target`): PRs from forks run with a read-only token and no secrets.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Checks (config, templates, scripts)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: VERSION is x.y.z
+        run: |
+          VERSION=$(head -n1 VERSION)
+          echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "::error file=VERSION::'$VERSION' is not x.y.z"; exit 1; }
+
+      # The app downloads remote-config.json from main at startup: a broken file breaks every installed TV.
+      - name: JSON files are valid
+        run: |
+          for f in $(git ls-files '*.json'); do
+            python3 -c "import json, sys; json.load(open(sys.argv[1]))" "$f" || { echo "::error file=$f::invalid JSON"; exit 1; }
+          done
+
+      - name: Issue templates and workflows are valid YAML
+        run: |
+          for f in $(git ls-files '.github/*.yml' '.github/**/*.yml'); do
+            python3 -c "import yaml, sys; yaml.safe_load(open(sys.argv[1]))" "$f" || { echo "::error file=$f::invalid YAML"; exit 1; }
+          done
+
+      # The in-app report screen pre-fills bug.yml through URL parameters (app/OmegaTube/BugReport.cs).
+      - name: Bug report fields match BugReport.cs
+        run: |
+          python3 - <<'EOF'
+          import re, sys, yaml
+          ids = {f.get("id") for f in yaml.safe_load(open(".github/ISSUE_TEMPLATE/bug.yml"))["body"]}
+          params = set(re.findall(r'"&(\w+)="', open("app/OmegaTube/BugReport.cs").read())) - {"title"}
+          missing = sorted(params - ids)
+          if missing:
+              print(f"::error file=.github/ISSUE_TEMPLATE/bug.yml::BugReport.cs fills fields missing from bug.yml: {missing}")
+              sys.exit(1)
+          print("ok:", sorted(params))
+          EOF
+
+      - name: Shell scripts parse
+        run: |
+          for f in scripts/*.sh; do bash -n "$f"; done
+          shellcheck -S error scripts/*.sh
+
+  core-host:
+    name: Core + PC tools (native build)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch third-party sources
+        run: scripts/fetch-deps.sh
+
+      - name: Build
+        run: |
+          cmake -S core -B build/host -DOMEGA_HOST_TOOLS=ON -DCMAKE_BUILD_TYPE=Release -Wno-dev
+          cmake --build build/host -j"$(nproc)"
+
+  tpk:
+    name: TV package (.tpk)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Fetch third-party sources
+        run: scripts/fetch-deps.sh
+
+      - name: Build core (TV toolchain) + app
+        run: OMEGA_NO_SIGN=1 scripts/build-app.sh
+
+      # Unsigned for any TV (SDK test signature): re-sign it with your own profile before installing,
+      # (see "Testing a PR on a TV" in the README).
+      - uses: actions/upload-artifact@v4
+        with:
+          name: omegatube-${{ github.event.pull_request.number && format('pr{0}', github.event.pull_request.number) || github.sha }}
+          path: app/OmegaTube/bin/Release/tizen80/*.tpk
+          retention-days: 14
