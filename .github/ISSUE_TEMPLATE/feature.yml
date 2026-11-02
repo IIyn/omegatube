@@ -1,0 +1,59 @@
+name: Feature request / suggestion
+description: Suggest a new feature, a change to how the app works, or any idea to make OmegaTube better
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to share an idea! Anyone can suggest something: a new feature, a change to an existing one, a different default, a layout tweak, or a general recommendation.
+        Only one idea per issue, please, so each one can be discussed and tracked on its own. Before posting, have a quick look at the [existing issues](https://github.com/IIyn/omegatube/issues?q=is%3Aissue) in case it was already suggested: if so, add a 👍 or a comment there instead.
+        Something doesn't work? Use the [bug report](https://github.com/IIyn/omegatube/issues/new?template=bug.yml) instead.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of suggestion is it?
+      options:
+        - New feature
+        - Change to an existing feature
+        - Interface / navigation with the remote
+        - Playback (quality, subtitles, audio…)
+        - SponsorBlock
+        - Settings / defaults
+        - Translations / languages
+        - Installation
+        - Other / general recommendation
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: What would you like to see added or changed? Be as concrete as you can.
+      placeholder: "Example: a setting to always start videos with subtitles in my language."
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why would it help?
+      description: The problem it solves or what it makes easier for you. What do you do today instead?
+    validations:
+      required: true
+  - type: textarea
+    id: how
+    attributes:
+      label: How could it work?
+      description: Optional. Where it would live in the app, which remote buttons it would use, how it works in another app (SmartTube, TizenTube, the official YouTube app…). Screenshots or mock-ups are welcome.
+  - type: input
+    id: version
+    attributes:
+      label: OmegaTube version
+      description: Optional. Settings → About on the TV.
+      placeholder: "1.2.1"
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Can you help?
+      options:
+        - label: I'd like to work on this myself (pull request)
+        - label: I can test it on my TV

@@ -24,6 +24,7 @@
 - [Install it with Apps2Samsung](#install-it-with-apps2samsung)
 - [Troubleshooting](#troubleshooting)
 - [Reporting a bug](#reporting-a-bug)
+- [Suggesting a feature](#suggesting-a-feature)
 - [Development](#development)
 - [Credits and license](#credits-and-license)
 
@@ -203,6 +204,16 @@ OmegaTube runs on many TV models and Tizen versions that we can't all test, so r
 **Attach the full log** (on the same screen) adds a link to the whole log of this session and the previous one. It is sent to OmegaTube's own server ([omegatube-logs](https://github.com/IIyn/omegatube-logs), a small Cloudflare Worker) and deleted after 90 days; anyone with the link can read it, so OmegaTube first removes account tokens, stream links, e-mail and IP addresses, video titles and searches. Nothing is sent unless you press it, and you can ask for a log to be deleted in the issue.
 
 No QR code? Open an [issue](https://github.com/IIyn/omegatube/issues/new?template=bug.yml) by hand with your TV model (Settings → Support → About This TV), the Tizen version and what happened.
+
+## Suggesting a feature
+
+Have an idea for OmegaTube? Anyone can suggest a new feature, a change to how something works, a different default or any other recommendation: open a [feature request](https://github.com/IIyn/omegatube/issues/new?template=feature.yml).
+
+- One idea per issue, so each one can be discussed on its own.
+- Check the [existing issues](https://github.com/IIyn/omegatube/issues) first: if someone already suggested it, add a 👍 or a comment there. Votes help choose what comes next.
+- Explain what it would change for you, not only what to add: the problem behind an idea often matters more than the exact solution.
+
+Want to build it yourself? Say so in the issue, then see [Development](#development).
 
 ## Development
 
