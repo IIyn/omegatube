@@ -58,11 +58,11 @@ namespace OmegaTube.Config
     // Languages offered for subtitles / dubbed audio (French names), by ISO 639-1 code.
     public static class Languages
     {
-        public static readonly string[] Codes = { "fr", "en", "es", "de", "it", "pt", "nl", "ar", "ja", "ko", "zh", "ru", "tr", "pl" };
+        public static readonly string[] Codes = { "fr", "en", "es", "de", "it", "pt", "nl", "ar", "ja", "ko", "zh", "ru", "tr", "pl", "cs" };
         private static readonly string[] Names =
         {
             "French", "English", "Spanish", "German", "Italian", "Portuguese", "Dutch", "Arabic", "Japanese",
-            "Korean", "Chinese", "Russian", "Turkish", "Polish",
+            "Korean", "Chinese", "Russian", "Turkish", "Polish", "Czech",
         };
 
         public static string Name(string code)
