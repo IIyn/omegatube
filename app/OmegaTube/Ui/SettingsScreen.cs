@@ -52,7 +52,7 @@ namespace OmegaTube.Ui
         private static readonly int[] Heights = { 720, 1080, 1440, 2160 };
         private static readonly string[] CodecSets = { "avc1,vp9", "vp9,avc1", "avc1,vp9,av01" };
         private static readonly string[] CodecSetLabels = { "H.264, VP9 above 1080p", "VP9 first", "H.264 / VP9 / AV1 (experimental)" };
-        private static readonly string[] Locales = { "fr-FR", "fr-BE", "fr-CA", "fr-CH", "en-US", "en-GB", "de-DE", "es-ES", "it-IT" };
+        private static readonly string[] Locales = { "fr-FR", "fr-BE", "fr-CA", "fr-CH", "en-US", "en-GB", "de-DE", "es-ES", "it-IT", "cs-CZ" };
 
         private readonly List<Category> categories = new List<Category>();
         private readonly List<Row> rows = new List<Row>();
