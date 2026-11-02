@@ -218,33 +218,7 @@ Want to build it yourself? Say so in the issue, then see [Contributing code](#co
 
 ## Contributing code
 
-Pull requests are welcome. To make them easy to review:
-
-1. For anything bigger than a small fix, open or comment on an [issue](https://github.com/IIyn/omegatube/issues) first, so we agree on the approach before you spend time on it.
-2. Fork the repository, create a branch from `main` (e.g. `fix/12-subtitles-offset`) and keep the PR to one topic.
-3. Open the pull request and fill in the template: what it changes, the issue it fixes, and how you tested it (TV model and Tizen version, emulator or PC tools).
-
-**Automatic checks.** Every pull request runs the [CI workflow](.github/workflows/ci.yml) on GitHub Actions:
-
-| Check | What it does |
-| --- | --- |
-| Checks | `VERSION` format, valid JSON (`remote-config.json`), valid YAML (issue templates, workflows), bug report fields in sync with `BugReport.cs`, shell scripts parse (`bash -n`, `shellcheck`). |
-| Core + PC tools | Builds the C++ core with `ytcheck` and `mp4dump` natively. |
-| TV package | Runs the full build (Docker toolchain + .NET) and attaches the `.tpk` to the run, under *Artifacts*. |
-
-All three must pass before a merge. On a first contribution, GitHub asks the maintainer to approve the run before it starts.
-
-**Testing a PR on a TV.** Download the `omegatube-pr<number>` artifact from the PR's *Checks* tab, unzip it, sign it for your TV and install it:
-
-```sh
-TPK=$(ls org.omegatube.app-*.tpk)
-~/tizen-studio/tools/ide/bin/tizen package -t tpk -s omegatube -- "$TPK"
-~/tizen-studio/tools/ide/bin/tizen install -n "$TPK" -t <device> -- .   # device name: 3rd column of `sdb devices`
-```
-
-Or check out the branch (`gh pr checkout <number>`) and use `scripts/build-app.sh` + `scripts/deploy.sh` as usual.
-
-**Review.** The maintainer is asked to review automatically (`.github/CODEOWNERS`). Comments are answered by pushing new commits to the same branch; the checks run again. Once approved and green, the PR is merged with *Squash and merge*.
+Pull requests are welcome, including code written with the help of an AI, as long as you reviewed and tested it yourself. Read [CONTRIBUTING.md](CONTRIBUTING.md) first: it covers the rules for AI-assisted code, the pull request process, the automatic checks (build, `.tpk` for each PR) and how to test a pull request on a TV.
 
 ## Development
 
