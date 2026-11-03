@@ -365,6 +365,7 @@ namespace OmegaTube.Ui
 
         public override void OnShow()
         {
+            Window.Instance.BackgroundColor = Color.Transparent;
             ShowChrome(Focus.Hidden);
             tick = new Timer(250);
             tick.Tick += (s, e) => { OnTick(); return true; };
@@ -827,6 +828,7 @@ namespace OmegaTube.Ui
         public override void OnHide()
         {
             Close();
+            Window.Instance.BackgroundColor = Color.Black;
         }
 
         public override void OnPause()

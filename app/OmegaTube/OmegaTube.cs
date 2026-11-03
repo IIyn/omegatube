@@ -25,10 +25,8 @@ namespace OmegaTube
             BugReport.Init(DirectoryInfo.Data);
 
             Window window = Window.Instance;
-            // The video plane sits below the UI plane: screens paint their own opaque background,
-            // the player screen leaves it transparent.
-            window.SetTransparency(true);
-            window.BackgroundColor = Color.Transparent;
+            // Keep browsing opaque; the player clears the background for the video plane.
+            window.BackgroundColor = Color.Black;
             window.KeyEvent += OnKeyEvent;
 
             try
