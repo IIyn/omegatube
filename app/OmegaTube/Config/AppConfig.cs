@@ -109,8 +109,8 @@ namespace OmegaTube.Config
         public List<HomeRow> HomeRows = new List<HomeRow>();
         public PlayerOptions Player = new PlayerOptions();
         public string UiLanguage = "en"; // app texts (I18n): en | fr | es
-        public string Language = "fr";   // InnerTube hl
-        public string Region = "FR";     // InnerTube gl
+        public string Language = "en";   // InnerTube hl
+        public string Region = "US";     // InnerTube gl
         public bool CheckUpdates = true;
         public bool SponsorBlockEnabled = true;
         public Dictionary<string, SkipMode> SkipModes = new Dictionary<string, SkipMode>();

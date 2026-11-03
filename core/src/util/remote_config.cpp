@@ -18,7 +18,7 @@ using json = nlohmann::json;
 std::mutex g_mutex;
 json g_config;
 std::string g_cache_path;
-std::string g_language = "fr", g_region = "FR";
+std::string g_language = "en", g_region = "US";
 
 // Objects merge key by key; anything else replaces.
 void merge(json& base, const json& over) {
