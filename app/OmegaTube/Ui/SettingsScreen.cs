@@ -365,7 +365,7 @@ namespace OmegaTube.Ui
                 Title = T("Check for updates"),
                 Hint = T("Compares with the latest version published on GitHub"),
                 Value = () => updateStatus,
-                Activate = () => _ = CheckUpdate(),
+                Activate = () => UiGuard.Fire("SettingsScreen.CheckUpdate", CheckUpdate),
             });
             if (App.NewRelease != null)
             {

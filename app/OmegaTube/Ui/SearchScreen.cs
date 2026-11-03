@@ -297,7 +297,7 @@ namespace OmegaTube.Ui
                     else
                     {
                         query += Layout[keyRow][keyCol];
-                        _ = RefreshSuggestions();
+                        UiGuard.Fire("SearchScreen.RefreshSuggestions", RefreshSuggestions);
                     }
                     break;
                 case "XF86Back":
@@ -331,7 +331,7 @@ namespace OmegaTube.Ui
                     RunSearch();
                     return;
             }
-            _ = RefreshSuggestions();
+            UiGuard.Fire("SearchScreen.RefreshSuggestions", RefreshSuggestions);
         }
 
         // Debounced: only the latest keystroke's request updates the list.
@@ -374,7 +374,7 @@ namespace OmegaTube.Ui
             resultsHost.Add(results);
             addButton.Show();
             zone = Zone.Keyboard;
-            _ = LoadResults();
+            UiGuard.Fire("SearchScreen.LoadResults", LoadResults);
         }
 
         private async Task LoadResults()

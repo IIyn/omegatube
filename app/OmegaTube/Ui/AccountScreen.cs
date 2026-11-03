@@ -181,7 +181,7 @@ namespace OmegaTube.Ui
             }
             else
             {
-                _ = SignIn();
+                UiGuard.Fire("AccountScreen.SignIn", SignIn);
             }
         }
 
@@ -202,7 +202,7 @@ namespace OmegaTube.Ui
                 nameLabel.Text = T("YouTube account");   // until the profile arrives (kept for later openings)
                 handleLabel.Text = "";
             }
-            _ = LoadProfile(generation);
+            UiGuard.Fire("AccountScreen.LoadProfile", () => LoadProfile(generation));
         }
 
         private bool profileLoaded;
@@ -367,11 +367,11 @@ namespace OmegaTube.Ui
                 YouTube.SignOut();
                 App.Home.InvalidateRows();
                 avatar.ResourceUrl = "";
-                _ = SignIn();
+                UiGuard.Fire("AccountScreen.SignIn", SignIn);
             }
             else if (retryButton.Visibility)
             {
-                _ = SignIn();
+                UiGuard.Fire("AccountScreen.SignIn", SignIn);
             }
             return true;
         }

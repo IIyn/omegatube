@@ -95,5 +95,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: omegatube-${{ github.event.pull_request.number && format('pr{0}', github.event.pull_request.number) || github.sha }}
-          path: app/OmegaTube/bin/Release/tizen80/*.tpk
+          path: app/OmegaTube/bin/Release/tizen60/*.tpk
           retention-days: 14

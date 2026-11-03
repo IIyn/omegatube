@@ -37,7 +37,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: omegatube-tpk
-          path: app/OmegaTube/bin/Release/tizen80/*.tpk
+          path: app/OmegaTube/bin/Release/tizen60/*.tpk
 
       # Stable names: install.sh downloads them from releases/latest/download/.
       - name: Attach to the release
@@ -46,7 +46,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p dist
-          cp app/OmegaTube/bin/Release/tizen80/*.tpk dist/OmegaTube.tpk
+          cp app/OmegaTube/bin/Release/tizen60/*.tpk dist/OmegaTube.tpk
           cp scripts/install-tv.sh dist/install.sh
           cp scripts/install-tv.ps1 dist/install.ps1
           cp tools/samsung-cert/SamsungCert.java dist/

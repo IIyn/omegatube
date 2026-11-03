@@ -409,7 +409,7 @@ namespace OmegaTube.Ui
                 return;
             }
             prewarmTimer = new Timer(500);
-            prewarmTimer.Tick += (sender, e) =>
+            prewarmTimer.Tick += (sender, e) => UiGuard.Tick("HomeScreen.prewarm", () =>
             {
                 if (!UiWork.IdleFor(PrewarmIdleMs))
                 {
@@ -433,7 +433,7 @@ namespace OmegaTube.Ui
                 }
                 prewarmTimer = null;
                 return false;
-            };
+            });
             prewarmTimer.Start();
         }
 
@@ -452,7 +452,7 @@ namespace OmegaTube.Ui
         {
             openTimer?.Stop();
             openTimer = new Timer(OpenDelayMs);
-            openTimer.Tick += (s, e) =>
+            openTimer.Tick += (s, e) => UiGuard.Tick("HomeScreen.open", () =>
             {
                 if (inRail && rail.Index != current)
                 {
@@ -460,7 +460,7 @@ namespace OmegaTube.Ui
                     UpdateFocus();
                 }
                 return false;
-            };
+            });
             openTimer.Start();
         }
 

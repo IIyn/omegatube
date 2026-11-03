@@ -62,9 +62,9 @@ namespace OmegaTube.Ui
             status.Text = T("Loading…");
             if (cacheKey != null)
             {
-                _ = ShowCached(cacheKey, generation);
+                UiGuard.Fire("ShelfList.ShowCached", () => ShowCached(cacheKey, generation));
             }
-            _ = Load();
+            UiGuard.Fire("ShelfList.Load", Load);
         }
 
         // The cached rows, read and parsed off the UI thread, shown unless the network was faster.
@@ -107,7 +107,7 @@ namespace OmegaTube.Ui
                 }
                 AfterChange();
             }
-            _ = Load();
+            UiGuard.Fire("ShelfList.Load", Load);
         }
 
         protected override void Dispose(DisposeTypes type)
@@ -209,7 +209,7 @@ namespace OmegaTube.Ui
         {
             if (fresh && !loading && !string.IsNullOrEmpty(continuation) && focus >= rows.Count - 1 - PrefetchRows)
             {
-                _ = Load();
+                UiGuard.Fire("ShelfList.Load", Load);
             }
         }
 

@@ -242,7 +242,7 @@ namespace OmegaTube.Ui
             UpdateVisible();
             if (fresh && FocusIndex >= items.Count - VisibleAhead && !string.IsNullOrEmpty(continuation))
             {
-                _ = Load();
+                UiGuard.Fire("FeedRow.Load", Load);
             }
             return true;
         }

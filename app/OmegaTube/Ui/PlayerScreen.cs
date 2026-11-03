@@ -368,14 +368,14 @@ namespace OmegaTube.Ui
             Window.Instance.BackgroundColor = Color.Transparent;
             ShowChrome(Focus.Hidden);
             tick = new Timer(250);
-            tick.Tick += (s, e) => { OnTick(); return true; };
+            tick.Tick += (s, e) => UiGuard.Tick("PlayerScreen.OnTick", () => { OnTick(); return true; });
             tick.Start();
             captionTick = new Timer(100);
-            captionTick.Tick += (s, e) => { UpdateCaption(); return true; };
+            captionTick.Tick += (s, e) => UiGuard.Tick("PlayerScreen.UpdateCaption", () => { UpdateCaption(); return true; });
             captionTick.Start();
-            _ = Start();
-            _ = LoadSuggestions();
-            _ = LoadDetails();
+            UiGuard.Fire("PlayerScreen.Start", Start);
+            UiGuard.Fire("PlayerScreen.LoadSuggestions", LoadSuggestions);
+            UiGuard.Fire("PlayerScreen.LoadDetails", LoadDetails);
         }
 
         private async Task Start()
@@ -384,7 +384,7 @@ namespace OmegaTube.Ui
             int w = (int)Window.Instance.WindowSize.Width, h = (int)Window.Instance.WindowSize.Height;
             if (App.Config.SponsorBlockEnabled && segments.Count == 0)
             {
-                _ = LoadSegments();
+                UiGuard.Fire("PlayerScreen.LoadSegments", LoadSegments);
             }
             long start = resumeMs;
             resumeMs = 0;
@@ -711,7 +711,7 @@ namespace OmegaTube.Ui
             {
                 return;
             }
-            _ = c.Kind == Social.Subscribe ? ToggleSubscribe(c) : Rate(c.Kind == Social.Like ? "LIKE" : "DISLIKE");
+            UiGuard.Fire("PlayerScreen.social", () => c.Kind == Social.Subscribe ? ToggleSubscribe(c) : Rate(c.Kind == Social.Like ? "LIKE" : "DISLIKE"));
         }
 
         private async Task ToggleSubscribe(Chip c)
@@ -882,7 +882,7 @@ namespace OmegaTube.Ui
             player = IntPtr.Zero;
             resumeMs = pos;
             marksDrawn = false;
-            _ = Start();
+            UiGuard.Fire("PlayerScreen.Start", Start);
         }
 
         // ---------------------------------------------------------------- per tick
@@ -1071,7 +1071,7 @@ namespace OmegaTube.Ui
             {
                 Toast(T("Subtitles: {0}", CaptionName(choice)));
             }
-            _ = LoadCues(choice, gen);
+            UiGuard.Fire("PlayerScreen.LoadCues", () => LoadCues(choice, gen));
         }
 
         private async Task LoadCues(CaptionChoice choice, int gen)
