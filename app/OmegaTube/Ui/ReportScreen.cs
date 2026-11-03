@@ -28,13 +28,15 @@ namespace OmegaTube.Ui
         private string fullLogUrl;
         private bool uploading, closed;
 
-        public ReportScreen(App app, string crash, bool fatal) : base(app)
+        // recovered: an error caught by UiGuard, the app keeps running behind this screen.
+        public ReportScreen(App app, string crash, bool fatal, bool recovered = false) : base(app)
         {
             this.crash = crash;
             this.fatal = fatal;
             Root.BackgroundColor = Theme.Background;
 
             string title = fatal ? T("OmegaTube cannot start on this TV")
+                         : recovered ? T("OmegaTube ran into an error")
                          : crash != null ? T("OmegaTube stopped because of an error")
                          : T("Report a problem");
             string body = fatal ? T("Scan the QR code with your phone: it opens a GitHub issue already filled in with this TV's model and the error. Sending it helps make OmegaTube work on your TV.")
@@ -169,7 +171,7 @@ namespace OmegaTube.Ui
                 case "Return":
                     if (!onClose)
                     {
-                        _ = Upload();
+                        UiGuard.Fire("report upload", Upload);
                     }
                     else if (fatal)
                     {

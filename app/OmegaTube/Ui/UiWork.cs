@@ -70,7 +70,7 @@ namespace OmegaTube.Ui
                 }
                 catch (Exception ex)
                 {
-                    Tizen.Log.Error("OmegaTube", "UiWork: " + ex);
+                    UiGuard.Report("UiWork", ex);
                     more = false;
                 }
                 if (more)

@@ -94,9 +94,9 @@ namespace OmegaTube.Ui
             AfterChange();
             if (cacheKey != null)
             {
-                _ = ShowCached(cacheKey, generation);
+                UiGuard.Fire("FeedGrid.ShowCached", () => ShowCached(cacheKey, generation));
             }
-            _ = Load();
+            UiGuard.Fire("FeedGrid.Load", Load);
         }
 
         // The cached first page, read and parsed off the UI thread, shown unless the network was faster.
@@ -134,7 +134,7 @@ namespace OmegaTube.Ui
             hlFocus = 0;
             inHighlights = false;   // first grid card, as on opening (the highlights stay in view above)
             AfterChange();
-            _ = Load();
+            UiGuard.Fire("FeedGrid.Load", Load);
         }
 
         protected override void Dispose(DisposeTypes type)
@@ -310,7 +310,7 @@ namespace OmegaTube.Ui
         {
             if (fresh && !loading && !string.IsNullOrEmpty(continuation) && focus / Columns >= (items.Count - 1) / Columns - PrefetchRows)
             {
-                _ = Load();
+                UiGuard.Fire("FeedGrid.Load", Load);
             }
         }
 

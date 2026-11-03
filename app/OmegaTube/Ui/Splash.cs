@@ -48,11 +48,11 @@ namespace OmegaTube.Ui
 
             pop = new Animation(450);
             pop.AnimateTo(play, "Scale", new Vector3(1f, 1f, 1f), 150, 450, new AlphaFunction(AlphaFunction.BuiltinFunctions.EaseOutBack));
-            pop.Finished += (s, e) => Pulse();
+            pop.Finished += (s, e) => UiGuard.Run("Splash.Pulse", Pulse);
             pop.Play();
 
             poll = new Timer(100);
-            poll.Tick += (s, e) => Check();
+            poll.Tick += (s, e) => UiGuard.Tick("Splash.Check", Check);
             poll.Start();
         }
 
@@ -93,12 +93,12 @@ namespace OmegaTube.Ui
             Closed?.Invoke();
             fade = new Animation(350);
             fade.AnimateTo(this, "Opacity", 0f, new AlphaFunction(AlphaFunction.BuiltinFunctions.EaseOut));
-            fade.Finished += (s, e) =>
+            fade.Finished += (s, e) => UiGuard.Run("Splash.fade", () =>
             {
                 pulse?.Stop();
                 spin?.Stop();
                 Unparent();
-            };
+            });
             fade.Play();
         }
     }

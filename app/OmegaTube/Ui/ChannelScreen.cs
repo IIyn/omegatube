@@ -137,7 +137,7 @@ namespace OmegaTube.Ui
             {
                 if (key == "Return")
                 {
-                    _ = ToggleSubscription();
+                    UiGuard.Fire("ChannelScreen.ToggleSubscription", ToggleSubscription);
                 }
                 else if (key == "Down" && grid.Count > 0)
                 {

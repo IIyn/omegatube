@@ -27,15 +27,27 @@ namespace OmegaTube.Ui
         }
 
         // View.CornerRadius is a float up to API 8 and a Vector4 after (the float setter is gone on
-        // Tizen 7+), so it is set through whichever type the running TizenFX has.
+        // Tizen 7+), so it is set through whichever type the running TizenFX has. Older TizenFX (before API 8)
+        // have no CornerRadius at all: the view simply stays square.
         private static readonly System.Reflection.PropertyInfo cornerRadius = typeof(View).GetProperty("CornerRadius");
 
         public static T Round<T>(T view, float radius) where T : View
         {
-            object value = cornerRadius.PropertyType == typeof(float)
-                ? radius
-                : System.Activator.CreateInstance(cornerRadius.PropertyType, radius, radius, radius, radius);
-            cornerRadius.SetValue(view, value);
+            if (cornerRadius == null || !cornerRadius.CanWrite)
+            {
+                return view;
+            }
+            try
+            {
+                object value = cornerRadius.PropertyType == typeof(float)
+                    ? radius
+                    : System.Activator.CreateInstance(cornerRadius.PropertyType, radius, radius, radius, radius);
+                cornerRadius.SetValue(view, value);
+            }
+            catch (System.Exception e)
+            {
+                Tizen.Log.Warn("OmegaTube", "CornerRadius: " + e.Message);
+            }
             return view;
         }
 
