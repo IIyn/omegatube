@@ -71,7 +71,43 @@ namespace OmegaTube
 
         public static string Describe(Exception e)
         {
-            return $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {(e != null ? e.ToString() : "unknown error")}";
+            string time = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}";
+            if (e is DllNotFoundException || e is BadImageFormatException)
+            {
+                // The loader's own reason right after the message: the issue URL keeps a crash's first lines.
+                return $"{time} {e.GetType()}: {e.Message}\n{CoreLoadError()}\n{e.StackTrace}";
+            }
+            return $"{time} {(e != null ? e.ToString() : "unknown error")}";
+        }
+
+        [DllImport("libdl.so.2", EntryPoint = "dlopen")]
+        private static extern IntPtr DlOpen(string file, int mode);
+
+        [DllImport("libdl.so.2", EntryPoint = "dlerror")]
+        private static extern IntPtr DlError();
+
+        // .NET Core 3.0 (Tizen 5.5) only reports the last name it probed ("libomegacore: No such file"), which
+        // hides the real cause (missing glibc symbol, wrong ABI...): ask the dynamic loader directly.
+        public static string CoreLoadError()
+        {
+            try
+            {
+                string path = Path.GetFullPath(Path.Combine(Tizen.Applications.Application.Current.DirectoryInfo.Resource, "..", "lib", "libomegacore.so"));
+                if (!File.Exists(path))
+                {
+                    return "dlopen: " + path + " is missing";
+                }
+                const int RtldNow = 2;
+                if (DlOpen(path, RtldNow) != IntPtr.Zero)
+                {
+                    return "dlopen: " + path + " loads fine";
+                }
+                return "dlopen: " + (Marshal.PtrToStringAnsi(DlError()) ?? "unknown error");
+            }
+            catch (Exception e)
+            {
+                return "dlopen check failed: " + e.Message;
+            }
         }
 
         public static string AppVersion
