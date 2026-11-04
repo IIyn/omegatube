@@ -235,7 +235,7 @@ namespace OmegaTube
         }
 
         // Ecore_Wl2_Window* of the NUI window. TizenFX 8 keeps the accessor internal, so go through reflection.
-        private static IntPtr GetEcoreWindow(Window window)
+        public static IntPtr GetEcoreWindow(Window window)
         {
             var method = typeof(Window).GetMethod("GetNativeWindowHandler",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);

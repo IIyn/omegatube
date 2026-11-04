@@ -66,14 +66,7 @@ namespace OmegaTube
 
             try
             {
-                // In TizenFX 8 (Tizen 6.0+), GetNativeWindowHandler returns the Ecore_Wl2_Window* directly.
-                var getHandlerMethod = typeof(Window).GetMethod("GetNativeWindowHandler",
-                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                if (getHandlerMethod != null)
-                {
-                    grabWindow = (IntPtr)getHandlerMethod.Invoke(window, null);
-                }
-
+                grabWindow = App.GetEcoreWindow(window);
                 // If not found, attempt resolving via ConnectedDisplayGet + GetNativeId
                 if (grabWindow == IntPtr.Zero)
                 {
