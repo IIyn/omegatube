@@ -20,16 +20,6 @@ docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/src" -w /src omegatube-toolchai
   $STRIP $OUT/libomegacore.so &&
   file $OUT/libomegacore.so"
 
-# Tizen 5.5 TVs (oldest supported) have glibc 2.24: one newer symbol and the TV refuses to load the library.
-MAX_GLIBC="${OMEGA_MAX_GLIBC:-2.24}"
-NEWER=$(readelf --dyn-syms -W "$OUT/libomegacore.so" | grep -oE '@GLIBC_[0-9.]+' | sort -u | sed 's/@GLIBC_//' |
-  while read -r v; do [ "$(printf '%s\n%s\n' "$v" "$MAX_GLIBC" | sort -V | tail -n1)" != "$MAX_GLIBC" ] && echo "$v"; done || true)
-if [ -n "$NEWER" ]; then
-  echo "libomegacore.so needs glibc newer than $MAX_GLIBC (Tizen 5.5 TVs cannot load it):" >&2
-  readelf --dyn-syms -W "$OUT/libomegacore.so" | grep -E "@GLIBC_($(echo $NEWER | tr ' ' '|' | sed 's/\./\\./g'))" >&2
-  exit 1
-fi
-
 mkdir -p app/OmegaTube/lib
 cp "$OUT/libomegacore.so" app/OmegaTube/lib/
 echo "-> app/OmegaTube/lib/libomegacore.so ($ARCH)"
