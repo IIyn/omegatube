@@ -29,6 +29,7 @@ namespace OmegaTube
             // Keep browsing opaque; the player clears the background for the video plane.
             window.BackgroundColor = Color.Black;
             window.KeyEvent += OnKeyEvent;
+            MediaKeyGrabber.GrabMediaKeys(window);
 
             try
             {
@@ -306,6 +307,7 @@ namespace OmegaTube
 
         protected override void OnTerminate()
         {
+            MediaKeyGrabber.ReleaseMediaKeys();
             while (stack.Count > 1)
             {
                 Pop();   // never reaches the quit question (the last screen stays)
@@ -314,7 +316,7 @@ namespace OmegaTube
         }
 
         // Ecore_Wl2_Window* of the NUI window. TizenFX 8 keeps the accessor internal, so go through reflection.
-        private static IntPtr GetEcoreWindow(Window window)
+        public static IntPtr GetEcoreWindow(Window window)
         {
             var method = typeof(Window).GetMethod("GetNativeWindowHandler",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
