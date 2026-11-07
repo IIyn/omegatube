@@ -288,7 +288,7 @@ VERSION               the single version number (copied into the manifest and th
 
 ### Translations
 
-App texts are written in English in the code (`T("Settings")`). The French, Spanish and Czech tables are in `app/OmegaTube/I18n.cs`. To add a language, add a table there and its code to `I18n.Codes`.
+App texts are written in English in the code (`T("Settings")`). The French, Spanish, Czech and Russian tables are in `app/OmegaTube/I18n.cs`. To add a language, add a table there and its code to `I18n.Codes`.
 
 ### Releasing
 
