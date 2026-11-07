@@ -1,0 +1,32 @@
+name: core load test (issue #15)
+
+# Validates the Tizen 5.5 UEP work-arounds for loading the core without a signed file, on every push/PR and
+# with no TV: the memfd route (dlopen of an in-memory fd) and the custom ELF loader (map + relocate into
+# anonymous memory). The custom loader is run against the real cross-built core under qemu-arm.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  memfd-load:
+    name: memfd route (host)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Load the core by file path and from memory
+        run: bash tests/memfd-load/run.sh
+
+  elf-load:
+    name: custom ELF loader (real core, qemu-arm)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ARM cross toolchain and qemu
+        run: sudo apt-get update && sudo apt-get install -y gcc-arm-linux-gnueabi qemu-user-static
+      - name: Fetch third-party sources
+        run: scripts/fetch-deps.sh
+      - name: Build the core for the TV (ARM)
+        run: scripts/build-core.sh
+      - name: Load the real core with the custom ELF loader under qemu-arm
+        run: bash tests/elf-load/run.sh

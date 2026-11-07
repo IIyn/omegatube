@@ -60,6 +60,7 @@ add_library(omegacore SHARED
     ${OMEGA_DEPS}/qrcodegen/qrcodegen.cpp
     src/core.cpp
     src/util/log.cpp
+    src/util/glibc_compat.cpp
     src/net/http.cpp
     src/media/demuxer.cpp
     src/media/mp4.cpp
@@ -77,6 +78,8 @@ target_link_libraries(omegacore PRIVATE mbedtls mbedx509 mbedcrypto omega_quickj
 
 # The TV ships its own libstdc++; link ours statically so we never depend on its version.
 target_link_libraries(omegacore PRIVATE -static-libstdc++ -static-libgcc -Wl,--no-undefined)
+# Oldest supported firmware (Tizen 5.5) has glibc < 2.25: mbedTLS's explicit_bzero goes to our own copy.
+target_link_libraries(omegacore PRIVATE -Wl,--wrap=explicit_bzero)
 
 # Host-side tool to check the demuxer against local files (not shipped).
 if(OMEGA_HOST_TOOLS)
