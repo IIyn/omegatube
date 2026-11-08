@@ -50,6 +50,7 @@ namespace OmegaTube.Ui
         private string signature;  // sections as last built: rebuild the rail only when they change
         private int current;       // section shown beside the rail
         private bool inRail;
+        private bool avatarFocused;  // focus is on the top-left profile avatar (above the rail entries)
         private bool dirty = true;
 
         public HomeScreen(App app) : base(app)
@@ -147,6 +148,7 @@ namespace OmegaTube.Ui
                 Feed?.RefreshProgress();
                 shown?.OnShow();
             }
+            RefreshAvatar();
             UpdateFocus();
             StartPrewarm();
         }
@@ -275,6 +277,7 @@ namespace OmegaTube.Ui
             }
             rail = new Rail(entries);
             Root.Add(rail);  // last: the expanded rail draws over the content
+            RefreshAvatar();
 
             int index = currentKey != null ? sections.FindIndex(s => s.Key == currentKey) : -1;
             if (index < 0)
@@ -477,8 +480,42 @@ namespace OmegaTube.Ui
 
         private void UpdateFocus()
         {
-            rail.SetFocused(inRail);
+            rail.SetFocused(inRail && !avatarFocused);
+            rail.SetAvatarFocused(inRail && avatarFocused);
             Feed?.SetFocused(!inRail && shown == null);
+        }
+
+        // Shows the active account's photo on the top-left avatar (default icon when signed out).
+        private void RefreshAvatar()
+        {
+            ProfileAccount active = YouTube.Accounts().Find(a => a.Active);
+            rail?.SetAvatar(active?.Photo);
+        }
+
+        // OK on the avatar: cycle to the next signed-in account and reload; with fewer than two accounts, open
+        // the Account screen instead (to add or manage one).
+        private void CycleAccount()
+        {
+            List<ProfileAccount> accts = YouTube.Accounts();
+            if (accts.Count < 2)
+            {
+                int ai = sections.FindIndex(s => s.Key == "account");
+                if (ai >= 0)
+                {
+                    avatarFocused = false;
+                    ShowSection(ai);
+                    inRail = ContentFocusable() ? false : inRail;
+                }
+                return;
+            }
+            int idx = accts.FindIndex(a => a.Active);
+            ProfileAccount next = accts[(idx + 1) % accts.Count];
+            if (YouTube.SwitchAccount(next.Id))
+            {
+                rail.SetAvatar(next.Photo);
+                InvalidateRows();
+                ApplyPending(reloadFeed: true);
+            }
         }
 
         public override bool OnKey(string key)
@@ -486,11 +523,46 @@ namespace OmegaTube.Ui
             bool back = key == "XF86Back" || key == "Escape";
             if (inRail)
             {
+                if (avatarFocused)
+                {
+                    switch (key)
+                    {
+                        case "Down":
+                            avatarFocused = false;   // back down to the first rail entry
+                            break;
+                        case "Right":
+                        case "Return":
+                            CycleAccount();
+                            break;
+                        default:
+                            if (back || key == "Left")
+                            {
+                                avatarFocused = false;
+                            }
+                            else
+                            {
+                                return true;
+                            }
+                            break;
+                    }
+                    UpdateFocus();
+                    return true;
+                }
                 switch (key)
                 {
                     case "Up":
+                        if (rail.Index == 0)
+                        {
+                            avatarFocused = true;   // above the first entry sits the profile avatar
+                        }
+                        else
+                        {
+                            rail.Move(-1);
+                            ScheduleOpen();
+                        }
+                        break;
                     case "Down":
-                        rail.Move(key == "Up" ? -1 : 1);
+                        rail.Move(1);
                         ScheduleOpen();
                         break;
                     case "Right":

@@ -1,5 +1,6 @@
 #include "yt/auth.h"
 
+#include <algorithm>
 #include <ctime>
 #include <fstream>
 #include <sstream>
@@ -109,32 +110,102 @@ bool scrape_identity(std::string& id, std::string& secret, std::string& error) {
     return !id.empty() && !secret.empty();
 }
 
-}  // namespace
+// Directory part of a path (with the trailing slash), or "" when there is none.
+std::string dir_of(const std::string& path) {
+    size_t slash = path.find_last_of('/');
+    return slash == std::string::npos ? "" : path.substr(0, slash + 1);
+}
 
-void Auth::init(const std::string& token_path) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    path_ = token_path;
-    std::ifstream in(path_);
-    if (!in) return;
+json read_json_file(const std::string& path) {
+    std::ifstream in(path);
+    if (!in) return json();
     std::stringstream ss;
     ss << in.rdbuf();
     json j = json::parse(ss.str(), nullptr, false);
-    if (!j.is_object()) return;
-    refresh_token_ = j.value("refresh_token", "");
-    token_client_id_ = j.value("client_id", "");
-    token_client_secret_ = j.value("client_secret", "");
-    OLOG("auth: %s", refresh_token_.empty() ? "signed out" : "saved account loaded");
+    return j.is_discarded() ? json() : j;
+}
+
+}  // namespace
+
+void Auth::init(const std::string& store_path) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    store_path_ = store_path;
+    legacy_path_ = dir_of(store_path) + "auth.json";
+    accounts_.clear();
+    active_id_.clear();
+    access_token_.clear();
+    access_expires_at_ = 0;
+    load_store_locked();
+    OLOG("auth: %zu account(s) loaded", accounts_.size());
+}
+
+Account* Auth::active_locked() {
+    for (auto& a : accounts_) {
+        if (a.id == active_id_) return &a;
+    }
+    return nullptr;
+}
+
+std::string Auth::next_id_locked() const {
+    int max = 0;
+    for (const auto& a : accounts_) {
+        try {
+            max = std::max(max, std::stoi(a.id));
+        } catch (...) {
+        }
+    }
+    return std::to_string(max + 1);
+}
+
+void Auth::load_store_locked() {
+    json j = read_json_file(store_path_);
+    if (j.is_object() && j.contains("accounts") && j["accounts"].is_array()) {
+        for (const auto& a : j["accounts"]) {
+            if (!a.is_object()) continue;
+            Account acc;
+            acc.id = a.value("id", "");
+            acc.refresh_token = a.value("refresh_token", "");
+            acc.client_id = a.value("client_id", "");
+            acc.client_secret = a.value("client_secret", "");
+            acc.name = a.value("name", "");
+            acc.handle = a.value("handle", "");
+            acc.photo = a.value("photo", "");
+            if (!acc.id.empty() && !acc.refresh_token.empty()) accounts_.push_back(acc);
+        }
+        active_id_ = j.value("active", "");
+    } else if (j.is_object() && !j.value("refresh_token", std::string()).empty()) {
+        // Legacy single-account format stored at store_path_ itself (e.g. the host tool's file): migrate in place.
+        Account acc{"1", j.value("refresh_token", ""), j.value("client_id", ""), j.value("client_secret", ""), "", "", ""};
+        accounts_.push_back(acc);
+        active_id_ = acc.id;
+        save_locked();
+    } else {
+        // No usable store: migrate a legacy auth.json next to it (the app's old single-account file).
+        json lj = read_json_file(legacy_path_);
+        if (lj.is_object() && !lj.value("refresh_token", std::string()).empty()) {
+            Account acc{"1", lj.value("refresh_token", ""), lj.value("client_id", ""), lj.value("client_secret", ""), "", "", ""};
+            accounts_.push_back(acc);
+            active_id_ = acc.id;
+            save_locked();
+        }
+    }
+    if (active_locked() == nullptr) active_id_ = accounts_.empty() ? std::string() : accounts_.front().id;
 }
 
 void Auth::save_locked() {
-    if (path_.empty()) return;
-    std::ofstream out(path_, std::ios::trunc);
-    if (refresh_token_.empty()) return;  // empty file = signed out
-    out << json{{"v", 1},
-                {"refresh_token", refresh_token_},
-                {"client_id", token_client_id_},
-                {"client_secret", token_client_secret_}}
-               .dump();
+    if (store_path_.empty()) return;
+    std::ofstream out(store_path_, std::ios::trunc);
+    json arr = json::array();
+    for (const auto& a : accounts_) {
+        arr.push_back({{"id", a.id},
+                       {"refresh_token", a.refresh_token},
+                       {"client_id", a.client_id},
+                       {"client_secret", a.client_secret},
+                       {"name", a.name},
+                       {"handle", a.handle},
+                       {"photo", a.photo}});
+    }
+    out << json{{"v", 2}, {"active", active_id_}, {"accounts", arr}}.dump();
 }
 
 bool Auth::ensure_identity(std::string& error) {
@@ -181,13 +252,17 @@ PollResult Auth::poll(const DeviceCode& code, std::string& error) {
                        status, error);
     if (!error.empty()) return PollResult::Failed;
     if (status == 200 && j.is_object() && j.contains("refresh_token")) {
-        refresh_token_ = j.value("refresh_token", "");
+        Account acc;
+        acc.id = next_id_locked();
+        acc.refresh_token = j.value("refresh_token", "");
+        acc.client_id = client_id_;
+        acc.client_secret = client_secret_;
+        accounts_.push_back(acc);
+        active_id_ = acc.id;  // the newly added account becomes active
         access_token_ = j.value("access_token", "");
         access_expires_at_ = static_cast<int64_t>(time(nullptr)) + j.value("expires_in", 3600) - 60;
-        token_client_id_ = client_id_;
-        token_client_secret_ = client_secret_;
         save_locked();
-        OLOG("auth: signed in");
+        OLOG("auth: signed in (%zu account(s))", accounts_.size());
         return PollResult::Done;
     }
     std::string e = j.is_object() ? j.value("error", "") : "";
@@ -200,11 +275,16 @@ PollResult Auth::poll(const DeviceCode& code, std::string& error) {
 }
 
 bool Auth::refresh_locked(std::string& error) {
-    std::string id = token_client_id_.empty() ? fallback_id() : token_client_id_;
-    std::string secret = token_client_secret_.empty() ? fallback_secret() : token_client_secret_;
+    Account* a = active_locked();
+    if (!a) {
+        error = "signed out";
+        return false;
+    }
+    std::string id = a->client_id.empty() ? fallback_id() : a->client_id;
+    std::string secret = a->client_secret.empty() ? fallback_secret() : a->client_secret;
     int status = 0;
     json j = post_form(kTokenUrl,
-                       "grant_type=refresh_token&refresh_token=" + form_escape(refresh_token_) +
+                       "grant_type=refresh_token&refresh_token=" + form_escape(a->refresh_token) +
                            "&client_id=" + form_escape(id) + "&client_secret=" + form_escape(secret),
                        status, error);
     if (!error.empty()) return false;
@@ -215,10 +295,14 @@ bool Auth::refresh_locked(std::string& error) {
     }
     error = oauth_error(j, status);
     if (status == 400 || status == 401) {
-        // invalid_grant: the account revoked access or the client rotated; start clean.
-        OLOG("auth: refresh rejected (%s), signing out", error.c_str());
-        refresh_token_.clear();
+        // invalid_grant: this account revoked access or the client rotated; drop it and fall back to the next.
+        OLOG("auth: refresh rejected (%s), removing account", error.c_str());
+        accounts_.erase(std::remove_if(accounts_.begin(), accounts_.end(),
+                                       [&](const Account& x) { return x.id == active_id_; }),
+                        accounts_.end());
+        active_id_ = accounts_.empty() ? std::string() : accounts_.front().id;
         access_token_.clear();
+        access_expires_at_ = 0;
         save_locked();
     }
     return false;
@@ -226,7 +310,8 @@ bool Auth::refresh_locked(std::string& error) {
 
 std::string Auth::access_token(std::string& error) {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (refresh_token_.empty()) return "";
+    Account* a = active_locked();
+    if (!a || a->refresh_token.empty()) return "";
     if (access_token_.empty() || static_cast<int64_t>(time(nullptr)) >= access_expires_at_) {
         if (!refresh_locked(error)) return "";
     }
@@ -235,15 +320,58 @@ std::string Auth::access_token(std::string& error) {
 
 bool Auth::signed_in() {
     std::lock_guard<std::mutex> lock(mutex_);
-    return !refresh_token_.empty();
+    Account* a = active_locked();
+    return a && !a->refresh_token.empty();
 }
 
 void Auth::sign_out() {
     std::lock_guard<std::mutex> lock(mutex_);
-    refresh_token_.clear();
+    accounts_.erase(std::remove_if(accounts_.begin(), accounts_.end(),
+                                   [&](const Account& x) { return x.id == active_id_; }),
+                    accounts_.end());
+    active_id_ = accounts_.empty() ? std::string() : accounts_.front().id;
     access_token_.clear();
+    access_expires_at_ = 0;
     save_locked();
-    OLOG("auth: signed out");
+    OLOG("auth: signed out (%zu account(s) left)", accounts_.size());
+}
+
+std::vector<Account> Auth::accounts() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return accounts_;
+}
+
+std::string Auth::active_id() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return active_id_;
+}
+
+bool Auth::switch_to(const std::string& id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (auto& a : accounts_) {
+        if (a.id == id) {
+            active_id_ = id;
+            access_token_.clear();
+            access_expires_at_ = 0;
+            save_locked();
+            OLOG("auth: switched account");
+            return true;
+        }
+    }
+    return false;
+}
+
+void Auth::cache_profile(const std::string& id, const std::string& name, const std::string& handle, const std::string& photo) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (auto& a : accounts_) {
+        if (a.id == id) {
+            a.name = name;
+            a.handle = handle;
+            a.photo = photo;
+            save_locked();
+            return;
+        }
+    }
 }
 
 Auth& shared_auth() {

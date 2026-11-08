@@ -287,7 +287,7 @@ namespace OmegaTube
         [UnmanagedFunctionPointer(CallingConvention.Cdecl, CharSet = CharSet.Ansi)] private delegate void DiagnoseFn(IntPtr win, int w, int h, string videoUrl, string audioUrl);
 
         // --- Bound function pointers -------------------------------------------------------------------------
-        private static Ip_v _version, _playerLastError, _configRefresh, _updateCheck, _authStatus, _authBegin, _authAccount;
+        private static Ip_v _version, _playerLastError, _configRefresh, _updateCheck, _authStatus, _authBegin, _authAccount, _authAccounts;
         private static I_v _selfTest, _reportAvailable;
         private static V_v _authSignOut;
         private static I_buf _logTail;
@@ -301,7 +301,7 @@ namespace OmegaTube
         private static I_ipl _playerSeek;
         private static I_ipd _playerSetRate;
         private static V_ipStats _playerGetStats;
-        private static Ip_b _ytSuggest, _reportUpload, _authPoll, _qrEncode, _ytRelated, _ytDetails, _sbSegments;
+        private static Ip_b _ytSuggest, _reportUpload, _authPoll, _qrEncode, _ytRelated, _ytDetails, _sbSegments, _authSwitch;
         private static Ip_bb _ytSearch, _ytBrowse, _ytPlaylist, _ytPlaylistPage, _ytCaptions, _ytRate, _ytChannel, _ytComments, _ytPostComment;
         private static Ip_bbb _ytPostReply, _ytCommentAction;
         private static Ip_bi _ytSubscribe;
@@ -352,6 +352,8 @@ namespace OmegaTube
             _ytPostReply = Fn<Ip_bbb>("omega_yt_post_reply");
             _ytCommentAction = Fn<Ip_bbb>("omega_yt_comment_action");
             _authAccount = Fn<Ip_v>("omega_auth_account");
+            _authAccounts = Fn<Ip_v>("omega_auth_accounts");
+            _authSwitch = Fn<Ip_b>("omega_auth_switch");
             _sbSegments = Fn<Ip_b>("omega_sb_segments");
             _free = Fn<V_ip>("omega_free");
         }
@@ -398,6 +400,8 @@ namespace OmegaTube
         public static IntPtr YtCommentAction(string videoId, string commentId, string action) => _ytCommentAction(Utf8z(videoId), Utf8z(commentId), Utf8z(action));
         public static IntPtr YtChannel(string channelId, string continuation) => _ytChannel(Utf8z(channelId), Utf8z(continuation));
         public static IntPtr AuthAccount() => _authAccount();
+        public static IntPtr AuthAccounts() => _authAccounts();
+        public static IntPtr AuthSwitch(string id) => _authSwitch(Utf8z(id));
         public static IntPtr SbSegments(string videoId) => _sbSegments(Utf8z(videoId));
         public static void Free(IntPtr p) => _free(p);
 
