@@ -12,28 +12,28 @@ namespace OmegaTube.Ui
     public class SearchScreen : Screen
     {
         // Four rows of ten characters per layout; the action row comes below.
-        private static readonly string[][] Qwerty =
+        internal static readonly string[][] Qwerty =
         {
             new[] { "1", "2", "3", "4", "5", "6", "7", "8", "9", "0" },
             new[] { "q", "w", "e", "r", "t", "y", "u", "i", "o", "p" },
             new[] { "a", "s", "d", "f", "g", "h", "j", "k", "l", "'" },
             new[] { "z", "x", "c", "v", "b", "n", "m", ",", ".", "-" },
         };
-        private static readonly string[][] Azerty =
+        internal static readonly string[][] Azerty =
         {
             new[] { "1", "2", "3", "4", "5", "6", "7", "8", "9", "0" },
             new[] { "a", "z", "e", "r", "t", "y", "u", "i", "o", "p" },
             new[] { "q", "s", "d", "f", "g", "h", "j", "k", "l", "m" },
             new[] { "w", "x", "c", "v", "b", "n", "é", "'", ".", "-" },
         };
-        private static readonly string[][] QwertySpanish =
+        internal static readonly string[][] QwertySpanish =
         {
             new[] { "1", "2", "3", "4", "5", "6", "7", "8", "9", "0" },
             new[] { "q", "w", "e", "r", "t", "y", "u", "i", "o", "p" },
             new[] { "a", "s", "d", "f", "g", "h", "j", "k", "l", "ñ" },
             new[] { "z", "x", "c", "v", "b", "n", "m", ",", ".", "-" },
         };
-        private static readonly string[][] Symbols =
+        internal static readonly string[][] Symbols =
         {
             new[] { "à", "â", "ä", "á", "é", "è", "ê", "ë", "í", "î" },
             new[] { "ï", "ó", "ô", "ö", "ú", "ù", "û", "ü", "ç", "ñ" },

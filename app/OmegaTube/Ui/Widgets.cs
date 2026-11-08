@@ -26,6 +26,28 @@ namespace OmegaTube.Ui
             return label;
         }
 
+        // Bold text. Cosmetic: if this TizenFX lacks FontStyle, the call is JIT-compiled (and fails) inside the
+        // try, and the label stays regular.
+        public static TextLabel Bold(TextLabel label)
+        {
+            try
+            {
+                SetBold(label);
+            }
+            catch (System.Exception e)
+            {
+                Tizen.Log.Warn("OmegaTube", "FontStyle: " + e.Message);
+            }
+            return label;
+        }
+
+        private static void SetBold(TextLabel label)
+        {
+            var style = new PropertyMap();
+            style.Add("weight", new PropertyValue("bold"));
+            label.FontStyle = style;
+        }
+
         // View.CornerRadius is a float up to API 8 and a Vector4 after (the float setter is gone on
         // Tizen 7+), so it is set through whichever type the running TizenFX has. Older TizenFX (before API 8)
         // have no CornerRadius at all: the view simply stays square.
