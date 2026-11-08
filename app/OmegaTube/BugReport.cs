@@ -75,7 +75,8 @@ namespace OmegaTube
             if (e is DllNotFoundException || e is BadImageFormatException)
             {
                 // The loader's own reason right after the message: the issue URL keeps a crash's first lines.
-                return $"{time} {e.GetType()}: {e.Message}\n{CoreLoadError()}\n{e.StackTrace}";
+                // NativeCore.LoadRoute says which route was tried (file path / memfd), key for Tizen 5.5 (#15).
+                return $"{time} {e.GetType()}: {e.Message}\ncore load route: {NativeCore.LoadRoute}\n{CoreLoadError()}\n{e.StackTrace}";
             }
             return $"{time} {(e != null ? e.ToString() : "unknown error")}";
         }

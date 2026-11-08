@@ -121,6 +121,18 @@ OMEGA_API char* omega_yt_rate(const char* video_id, const char* rating);
 OMEGA_API char* omega_yt_subscribe(const char* channel_id, int subscribe);
 // A channel's videos (newest first): same JSON as search plus "title","avatar","subscribers" (first page).
 OMEGA_API char* omega_yt_channel(const char* channel_id, const char* continuation);
+// Comments of a video, continuation NULL/empty = first page (top comments), or an item's replyToken for its replies:
+// {"items":[{"id","author","avatar","text","published","likes","replies","pinned","creator","hearted","replyToken",
+//  "liked","disliked" (the signed-in account's vote)}],
+//  "continuation","count" (display text, first page),"sortTop","sortNewest" (continuations reloading the list
+//  in that order),"createParams" (for omega_yt_post_comment),"disabled":bool} or {"error"}.
+OMEGA_API char* omega_yt_comments(const char* video_id, const char* continuation);
+// As the signed-in account: {"ok":true,"comment":{...} or null} or {"error"}.
+OMEGA_API char* omega_yt_post_comment(const char* create_params, const char* text);
+// A reply in the thread of comment_id (a top-level comment): as omega_yt_post_comment.
+OMEGA_API char* omega_yt_post_reply(const char* video_id, const char* comment_id, const char* text);
+// action: like, unlike, dislike, undislike. {"ok":true} or {"error"}.
+OMEGA_API char* omega_yt_comment_action(const char* video_id, const char* comment_id, const char* action);
 // Subtitles: a caption track URL (from omega_player_formats), machine-translated to translate_to when not
 // NULL/empty: {"cues":[{"start","end","text"}]} (ms) or {"error"}.
 OMEGA_API char* omega_yt_captions(const char* url, const char* translate_to);

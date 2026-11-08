@@ -489,6 +489,66 @@ char* omega_yt_channel(const char* channel_id, const char* continuation) {
     return to_c_json(j);
 }
 
+namespace {
+
+nlohmann::json comment_json(const omega::yt::Comment& c) {
+    return {{"id", c.id},           {"author", c.author}, {"avatar", c.avatar},   {"text", c.text},
+            {"published", c.published}, {"likes", c.likes}, {"replies", c.replies}, {"pinned", c.pinned},
+            {"creator", c.creator}, {"hearted", c.hearted}, {"replyToken", c.reply_token},
+            {"liked", c.liked}, {"disliked", c.disliked}};
+}
+
+}  // namespace
+
+char* omega_yt_comments(const char* video_id, const char* continuation) {
+    omega::yt::CommentPage page;
+    std::string error;
+    std::string token = omega::yt::shared_auth().signed_in() ? omega::yt::shared_auth().access_token(error) : "";
+    error.clear();  // no token: the comments still load, without the account's votes
+    if (!omega::yt::shared_client().comments(video_id ? video_id : "", continuation ? continuation : "", token, page, error))
+        return to_c_json({{"error", error}});
+    nlohmann::json items = nlohmann::json::array();
+    for (const auto& c : page.items) items.push_back(comment_json(c));
+    return to_c_json({{"items", items},
+                      {"continuation", page.continuation},
+                      {"count", page.count},
+                      {"sortTop", page.sort_top},
+                      {"sortNewest", page.sort_newest},
+                      {"createParams", page.create_params},
+                      {"disabled", page.disabled}});
+}
+
+char* omega_yt_post_comment(const char* create_params, const char* text) {
+    std::string error;
+    std::string token = omega::yt::shared_auth().access_token(error);
+    if (token.empty()) return to_c_json({{"error", error.empty() ? "signed out" : error}});
+    omega::yt::Comment c;
+    if (!omega::yt::post_comment(create_params ? create_params : "", text ? text : "", token, c, error))
+        return to_c_json({{"error", error}});
+    nlohmann::json comment = c.id.empty() && c.text.empty() ? nlohmann::json() : comment_json(c);
+    return to_c_json({{"ok", true}, {"comment", comment}});
+}
+
+char* omega_yt_post_reply(const char* video_id, const char* comment_id, const char* text) {
+    std::string error;
+    std::string token = omega::yt::shared_auth().access_token(error);
+    if (token.empty()) return to_c_json({{"error", error.empty() ? "signed out" : error}});
+    omega::yt::Comment c;
+    if (!omega::yt::post_reply(video_id ? video_id : "", comment_id ? comment_id : "", text ? text : "", token, c, error))
+        return to_c_json({{"error", error}});
+    nlohmann::json comment = c.id.empty() && c.text.empty() ? nlohmann::json() : comment_json(c);
+    return to_c_json({{"ok", true}, {"comment", comment}});
+}
+
+char* omega_yt_comment_action(const char* video_id, const char* comment_id, const char* action) {
+    std::string error;
+    std::string token = omega::yt::shared_auth().access_token(error);
+    if (token.empty()) return to_c_json({{"error", error.empty() ? "signed out" : error}});
+    if (!omega::yt::comment_action(video_id ? video_id : "", comment_id ? comment_id : "", action ? action : "", token, error))
+        return to_c_json({{"error", error}});
+    return to_c_json({{"ok", true}});
+}
+
 char* omega_yt_captions(const char* url, const char* translate_to) {
     std::vector<omega::yt::CaptionCue> cues;
     std::string error;

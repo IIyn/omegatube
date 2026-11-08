@@ -72,6 +72,22 @@ namespace OmegaTube.Data
         public string Error;
     }
 
+    // A top-level comment (texts as YouTube displays them).
+    public class Comment
+    {
+        public string Id = "", Author = "", Avatar = "", Text = "", Published = "", Likes = "", Replies = "", ReplyToken = "";
+        public bool Pinned, Creator, Hearted, Liked, Disliked;
+    }
+
+    // A page of comments; the first one also carries the header (count, sort tokens, posting params).
+    public class CommentPage
+    {
+        public List<Comment> Items = new List<Comment>();
+        public string Continuation = "", Count = "", SortTop = "", SortNewest = "", CreateParams = "";
+        public bool Disabled;
+        public string Error;
+    }
+
     public class AccountInfo
     {
         public string Name, Handle, Photo, Error;
@@ -161,6 +177,67 @@ namespace OmegaTube.Data
 
         public static Task<string> Subscribe(string channelId, bool subscribe) =>
             Task.Run(() => Json.Str(Call(NativeCore.YtSubscribe(channelId, subscribe)), "error", null));
+
+        // continuation: "" = first page, else a page / sort continuation.
+        public static Task<CommentPage> Comments(string videoId, string continuation = "")
+        {
+            return Task.Run(() =>
+            {
+                object root = Call(NativeCore.YtComments(videoId, continuation ?? ""));
+                var page = new CommentPage
+                {
+                    Continuation = Json.Str(root, "continuation"), Count = Json.Str(root, "count"),
+                    SortTop = Json.Str(root, "sortTop"), SortNewest = Json.Str(root, "sortNewest"),
+                    CreateParams = Json.Str(root, "createParams"), Disabled = Json.Bool(root, "disabled"),
+                    Error = Json.Str(root, "error", null),
+                };
+                foreach (object o in Json.Arr(root, "items") ?? new List<object>())
+                {
+                    page.Items.Add(ToComment(o));
+                }
+                return page;
+            });
+        }
+
+        // Returns (the created comment or null, error or null).
+        public static Task<(Comment, string)> PostComment(string createParams, string text)
+        {
+            return Task.Run(() =>
+            {
+                object root = Call(NativeCore.YtPostComment(createParams, text));
+                string error = Json.Str(root, "error", null);
+                object c = Json.Obj(root, "comment");
+                return (error == null && c != null ? ToComment(c) : null, error);
+            });
+        }
+
+        // A reply in the thread of commentId. Returns (the created reply or null, error or null).
+        public static Task<(Comment, string)> PostReply(string videoId, string commentId, string text)
+        {
+            return Task.Run(() =>
+            {
+                object root = Call(NativeCore.YtPostReply(videoId, commentId, text));
+                string error = Json.Str(root, "error", null);
+                object c = Json.Obj(root, "comment");
+                return (error == null && c != null ? ToComment(c) : null, error);
+            });
+        }
+
+        // action: like, unlike, dislike, undislike. Returns the error or null.
+        public static Task<string> CommentAction(string videoId, string commentId, string action) =>
+            Task.Run(() => Json.Str(Call(NativeCore.YtCommentAction(videoId, commentId, action)), "error", null));
+
+        private static Comment ToComment(object o)
+        {
+            return new Comment
+            {
+                Id = Json.Str(o, "id"), Author = Json.Str(o, "author"), Avatar = Json.Str(o, "avatar"),
+                Text = Json.Str(o, "text"), Published = Json.Str(o, "published"), Likes = Json.Str(o, "likes"),
+                Replies = Json.Str(o, "replies"), Pinned = Json.Bool(o, "pinned"), Creator = Json.Bool(o, "creator"),
+                Hearted = Json.Bool(o, "hearted"), ReplyToken = Json.Str(o, "replyToken"),
+                Liked = Json.Bool(o, "liked"), Disliked = Json.Bool(o, "disliked"),
+            };
+        }
 
         public static Task<FeedPage> Related(string videoId)
         {
