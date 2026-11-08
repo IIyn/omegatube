@@ -514,7 +514,7 @@ void omega_init(const char* data_dir) {
     if (!dir.empty()) omega::log::init_file(dir + "omega.log");
     OLOG("omegacore %s", kVersion);
     omega::cfg::init(dir + "remote-config.json");
-    omega::yt::shared_auth().init(dir + "auth.json");
+    omega::yt::shared_auth().init(dir + "accounts.json");  // migrates a legacy auth.json
     if (!dir.empty()) omega::yt::shared_decipher().set_cache_dir(dir.substr(0, dir.size() - 1));
 }
 
@@ -601,6 +601,14 @@ char* omega_auth_poll(const char* device_code) {
     std::string error;
     static const char* names[] = {"pending", "slow_down", "done", "denied", "expired", "failed"};
     omega::yt::PollResult r = omega::yt::shared_auth().poll(code, error);
+    if (r == omega::yt::PollResult::Done) {
+        // Cache the new account's profile so the picker can show its name/avatar without another round-trip.
+        std::string e;
+        std::string token = omega::yt::shared_auth().access_token(e);
+        omega::yt::AccountInfo info;
+        if (!token.empty() && omega::yt::account_info(token, info, e))
+            omega::yt::shared_auth().cache_profile(omega::yt::shared_auth().active_id(), info.name, info.handle, info.photo);
+    }
     return to_c_json({{"status", names[static_cast<int>(r)]}, {"error", error}});
 }
 
@@ -612,7 +620,23 @@ char* omega_auth_account(void) {
     if (token.empty()) return to_c_json({{"error", error.empty() ? "signed out" : error}});
     omega::yt::AccountInfo account;
     if (!omega::yt::account_info(token, account, error)) return to_c_json({{"error", error}});
+    omega::yt::shared_auth().cache_profile(omega::yt::shared_auth().active_id(), account.name, account.handle, account.photo);
     return to_c_json({{"name", account.name}, {"handle", account.handle}, {"photo", account.photo}});
+}
+
+// All signed-in accounts for the picker: {"accounts":[{"id","name","handle","photo","active"}]}.
+char* omega_auth_accounts(void) {
+    nlohmann::json arr = nlohmann::json::array();
+    std::string active = omega::yt::shared_auth().active_id();
+    for (const auto& a : omega::yt::shared_auth().accounts())
+        arr.push_back({{"id", a.id}, {"name", a.name}, {"handle", a.handle}, {"photo", a.photo}, {"active", a.id == active}});
+    return to_c_json({{"accounts", arr}});
+}
+
+// Makes the account with this id active. {"ok":true} or {"error"}.
+char* omega_auth_switch(const char* id) {
+    if (!omega::yt::shared_auth().switch_to(id ? id : "")) return to_c_json({{"error", "no such account"}});
+    return to_c_json({{"ok", true}});
 }
 
 char* omega_qr_encode(const char* text) {

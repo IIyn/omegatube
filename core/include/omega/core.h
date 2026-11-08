@@ -129,17 +129,23 @@ OMEGA_API char* omega_sb_segments(const char* video_id);
 OMEGA_API void omega_free(void* p);
 
 // ---- Google account (OAuth device flow) ----
-// token_path: file keeping the refresh token (app data folder).
-OMEGA_API void omega_auth_init(const char* token_path);
-// {"signedIn":bool}
+// store_path: file keeping the account store (app data folder); a legacy auth.json is migrated.
+OMEGA_API void omega_auth_init(const char* store_path);
+// {"signedIn":bool} (whether an active account is signed in)
 OMEGA_API char* omega_auth_status(void);
 // {"deviceCode","userCode","verificationUrl","qrUrl","interval","expiresIn"} or {"error"}
 OMEGA_API char* omega_auth_begin(void);
-// {"status":"pending|slow_down|done|denied|expired|failed","error":"..."}
+// {"status":"pending|slow_down|done|denied|expired|failed","error":"..."}; on "done" a new account is added
+// and becomes active.
 OMEGA_API char* omega_auth_poll(const char* device_code);
+// Removes the active account; the next one (if any) becomes active.
 OMEGA_API void omega_auth_sign_out(void);
-// Network: the signed-in account {"name","handle","photo"} or {"error"}.
+// Network: the active account {"name","handle","photo"} or {"error"}.
 OMEGA_API char* omega_auth_account(void);
+// All signed-in accounts for the picker: {"accounts":[{"id","name","handle","photo","active"}]}.
+OMEGA_API char* omega_auth_accounts(void);
+// Makes the account with this id active: {"ok":true} or {"error"}.
+OMEGA_API char* omega_auth_switch(const char* id);
 
 // QR code of `text` (ECC medium): {"size":N,"rows":["0101...", ...]} ("1" = dark module).
 OMEGA_API char* omega_qr_encode(const char* text);

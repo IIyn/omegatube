@@ -77,6 +77,13 @@ namespace OmegaTube.Data
         public string Name, Handle, Photo, Error;
     }
 
+    // One signed-in account for the profile picker / switcher.
+    public class ProfileAccount
+    {
+        public string Id, Name, Handle, Photo;
+        public bool Active;
+    }
+
     // Why a video could not start (see omega_player_last_error).
     public class PlayError
     {
@@ -348,6 +355,24 @@ namespace OmegaTube.Data
                 };
             });
         }
+
+        // All signed-in accounts (cached profiles; no network call). The active one has Active == true.
+        public static List<ProfileAccount> Accounts()
+        {
+            var list = new List<ProfileAccount>();
+            foreach (object o in Json.Arr(Call(NativeCore.AuthAccounts()), "accounts") ?? new List<object>())
+            {
+                list.Add(new ProfileAccount
+                {
+                    Id = Json.Str(o, "id"), Name = Json.Str(o, "name"), Handle = Json.Str(o, "handle"),
+                    Photo = Json.Str(o, "photo"), Active = Json.Bool(o, "active"),
+                });
+            }
+            return list;
+        }
+
+        // Makes the account with this id active. True on success.
+        public static bool SwitchAccount(string id) => Json.Str(Call(NativeCore.AuthSwitch(id)), "error", null) == null;
 
         private static VideoQuality ToQuality(object o)
         {

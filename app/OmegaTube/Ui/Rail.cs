@@ -21,6 +21,8 @@ namespace OmegaTube.Ui
         private readonly List<TextLabel> labels = new List<TextLabel>();
         private readonly View panel;
         private readonly View list;
+        private readonly ImageView avatar;    // active account's photo, top-left; focusable to switch profile
+        private readonly View avatarRing;     // focus highlight around the avatar
         private Animation scroll;
         private int index;
         private bool focused;
@@ -35,8 +37,14 @@ namespace OmegaTube.Ui
             panel = new View { Size = new Size(Theme.RailWidth, 1080), BackgroundColor = Theme.Background };
             Add(panel);
 
-            var brand = new ImageView { ResourceUrl = Theme.Icon("omegatube"), Size = new Size(64, 64), Position = new Position(23, 44) };
-            Add(brand);
+            // Top-left profile avatar (falls back to a person icon when signed out / no photo). Focusable:
+            // the home screen moves focus here from the top rail entry, and OK cycles to the next account.
+            avatarRing = Widgets.Rounded(Theme.Accent, 76, 76, 38);
+            avatarRing.Position = new Position(17, 38);
+            avatarRing.Hide();
+            Add(avatarRing);
+            avatar = Widgets.Round(new ImageView { ResourceUrl = Theme.Icon("person"), Size = new Size(64, 64), Position = new Position(23, 44) }, 32);
+            Add(avatar);
             var clip = new View { Position = new Position(0, Top), Size = new Size(Theme.RailExpandedWidth, 1080 - Top),
                                   ClippingMode = ClippingModeType.ClipChildren };
             Add(clip);
@@ -64,6 +72,14 @@ namespace OmegaTube.Ui
             }
             Refresh();
         }
+
+        // The active account's avatar (empty -> default person icon).
+        public void SetAvatar(string photo)
+        {
+            avatar.ResourceUrl = string.IsNullOrEmpty(photo) ? Theme.Icon("person") : photo;
+        }
+
+        public void SetAvatarFocused(bool value) => Widgets.SetVisible(avatarRing, value);
 
         public void SetFocused(bool value)
         {

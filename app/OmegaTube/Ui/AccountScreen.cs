@@ -26,7 +26,11 @@ namespace OmegaTube.Ui
         // Signed in
         private readonly ImageView avatar;
         private readonly TextLabel nameLabel, handleLabel;
-        private readonly Widgets.PillButton signOutButton;
+        private readonly View actionsHost;   // right-column action buttons, rebuilt per show
+        private readonly List<Widgets.PillButton> actionButtons = new List<Widgets.PillButton>();
+        private readonly List<Action> actions = new List<Action>();
+        private int actionFocus;
+        private int signOutIndex;
         private readonly TextLabel help;
 
         private bool closed;
@@ -138,12 +142,11 @@ namespace OmegaTube.Ui
             Feature(features, 1, "subscriptions", T("Subscriptions"), T("The latest videos of your channels"));
             Feature(features, 2, "history", T("Synced history"), T("What you watch here resumes wherever you left off"));
 
-            signOutButton = new Widgets.PillButton(T("Sign out"), "logout", SideW, 84);
-            signOutButton.Position = new Position(SideX, CardY);
-            profileView.Add(signOutButton);
+            actionsHost = new View { Position = new Position(SideX, CardY), Size = new Size(SideW, 640) };
+            profileView.Add(actionsHost);
             var note = Widgets.Label(T("Your settings and menu sections stay on this TV."), Theme.SmallSize + 1, Theme.TextDim, SideW, 80);
             note.MultiLine = true;
-            note.Position = new Position(SideX + 10, CardY + 110);
+            note.Position = new Position(SideX + 10, CardY + 560);
             profileView.Add(note);
         }
 
@@ -194,15 +197,96 @@ namespace OmegaTube.Ui
             signInView.Hide();
             profileView.Show();
             confirmSignOut = false;
-            signOutButton.Text = T("Sign out");
-            signOutButton.SetFocused(true);
-            help.Text = T("OK sign out    Back leave");
+            BuildActions();
+            help.Text = T("OK select    Back leave");
             if (!profileLoaded)
             {
                 nameLabel.Text = T("YouTube account");   // until the profile arrives (kept for later openings)
                 handleLabel.Text = "";
             }
             UiGuard.Fire("AccountScreen.LoadProfile", () => LoadProfile(generation));
+        }
+
+        // Right-column actions, rebuilt from the current accounts: Add account, Switch to <each other account>,
+        // then Sign out (of the active one).
+        private void BuildActions()
+        {
+            foreach (Widgets.PillButton b in actionButtons)
+            {
+                actionsHost.Remove(b);
+                b.Dispose();
+            }
+            actionButtons.Clear();
+            actions.Clear();
+
+            AddAction(T("Add account"), "set_account", () => UiGuard.Fire("AccountScreen.SignIn", SignIn));
+            foreach (ProfileAccount a in YouTube.Accounts())
+            {
+                if (a.Active)
+                {
+                    continue;
+                }
+                string label = !string.IsNullOrEmpty(a.Name) ? a.Name : !string.IsNullOrEmpty(a.Handle) ? a.Handle : T("Account");
+                string id = a.Id;
+                AddAction(T("Switch to {0}", label), "person", () =>
+                {
+                    if (YouTube.SwitchAccount(id))
+                    {
+                        App.Home.InvalidateRows();
+                        profileLoaded = false;
+                        ShowProfile();
+                    }
+                });
+            }
+            signOutIndex = actionButtons.Count;
+            AddAction(T("Sign out"), "logout", SignOutActive);
+
+            for (int i = 0; i < actionButtons.Count; i++)
+            {
+                actionButtons[i].Position = new Position(0, i * 100);
+            }
+            FocusAction(0);
+        }
+
+        private void AddAction(string text, string icon, Action act)
+        {
+            var b = new Widgets.PillButton(text, icon, SideW, 84);
+            actionsHost.Add(b);
+            actionButtons.Add(b);
+            actions.Add(act);
+        }
+
+        private void FocusAction(int i)
+        {
+            actionFocus = System.Math.Max(0, System.Math.Min(actionButtons.Count - 1, i));
+            for (int k = 0; k < actionButtons.Count; k++)
+            {
+                actionButtons[k].SetFocused(k == actionFocus);
+            }
+        }
+
+        private void SignOutActive()
+        {
+            if (!confirmSignOut)
+            {
+                confirmSignOut = true;
+                actionButtons[signOutIndex].Text = T("Confirm?");
+                help.Text = T("OK confirm sign-out    Back cancel");
+                return;
+            }
+            confirmSignOut = false;
+            YouTube.SignOut();
+            App.Home.InvalidateRows();
+            avatar.ResourceUrl = "";
+            profileLoaded = false;
+            if (YouTube.SignedIn())
+            {
+                ShowProfile();   // another account became active
+            }
+            else
+            {
+                UiGuard.Fire("AccountScreen.SignIn", SignIn);
+            }
         }
 
         private bool profileLoaded;
@@ -334,15 +418,24 @@ namespace OmegaTube.Ui
             Widgets.DrawQr(qrHost, QrSize, YouTube.Qr(text));
         }
 
+        private void CancelConfirm()
+        {
+            if (!confirmSignOut)
+            {
+                return;
+            }
+            confirmSignOut = false;
+            actionButtons[signOutIndex].Text = T("Sign out");
+            help.Text = T("OK select    Back leave");
+        }
+
         public override bool OnKey(string key)
         {
             if (key == "XF86Back" || key == "Escape")
             {
                 if (confirmSignOut)
                 {
-                    confirmSignOut = false;
-                    signOutButton.Text = T("Sign out");
-                    help.Text = T("OK sign out    Back leave");
+                    CancelConfirm();
                     return true;
                 }
                 return false;
@@ -351,25 +444,22 @@ namespace OmegaTube.Ui
             {
                 return false;   // back to the home rail
             }
-            if (key != "Return")
-            {
-                return true;
-            }
             if (profileView.Visibility)
             {
-                if (!confirmSignOut)
+                switch (key)
                 {
-                    confirmSignOut = true;
-                    signOutButton.Text = T("Confirm?");
-                    help.Text = T("OK confirm sign-out    Back cancel");
-                    return true;
+                    case "Up":
+                    case "Down":
+                        CancelConfirm();
+                        FocusAction(actionFocus + (key == "Up" ? -1 : 1));
+                        break;
+                    case "Return":
+                        actions[actionFocus]();
+                        break;
                 }
-                YouTube.SignOut();
-                App.Home.InvalidateRows();
-                avatar.ResourceUrl = "";
-                UiGuard.Fire("AccountScreen.SignIn", SignIn);
+                return true;
             }
-            else if (retryButton.Visibility)
+            if (key == "Return" && retryButton.Visibility)
             {
                 UiGuard.Fire("AccountScreen.SignIn", SignIn);
             }

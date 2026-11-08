@@ -185,6 +185,14 @@ namespace OmegaTube
         [DllImport(Lib, EntryPoint = "omega_auth_account")]
         public static extern IntPtr AuthAccount();
 
+        [DllImport(Lib, EntryPoint = "omega_auth_accounts")]
+        public static extern IntPtr AuthAccounts();
+
+        [DllImport(Lib, EntryPoint = "omega_auth_switch")]
+        private static extern IntPtr AuthSwitchRaw(byte[] id);
+
+        public static IntPtr AuthSwitch(string id) => AuthSwitchRaw(Utf8z(id));
+
         [DllImport(Lib, EntryPoint = "omega_sb_segments")]
         private static extern IntPtr SbSegmentsRaw(byte[] videoId);
 
