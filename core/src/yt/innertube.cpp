@@ -6,6 +6,7 @@
 #include <cstring>
 #include <functional>
 #include <mutex>
+#include <unordered_map>
 
 #include "util/log.h"
 #include "util/remote_config.h"
@@ -866,6 +867,317 @@ bool Client::channel(const std::string& channel_id, const std::string& continuat
     return true;
 }
 
+namespace {
+
+std::string trimmed(std::string s) {
+    size_t a = s.find_first_not_of(" \t\n ");
+    if (a == std::string::npos) return "";
+    size_t b = s.find_last_not_of(" \t\n");
+    return s.substr(a, b - a + 1);
+}
+
+std::string string_at(const json& j, std::initializer_list<const char*> path) {
+    const json* at = &j;
+    for (const char* k : path) {
+        if (!at->is_object() || !at->contains(k)) return "";
+        at = &(*at)[k];
+    }
+    return at->is_string() ? at->get<std::string>() : "";
+}
+
+// First continuationCommand token under j.
+std::string continuation_token(const json& j) {
+    if (const json* cmd = find_key(j, "continuationCommand"))
+        if (cmd->is_object()) return cmd->value("token", "");
+    return "";
+}
+
+// New layout: the thread only holds keys, the texts are commentEntityPayload mutations of frameworkUpdates.
+Comment comment_from_entity(const json& p) {
+    Comment c;
+    const json& props = p.value("properties", json::object());
+    const json& author = p.value("author", json::object());
+    const json& toolbar = p.value("toolbar", json::object());
+    c.id = props.value("commentId", "");
+    c.text = string_at(props, {"content", "content"});
+    c.published = props.value("publishedTime", "");
+    c.author = author.value("displayName", "");
+    c.avatar = author.value("avatarThumbnailUrl", "");
+    c.creator = author.value("isCreator", false);
+    if (c.avatar.empty())
+        if (const json* src = find_key(p.value("avatar", json::object()), "sources"))
+            if (src->is_array() && !src->empty()) c.avatar = src->back().value("url", "");
+    c.likes = trimmed(toolbar.value("likeCountNotliked", ""));
+    if (c.likes == "0") c.likes.clear();
+    c.replies = trimmed(toolbar.value("replyCount", ""));
+    if (c.replies == "0") c.replies.clear();
+    c.hearted = toolbar.value("heartState", "") == "TOOLBAR_HEART_STATE_HEARTED";
+    return c;
+}
+
+// Old layout: commentRenderer carries everything.
+Comment comment_from_renderer(const json& r) {
+    Comment c;
+    c.id = r.value("commentId", "");
+    c.author = text_of(r.value("authorText", json::object()));
+    c.avatar = last_thumbnail(r.value("authorThumbnail", json::object()));
+    c.text = text_of(r.value("contentText", json::object()));
+    c.published = text_of(r.value("publishedTimeText", json::object()));
+    c.likes = trimmed(text_of(r.value("voteCount", json::object())));
+    c.replies = r.contains("replyCount") ? std::to_string(r.value("replyCount", 0)) : "";
+    if (c.replies == "0") c.replies.clear();
+    c.creator = r.value("authorIsChannelOwner", false);
+    c.pinned = r.contains("pinnedCommentBadge");
+    return c;
+}
+
+// Header + threads + next page of a comments continuation answer (reload or append), or of a create_comment one.
+void parse_comments(const json& r, CommentPage& out) {
+    std::unordered_map<std::string, const json*> entities;
+    static const json kNone = json::array();
+    const json* mutations = &kNone;
+    if (r.contains("frameworkUpdates") && r["frameworkUpdates"].is_object()) {
+        const json& fu = r["frameworkUpdates"];
+        if (fu.contains("entityBatchUpdate") && fu["entityBatchUpdate"].contains("mutations"))
+            mutations = &fu["entityBatchUpdate"]["mutations"];
+    }
+    // Pointers into r itself (value() would return copies).
+    if (mutations->is_array())
+        for (const json& m : *mutations) {
+            if (!m.is_object() || !m.contains("payload") || !m["payload"].is_object()) continue;
+            const json& p = m["payload"];
+            if (!p.contains("commentEntityPayload") || !p["commentEntityPayload"].is_object()) continue;
+            const json& e = p["commentEntityPayload"];
+            entities[m.value("entityKey", "")] = &e;
+            if (e.contains("key")) entities[e.value("key", "")] = &e;
+        }
+    auto from_view_model = [&](const json& vm, Comment& c) {
+        const json& model = vm.contains("commentViewModel") ? vm["commentViewModel"] : vm;
+        auto e = entities.find(model.value("commentKey", ""));
+        if (e == entities.end()) return false;
+        c = comment_from_entity(*e->second);
+        c.pinned = model.contains("pinnedText");
+        return true;
+    };
+    auto add = [&](Comment c) {
+        if (c.avatar.compare(0, 2, "//") == 0) c.avatar = "https:" + c.avatar;
+        if (!c.text.empty() || !c.author.empty()) out.items.push_back(std::move(c));
+    };
+    std::function<void(const json&)> walk = [&](const json& j) {
+        if (j.is_array()) {
+            for (const json& e : j) walk(e);
+            return;
+        }
+        if (!j.is_object()) return;
+        for (auto it = j.begin(); it != j.end(); ++it) {
+            const std::string& k = it.key();
+            const json& v = it.value();
+            if (k == "commentsHeaderRenderer" && v.is_object()) {
+                out.count = text_of(v.value("countText", json::object()));
+                if (out.count.empty()) out.count = text_of(v.value("commentsCount", json::object()));
+                if (const json* items = find_key(v, "subMenuItems"))
+                    if (items->is_array()) {
+                        if (items->size() > 0) out.sort_top = continuation_token((*items)[0]);
+                        if (items->size() > 1) out.sort_newest = continuation_token((*items)[1]);
+                    }
+                if (const json* params = find_key(v, "createCommentParams"))
+                    if (params->is_string()) out.create_params = params->get<std::string>();
+            } else if (k == "commentThreadRenderer" && v.is_object()) {
+                Comment c;
+                if (const json* vm = find_key(v, "commentViewModel")) {
+                    if (!from_view_model(*vm, c)) continue;
+                } else if (const json* cr = find_key(v, "commentRenderer")) {
+                    c = comment_from_renderer(*cr);
+                } else {
+                    continue;
+                }
+                if (v.contains("replies")) c.reply_token = continuation_token(v["replies"]);
+                add(std::move(c));
+            } else if (k == "commentViewModel" && v.is_object()) {
+                // A reply: outside any thread.
+                Comment c;
+                if (from_view_model(v, c)) add(std::move(c));
+            } else if (k == "commentRenderer" && v.is_object()) {
+                add(comment_from_renderer(v));
+            } else if (k == "continuationItemRenderer" && v.is_object()) {
+                // The thread's own replies continuation sits inside commentThreadRenderer, skipped above.
+                std::string token = continuation_token(v);
+                if (!token.empty()) out.continuation = token;
+            } else if (k == "frameworkUpdates") {
+                continue;
+            } else {
+                walk(v);
+            }
+        }
+    };
+    walk(r);
+}
+
+// Params of the comment endpoints. YouTube only hands them to WEB sessions, which refuse the TV OAuth token, so
+// they are built here: protobuf, base64, '=' percent-encoded.
+void pb_varint(std::string& out, uint64_t v) {
+    for (; v >= 0x80; v >>= 7) out += static_cast<char>((v & 0x7f) | 0x80);
+    out += static_cast<char>(v);
+}
+
+void pb_int(std::string& out, int field, uint64_t v) {
+    pb_varint(out, static_cast<uint64_t>(field) << 3);
+    pb_varint(out, v);
+}
+
+void pb_string(std::string& out, int field, const std::string& v) {
+    pb_varint(out, (static_cast<uint64_t>(field) << 3) | 2);
+    pb_varint(out, v.size());
+    out += v;
+}
+
+std::string params_token(const std::string& pb) {
+    static const char kAlphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string out;
+    for (size_t i = 0; i < pb.size(); i += 3) {
+        size_t left = pb.size() - i;
+        unsigned n = static_cast<unsigned char>(pb[i]) << 16;
+        if (left > 1) n |= static_cast<unsigned char>(pb[i + 1]) << 8;
+        if (left > 2) n |= static_cast<unsigned char>(pb[i + 2]);
+        out += kAlphabet[(n >> 18) & 63];
+        out += kAlphabet[(n >> 12) & 63];
+        out += left > 1 ? std::string(1, kAlphabet[(n >> 6) & 63]) : "%3D";
+        out += left > 2 ? std::string(1, kAlphabet[n & 63]) : "%3D";
+    }
+    return out;
+}
+
+// {2: videoId, [4: commentId,] 5: {1: 0}, 10: 7}: a comment, or a reply in a thread.
+std::string create_params(const std::string& video_id, const std::string& comment_id) {
+    if (video_id.empty()) return "";
+    std::string pb, inner;
+    pb_string(pb, 2, video_id);
+    if (!comment_id.empty()) pb_string(pb, 4, comment_id);
+    pb_int(inner, 1, 0);
+    pb_string(pb, 5, inner);
+    pb_int(pb, 10, 7);
+    return params_token(pb);
+}
+
+// {1: action, 2: 2, 3: commentId, 5: videoId, 6: 0, 7: undo, 23: " "}, as in the WEB toolbar's own commands.
+std::string comment_action_params(int action, bool undo, const std::string& video_id, const std::string& comment_id) {
+    std::string pb;
+    pb_int(pb, 1, static_cast<uint64_t>(action));
+    pb_int(pb, 2, 2);
+    pb_string(pb, 3, comment_id);
+    pb_string(pb, 5, video_id);
+    pb_int(pb, 6, 0);
+    pb_int(pb, 7, undo ? 1 : 0);
+    pb_string(pb, 23, " ");
+    return params_token(pb);
+}
+
+// The account's vote on each comment: the TV client answers the same continuation as WEB, as commentRenderers
+// carrying it. Cosmetic: on any failure the comments simply show no vote.
+void apply_votes(const std::string& token, const std::string& access_token, CommentPage& page) {
+    net::Response res = post_as_account("next", {{"continuation", token}}, access_token);
+    if (!res.ok()) {
+        OLOG("yt: comment votes: http %d", res.status);
+        return;
+    }
+    json r = json::parse(res.body, nullptr, false);
+    std::unordered_map<std::string, std::string> votes;
+    std::function<void(const json&)> walk = [&](const json& j) {
+        if (j.is_array()) {
+            for (const json& e : j) walk(e);
+        } else if (j.is_object()) {
+            for (auto it = j.begin(); it != j.end(); ++it) {
+                if (it.key() == "commentRenderer" && it.value().is_object()) {
+                    const json& c = it.value();
+                    votes[c.value("commentId", "")] = c.value("isLiked", false) ? "LIKE" : c.value("voteStatus", "");
+                } else {
+                    walk(it.value());
+                }
+            }
+        }
+    };
+    try {
+        walk(r);
+    } catch (const json::exception& e) {
+        OLOG("yt: comment votes: %s", e.what());
+        return;
+    }
+    for (Comment& c : page.items) {
+        auto v = votes.find(c.id);
+        if (v == votes.end()) continue;
+        c.liked = v->second == "LIKE";
+        c.disliked = v->second == "DISLIKE";
+    }
+}
+
+}  // namespace
+
+bool Client::comments(const std::string& video_id, const std::string& continuation, const std::string& access_token,
+                      CommentPage& out, std::string& error) {
+    if (!ensure_visitor(error)) return false;
+    ClientDef def = client_def("search", visitor_data_, web_client_version_);
+    auto next = [&](json body, json& r) {
+        body["context"] = {{"client", def.client}};
+        net::Request req;
+        req.method = "POST";
+        req.url = "https://www.youtube.com/youtubei/v1/next?prettyPrint=false";
+        req.headers = client_headers(def, visitor_data_);
+        req.body = body.dump();
+        net::Response res = net::fetch(req);
+        if (!res.ok()) {
+            error = http_error("comments", res);
+            return false;
+        }
+        last_response_ = res.body;
+        r = json::parse(res.body, nullptr, false);
+        if (r.is_discarded()) {
+            error = "comments: invalid json";
+            return false;
+        }
+        return true;
+    };
+    out = CommentPage{};
+    std::string token = continuation;
+    if (token.empty()) {
+        // The watch page only holds the continuation of the comments section.
+        json watch;
+        if (!next({{"videoId", video_id}}, watch)) return false;
+        std::function<void(const json&)> find_section = [&](const json& j) {
+            if (!token.empty()) return;
+            if (j.is_object()) {
+                auto it = j.find("itemSectionRenderer");
+                if (it != j.end() && it->is_object() && it->value("sectionIdentifier", "") == "comment-item-section") {
+                    token = continuation_token(*it);
+                    return;
+                }
+                for (const json& v : j) find_section(v);
+            } else if (j.is_array()) {
+                for (const json& v : j) find_section(v);
+            }
+        };
+        find_section(watch);
+        if (token.empty()) {
+            out.disabled = true;  // turned off, or a live chat instead
+            OLOG("yt: comments %s: none (disabled)", video_id.c_str());
+            return true;
+        }
+    }
+    json r;
+    if (!next({{"continuation", token}}, r)) return false;
+    try {
+        parse_comments(r, out);
+    } catch (const json::exception& e) {
+        error = std::string("comments: ") + e.what();
+        return false;
+    }
+    if (out.create_params.empty()) out.create_params = create_params(video_id, "");
+    if (!access_token.empty() && !out.items.empty()) apply_votes(token, access_token, out);
+    OLOG("yt: comments %s%s -> %zu items, count '%s', next %s, post %s", video_id.c_str(),
+         continuation.empty() ? "" : " (continuation)", out.items.size(), out.count.c_str(),
+         out.continuation.empty() ? "no" : "yes", out.create_params.empty() ? "no" : "yes");
+    return true;
+}
+
 bool Client::browse(const std::string& browse_id, const std::string& continuation, const std::string& access_token,
                     Feed& out, std::string& error) {
     ClientDef def = client_def("browse", "");
@@ -1058,6 +1370,86 @@ bool set_subscribed(const std::string& channel_id, bool subscribe, const std::st
         return false;
     }
     OLOG("yt: %s %s ok", endpoint.c_str(), channel_id.c_str());
+    return true;
+}
+
+namespace {
+
+// A comment or reply creation: only a succeeded status or the new comment itself counts (a 200 can be a refusal).
+bool create_comment_request(const char* endpoint, const json& body, const std::string& access_token, Comment& out,
+                            std::string& error) {
+    net::Response res = post_as_account(endpoint, body, access_token);
+    if (!res.ok()) {
+        error = http_error(endpoint, res);
+        OLOG("yt: %s %s", error.c_str(), res.body.substr(0, 300).c_str());
+        return false;
+    }
+    json r = json::parse(res.body, nullptr, false);
+    CommentPage page;
+    std::string status;
+    if (r.is_object()) {
+        try {
+            parse_comments(r, page);
+            status = r.value("actionResult", json::object()).value("status", "");
+        } catch (const json::exception& e) {
+            OLOG("yt: %s answer: %s", endpoint, e.what());
+        }
+    }
+    if (page.items.empty() && status != "STATUS_SUCCEEDED") {
+        error = std::string(endpoint) + ": refused" + (status.empty() ? std::string() : " (" + status + ")");
+        OLOG("yt: %s %s", error.c_str(), res.body.substr(0, 600).c_str());
+        return false;
+    }
+    if (!page.items.empty()) out = page.items.front();
+    OLOG("yt: %s ok (%s, status '%s')", endpoint, page.items.empty() ? "not returned" : out.id.c_str(), status.c_str());
+    return true;
+}
+
+}  // namespace
+
+bool post_comment(const std::string& create_params, const std::string& text, const std::string& access_token,
+                  Comment& out, std::string& error) {
+    return create_comment_request("comment/create_comment", {{"createCommentParams", create_params}, {"commentText", text}},
+                                  access_token, out, error);
+}
+
+bool post_reply(const std::string& video_id, const std::string& comment_id, const std::string& text,
+                const std::string& access_token, Comment& out, std::string& error) {
+    return create_comment_request("comment/create_comment_reply",
+                                  {{"createReplyParams", create_params(video_id, comment_id)}, {"commentText", text}},
+                                  access_token, out, error);
+}
+
+bool comment_action(const std::string& video_id, const std::string& comment_id, const std::string& action,
+                    const std::string& access_token, std::string& error) {
+    // Codes read from the WEB toolbar: 5 like, 4 dislike, field 7 undoes them. Never guess one: 6 DELETES the comment.
+    int type = action == "like" || action == "unlike" ? 5 : action == "dislike" || action == "undislike" ? 4 : 0;
+    bool undo = action == "unlike" || action == "undislike";
+    if (type == 0 || video_id.empty() || comment_id.empty()) {
+        error = "comment action '" + action + "' not supported";
+        return false;
+    }
+    json body = {{"actions", json::array({comment_action_params(type, undo, video_id, comment_id)})}};
+    net::Response res = post_as_account("comment/perform_comment_action", body, access_token);
+    if (!res.ok()) {
+        error = http_error("comment action", res);
+        OLOG("yt: %s %s", error.c_str(), res.body.substr(0, 300).c_str());
+        return false;
+    }
+    json r = json::parse(res.body, nullptr, false);
+    bool done = false;
+    try {
+        if (r.is_object() && r.contains("actionResults") && r["actionResults"].is_array())
+            for (const json& a : r["actionResults"]) done = done || a.value("status", "") == "STATUS_SUCCEEDED";
+    } catch (const json::exception& e) {
+        OLOG("yt: comment action answer: %s", e.what());
+    }
+    if (!done) {
+        error = "comment action: refused";
+        OLOG("yt: %s %s", error.c_str(), res.body.substr(0, 600).c_str());
+        return false;
+    }
+    OLOG("yt: comment %s %s ok", action.c_str(), comment_id.c_str());
     return true;
 }
 

@@ -97,6 +97,26 @@ struct ChannelInfo {
     std::string title, avatar, subscribers;
 };
 
+// A top-level comment of a video (texts as YouTube displays them, in the request language).
+struct Comment {
+    std::string id, author, avatar, text, published;  // author: "@handle"; published: "il y a 17 heures"
+    std::string likes;     // display count ("8", "1,2 k"), empty when none
+    std::string replies;   // reply count ("3"), empty when none
+    bool pinned = false, creator = false, hearted = false;
+    std::string reply_token;              // continuation of the thread's replies, empty when none
+    bool liked = false, disliked = false;  // the account's vote (only when read with an access token)
+};
+
+// One page of a video's comments; the first page (continuation empty) also fills the header fields.
+struct CommentPage {
+    std::vector<Comment> items;
+    std::string continuation;               // next page, empty at the end
+    std::string count;                      // "83 commentaires"
+    std::string sort_top, sort_newest;      // continuations reloading the list in that order
+    std::string create_params;              // createCommentParams for post_comment
+    bool disabled = false;                  // comments are turned off
+};
+
 // InnerTube client impersonating the visionOS YouTube app: as of 2026-10 it gets direct (non-ciphered,
 // non-throttled) stream URLs without PO token. See tools/yt-probe/probe.py to re-check.
 class Client {
@@ -128,6 +148,12 @@ public:
     // A channel's videos tab (WEB browse), newest first; the first page also fills the channel header.
     bool channel(const std::string& channel_id, const std::string& continuation, Feed& out, struct ChannelInfo& header,
                  std::string& error);
+    // Comments of a video (WEB "next"): continuation empty = the first page (top comments) with the header;
+    // else a page continuation or one of the sort tokens.
+    // access_token (may be empty): also fills the account's votes (Comment::liked / disliked). A reply_token as
+    // continuation gives that thread's replies.
+    bool comments(const std::string& video_id, const std::string& continuation, const std::string& access_token,
+                  CommentPage& out, std::string& error);
     // Signed-in feeds through the TV client: FEwhat_to_watch (home), FEsubscriptions, FEhistory.
     bool browse(const std::string& browse_id, const std::string& continuation, const std::string& access_token,
                 Feed& out, std::string& error);
@@ -173,6 +199,17 @@ bool fetch_captions(const std::string& url, const std::string& translate_to, std
 bool rate_video(const std::string& video_id, const std::string& rating, const std::string& access_token,
                 std::string& error);
 bool set_subscribed(const std::string& channel_id, bool subscribe, const std::string& access_token, std::string& error);
+
+// Posts a top-level comment as the signed-in account; create_params from CommentPage. Fills `out` with the
+// created comment when YouTube returns it.
+bool post_comment(const std::string& create_params, const std::string& text, const std::string& access_token,
+                  Comment& out, std::string& error);
+// A reply in the thread of comment_id (a top-level comment's id).
+bool post_reply(const std::string& video_id, const std::string& comment_id, const std::string& text,
+                const std::string& access_token, Comment& out, std::string& error);
+// action: like, unlike, dislike, undislike.
+bool comment_action(const std::string& video_id, const std::string& comment_id, const std::string& action,
+                    const std::string& access_token, std::string& error);
 
 // Return YouTube Dislike estimates (returnyoutubedislikeapi.com): likes, dislikes; -1 when unknown.
 bool vote_counts(const std::string& video_id, int64_t& likes, int64_t& dislikes, std::string& error);

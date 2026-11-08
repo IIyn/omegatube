@@ -270,6 +270,7 @@ namespace OmegaTube
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate void V_v();
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate IntPtr Ip_b(byte[] a);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate IntPtr Ip_bb(byte[] a, byte[] b);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate IntPtr Ip_bbb(byte[] a, byte[] b, byte[] c);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate IntPtr Ip_bi(byte[] a, int b);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate void V_b(byte[] a);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate void V_bb(byte[] a, byte[] b);
@@ -301,7 +302,8 @@ namespace OmegaTube
         private static I_ipd _playerSetRate;
         private static V_ipStats _playerGetStats;
         private static Ip_b _ytSuggest, _reportUpload, _authPoll, _qrEncode, _ytRelated, _ytDetails, _sbSegments;
-        private static Ip_bb _ytSearch, _ytBrowse, _ytPlaylist, _ytPlaylistPage, _ytCaptions, _ytRate, _ytChannel;
+        private static Ip_bb _ytSearch, _ytBrowse, _ytPlaylist, _ytPlaylistPage, _ytCaptions, _ytRate, _ytChannel, _ytComments, _ytPostComment;
+        private static Ip_bbb _ytPostReply, _ytCommentAction;
         private static Ip_bi _ytSubscribe;
         private static V_b _init;
         private static V_bb _setLocale;
@@ -345,6 +347,10 @@ namespace OmegaTube
             _ytRate = Fn<Ip_bb>("omega_yt_rate");
             _ytSubscribe = Fn<Ip_bi>("omega_yt_subscribe");
             _ytChannel = Fn<Ip_bb>("omega_yt_channel");
+            _ytComments = Fn<Ip_bb>("omega_yt_comments");
+            _ytPostComment = Fn<Ip_bb>("omega_yt_post_comment");
+            _ytPostReply = Fn<Ip_bbb>("omega_yt_post_reply");
+            _ytCommentAction = Fn<Ip_bbb>("omega_yt_comment_action");
             _authAccount = Fn<Ip_v>("omega_auth_account");
             _sbSegments = Fn<Ip_b>("omega_sb_segments");
             _free = Fn<V_ip>("omega_free");
@@ -386,6 +392,10 @@ namespace OmegaTube
         public static IntPtr YtDetails(string videoId) => _ytDetails(Utf8z(videoId));
         public static IntPtr YtRate(string videoId, string rating) => _ytRate(Utf8z(videoId), Utf8z(rating));
         public static IntPtr YtSubscribe(string channelId, bool subscribe) => _ytSubscribe(Utf8z(channelId), subscribe ? 1 : 0);
+        public static IntPtr YtComments(string videoId, string continuation) => _ytComments(Utf8z(videoId), Utf8z(continuation));
+        public static IntPtr YtPostComment(string createParams, string text) => _ytPostComment(Utf8z(createParams), Utf8z(text));
+        public static IntPtr YtPostReply(string videoId, string commentId, string text) => _ytPostReply(Utf8z(videoId), Utf8z(commentId), Utf8z(text));
+        public static IntPtr YtCommentAction(string videoId, string commentId, string action) => _ytCommentAction(Utf8z(videoId), Utf8z(commentId), Utf8z(action));
         public static IntPtr YtChannel(string channelId, string continuation) => _ytChannel(Utf8z(channelId), Utf8z(continuation));
         public static IntPtr AuthAccount() => _authAccount();
         public static IntPtr SbSegments(string videoId) => _sbSegments(Utf8z(videoId));

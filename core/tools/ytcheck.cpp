@@ -8,6 +8,8 @@
 //   ytcheck --account            name / handle / photo of the account of a previous --signin
 //   ytcheck --details <videoId>  date, channel, like / subscription state (with a --signin token), RYD votes
 //   ytcheck --channel <channelId>  channel header + first videos
+//   ytcheck --comments <videoId> [new]  comments header + first two pages (new: newest first)
+//   ytcheck --post-comment <videoId> <text>  posts a comment as the --signin account
 //   ytcheck --range <url> [MB] [out]  downloads MB megabytes through RangeReader (1 MB ranges, kept-alive)
 //   ytcheck <videoId> [MB]       resolves formats via InnerTube and downloads the whole audio stream and
 //                                the first MB megabytes (default 100) of the 1080p H.264 stream via ranges.
@@ -21,6 +23,7 @@
 
 #include <thread>
 
+#include "util/log.h"
 #include "media/demuxer.h"
 #include "net/http.h"
 #include "util/remote_config.h"
@@ -282,6 +285,128 @@ int main(int argc, char** argv) {
                d.channel.c_str(), d.channel_id.c_str(), d.subscribers.c_str(), d.channel_avatar.c_str(), d.date.c_str(),
                static_cast<long long>(likes), static_cast<long long>(dislikes), d.like_status.c_str(), d.subscribed,
                token.empty() ? "  (signed out: run --signin for the account state)" : "");
+        return 0;
+    }
+    if (argc >= 3 && (strcmp(argv[1], "--comments") == 0 || strcmp(argv[1], "--replies") == 0)) {
+        omega::yt::Auth& auth = omega::yt::shared_auth();
+        auth.init("omegatube-auth.json");
+        omega::yt::Client client;
+        omega::yt::CommentPage page;
+        std::string error;
+        std::string token = auth.signed_in() && !getenv("ANON") ? auth.access_token(error) : "";
+        error.clear();
+        if (!client.comments(argv[2], "", token, page, error)) {
+            if (const char* dump = getenv("DUMP")) {
+                FILE* f = fopen(dump, "w");
+                fputs(client.last_response().c_str(), f);
+                fclose(f);
+            }
+            printf("comments failed: %s\n", error.c_str());
+            return 1;
+        }
+        if (page.disabled) {
+            printf("comments disabled\n");
+            return 0;
+        }
+        printf("count '%s', sort top %s / newest %s, post params %s\n", page.count.c_str(),
+               page.sort_top.empty() ? "no" : "yes", page.sort_newest.empty() ? "no" : "yes",
+               page.create_params.empty() ? "no" : "yes");
+        if (strcmp(argv[1], "--replies") == 0) {
+            std::string reply_token;
+            for (const auto& c : page.items) {
+                if (!c.reply_token.empty()) {
+                    printf("thread %s by %s, %s replies\n", c.id.c_str(), c.author.c_str(), c.replies.c_str());
+                    reply_token = c.reply_token;
+                    break;
+                }
+            }
+            if (reply_token.empty()) {
+                printf("no thread with replies on this page\n");
+                return 0;
+            }
+            if (!client.comments(argv[2], reply_token, token, page, error)) {
+                printf("replies failed: %s\n", error.c_str());
+                return 1;
+            }
+        } else if (argc >= 4 && strcmp(argv[3], "new") == 0 && !page.sort_newest.empty()) {
+            std::string newest = page.sort_newest;
+            if (!client.comments(argv[2], newest, token, page, error)) {
+                printf("newest failed: %s\n", error.c_str());
+                return 1;
+            }
+        }
+        for (int round = 0; round < 2; ++round) {
+            for (const auto& c : page.items)
+                printf("  %s%s%s%s | %s | likes '%s' replies '%s' | %s\n   avatar %s\n   %.140s\n",
+                       c.liked ? "[liked] " : c.disliked ? "[disliked] " : "", c.pinned ? "[pinned] " : "",
+                       c.creator ? "[creator] " : "", c.author.c_str(), c.published.c_str(), c.likes.c_str(),
+                       c.replies.c_str(), c.id.c_str(), c.avatar.c_str(), c.text.c_str());
+            printf("-- %zu items, next %s\n", page.items.size(), page.continuation.empty() ? "none" : "yes");
+            if (page.continuation.empty() || round == 1) break;
+            std::string next_page = page.continuation;
+            if (!client.comments(argv[2], next_page, token, page, error)) {
+                printf("page 2 failed: %s\n", error.c_str());
+                return 1;
+            }
+        }
+        return 0;
+    }
+    if (argc >= 5 && strcmp(argv[1], "--reply") == 0) {
+        omega::yt::Auth& auth = omega::yt::shared_auth();
+        auth.init("omegatube-auth.json");
+        std::string error;
+        std::string token = auth.signed_in() ? auth.access_token(error) : "";
+        if (token.empty()) {
+            printf("signed out: run --signin first\n");
+            return 1;
+        }
+        omega::yt::Comment c;
+        if (!omega::yt::post_reply(argv[2], argv[3], argv[4], token, c, error)) {
+            printf("reply failed: %s\n", error.c_str());
+            for (const std::string& line : omega::log::tail(2)) printf("%s\n", line.c_str());
+            return 1;
+        }
+        printf("replied: %s | %s | %s\n", c.id.c_str(), c.author.c_str(), c.text.c_str());
+        return 0;
+    }
+    if (argc >= 5 && strcmp(argv[1], "--comment-action") == 0) {
+        omega::yt::Auth& auth = omega::yt::shared_auth();
+        auth.init("omegatube-auth.json");
+        std::string error;
+        std::string token = auth.signed_in() ? auth.access_token(error) : "";
+        if (token.empty()) {
+            printf("signed out: run --signin first\n");
+            return 1;
+        }
+        if (!omega::yt::comment_action(argv[2], argv[3], argv[4], token, error)) {
+            printf("action failed: %s\n", error.c_str());
+            for (const std::string& line : omega::log::tail(2)) printf("%s\n", line.c_str());
+            return 1;
+        }
+        printf("action '%s' accepted\n", argv[4]);
+        return 0;
+    }
+    if (argc >= 4 && strcmp(argv[1], "--post-comment") == 0) {
+        omega::yt::Auth& auth = omega::yt::shared_auth();
+        auth.init("omegatube-auth.json");
+        std::string error;
+        std::string token = auth.signed_in() ? auth.access_token(error) : "";
+        if (token.empty()) {
+            printf("signed out: run --signin first\n");
+            return 1;
+        }
+        omega::yt::Client client;
+        omega::yt::CommentPage page;
+        if (!client.comments(argv[2], "", "", page, error) || page.create_params.empty()) {
+            printf("no createCommentParams: %s\n", error.c_str());
+            return 1;
+        }
+        omega::yt::Comment c;
+        if (!omega::yt::post_comment(page.create_params, argv[3], token, c, error)) {
+            printf("post failed: %s\n", error.c_str());
+            return 1;
+        }
+        printf("posted: %s | %s | %s\n", c.id.c_str(), c.author.c_str(), c.text.c_str());
         return 0;
     }
     if (argc >= 3 && strcmp(argv[1], "--channel") == 0) {
