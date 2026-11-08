@@ -287,7 +287,7 @@ namespace OmegaTube
         [UnmanagedFunctionPointer(CallingConvention.Cdecl, CharSet = CharSet.Ansi)] private delegate void DiagnoseFn(IntPtr win, int w, int h, string videoUrl, string audioUrl);
 
         // --- Bound function pointers -------------------------------------------------------------------------
-        private static Ip_v _version, _playerLastError, _configRefresh, _updateCheck, _authStatus, _authBegin, _authAccount;
+        private static Ip_v _version, _playerLastError, _configRefresh, _updateCheck, _authStatus, _authBegin, _authAccount, _authAccounts;
         private static I_v _selfTest, _reportAvailable;
         private static V_v _authSignOut;
         private static I_buf _logTail;
@@ -301,7 +301,7 @@ namespace OmegaTube
         private static I_ipl _playerSeek;
         private static I_ipd _playerSetRate;
         private static V_ipStats _playerGetStats;
-        private static Ip_b _ytSuggest, _reportUpload, _authPoll, _qrEncode, _ytRelated, _ytDetails, _sbSegments;
+        private static Ip_b _ytSuggest, _reportUpload, _authPoll, _qrEncode, _ytRelated, _ytDetails, _sbSegments, _authSwitch;
         private static Ip_bb _ytSearch, _ytBrowse, _ytPlaylist, _ytPlaylistPage, _ytCaptions, _ytRate, _ytChannel, _ytComments, _ytPostComment;
         private static Ip_bbb _ytPostReply, _ytCommentAction;
         private static Ip_bi _ytSubscribe;
@@ -352,6 +352,8 @@ namespace OmegaTube
             _ytPostReply = Fn<Ip_bbb>("omega_yt_post_reply");
             _ytCommentAction = Fn<Ip_bbb>("omega_yt_comment_action");
             _authAccount = Fn<Ip_v>("omega_auth_account");
+            _authAccounts = Fn<Ip_v>("omega_auth_accounts");
+            _authSwitch = Fn<Ip_b>("omega_auth_switch");
             _sbSegments = Fn<Ip_b>("omega_sb_segments");
             _free = Fn<V_ip>("omega_free");
         }
@@ -398,6 +400,8 @@ namespace OmegaTube
         public static IntPtr YtCommentAction(string videoId, string commentId, string action) => _ytCommentAction(Utf8z(videoId), Utf8z(commentId), Utf8z(action));
         public static IntPtr YtChannel(string channelId, string continuation) => _ytChannel(Utf8z(channelId), Utf8z(continuation));
         public static IntPtr AuthAccount() => _authAccount();
+        public static IntPtr AuthAccounts() => _authAccounts();
+        public static IntPtr AuthSwitch(string id) => _authSwitch(Utf8z(id));
         public static IntPtr SbSegments(string videoId) => _sbSegments(Utf8z(videoId));
         public static void Free(IntPtr p) => _free(p);
 
@@ -408,119 +412,6 @@ namespace OmegaTube
             Array.Resize(ref raw, raw.Length + 1);
             return raw;
         }
-
-        [DllImport(Lib, EntryPoint = "omega_yt_browse")]
-        private static extern IntPtr YtBrowseRaw(byte[] browseId, byte[] continuation);
-
-        public static IntPtr YtBrowse(string browseId, string continuation) => YtBrowseRaw(Utf8z(browseId), Utf8z(continuation));
-
-        [DllImport(Lib, EntryPoint = "omega_init")]
-        private static extern void InitRaw(byte[] dataDir);
-
-        public static void Init(string dataDir) => InitRaw(Utf8z(dataDir));
-
-        [DllImport(Lib, EntryPoint = "omega_config_refresh")]
-        public static extern IntPtr ConfigRefresh();
-
-        [DllImport(Lib, EntryPoint = "omega_set_locale")]
-        private static extern void SetLocaleRaw(byte[] language, byte[] region);
-
-        public static void SetLocale(string language, string region) => SetLocaleRaw(Utf8z(language), Utf8z(region));
-
-        [DllImport(Lib, EntryPoint = "omega_update_check")]
-        public static extern IntPtr UpdateCheck();
-
-        [DllImport(Lib, EntryPoint = "omega_report_available")]
-        public static extern int ReportAvailable();
-
-        [DllImport(Lib, EntryPoint = "omega_report_upload")]
-        private static extern IntPtr ReportUploadRaw(byte[] text);
-
-        public static IntPtr ReportUpload(string text) => ReportUploadRaw(Utf8z(text));
-
-        [DllImport(Lib, EntryPoint = "omega_auth_status")]
-        public static extern IntPtr AuthStatus();
-
-        [DllImport(Lib, EntryPoint = "omega_auth_begin")]
-        public static extern IntPtr AuthBegin();
-
-        [DllImport(Lib, EntryPoint = "omega_auth_poll")]
-        private static extern IntPtr AuthPollRaw(byte[] deviceCode);
-
-        public static IntPtr AuthPoll(string deviceCode) => AuthPollRaw(Utf8z(deviceCode));
-
-        [DllImport(Lib, EntryPoint = "omega_auth_sign_out")]
-        public static extern void AuthSignOut();
-
-        [DllImport(Lib, EntryPoint = "omega_qr_encode")]
-        private static extern IntPtr QrEncodeRaw(byte[] text);
-
-        public static IntPtr QrEncode(string text) => QrEncodeRaw(Utf8z(text));
-
-        [DllImport(Lib, EntryPoint = "omega_yt_playlist")]
-        private static extern IntPtr YtPlaylistRaw(byte[] videoId, byte[] playlistId);
-
-        public static IntPtr YtPlaylist(string videoId, string playlistId) => YtPlaylistRaw(Utf8z(videoId), Utf8z(playlistId));
-
-        [DllImport(Lib, EntryPoint = "omega_yt_playlist_page")]
-        private static extern IntPtr YtPlaylistPageRaw(byte[] playlistId, byte[] continuation);
-
-        public static IntPtr YtPlaylistPage(string playlistId, string continuation) => YtPlaylistPageRaw(Utf8z(playlistId), Utf8z(continuation));
-
-        [DllImport(Lib, EntryPoint = "omega_yt_related")]
-        private static extern IntPtr YtRelatedRaw(byte[] videoId);
-
-        public static IntPtr YtRelated(string videoId) => YtRelatedRaw(Utf8z(videoId));
-
-        [DllImport(Lib, EntryPoint = "omega_player_formats")]
-        public static extern IntPtr PlayerFormats(IntPtr player);
-
-        [DllImport(Lib, EntryPoint = "omega_player_set_rate")]
-        public static extern int PlayerSetRate(IntPtr player, double rate);
-
-        [DllImport(Lib, EntryPoint = "omega_yt_captions")]
-        private static extern IntPtr YtCaptionsRaw(byte[] url, byte[] translateTo);
-
-        public static IntPtr YtCaptions(string url, string translateTo) => YtCaptionsRaw(Utf8z(url), Utf8z(translateTo));
-
-        [DllImport(Lib, EntryPoint = "omega_yt_details")]
-        private static extern IntPtr YtDetailsRaw(byte[] videoId);
-
-        public static IntPtr YtDetails(string videoId) => YtDetailsRaw(Utf8z(videoId));
-
-        [DllImport(Lib, EntryPoint = "omega_yt_rate")]
-        private static extern IntPtr YtRateRaw(byte[] videoId, byte[] rating);
-
-        public static IntPtr YtRate(string videoId, string rating) => YtRateRaw(Utf8z(videoId), Utf8z(rating));
-
-        [DllImport(Lib, EntryPoint = "omega_yt_subscribe")]
-        private static extern IntPtr YtSubscribeRaw(byte[] channelId, int subscribe);
-
-        public static IntPtr YtSubscribe(string channelId, bool subscribe) => YtSubscribeRaw(Utf8z(channelId), subscribe ? 1 : 0);
-
-        [DllImport(Lib, EntryPoint = "omega_yt_channel")]
-        private static extern IntPtr YtChannelRaw(byte[] channelId, byte[] continuation);
-
-        public static IntPtr YtChannel(string channelId, string continuation) => YtChannelRaw(Utf8z(channelId), Utf8z(continuation));
-
-        [DllImport(Lib, EntryPoint = "omega_auth_account")]
-        public static extern IntPtr AuthAccount();
-
-        [DllImport(Lib, EntryPoint = "omega_auth_accounts")]
-        public static extern IntPtr AuthAccounts();
-
-        [DllImport(Lib, EntryPoint = "omega_auth_switch")]
-        private static extern IntPtr AuthSwitchRaw(byte[] id);
-
-        public static IntPtr AuthSwitch(string id) => AuthSwitchRaw(Utf8z(id));
-
-        [DllImport(Lib, EntryPoint = "omega_sb_segments")]
-        private static extern IntPtr SbSegmentsRaw(byte[] videoId);
-
-        public static IntPtr SbSegments(string videoId) => SbSegmentsRaw(Utf8z(videoId));
-
-        [DllImport(Lib, EntryPoint = "omega_free")]
-        public static extern void Free(IntPtr p);
 
         // Native UTF-8 C string -> managed string.
         public static string Utf8(IntPtr p)
