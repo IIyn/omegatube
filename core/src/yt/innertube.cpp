@@ -99,14 +99,25 @@ int watched_percent(const json& j) {
     return 0;
 }
 
-// The animated-preview WebP of an item, if YouTube offers one (richThumbnail.movingThumbnailRenderer, present
-// in several layouts). Returns the first (and usually only) moving-thumbnail URL, else "".
+// The animated-preview WebP of an item, if YouTube offers one: richThumbnail.movingThumbnailRenderer in the WEB
+// layouts; other layouts (TV tiles) name the field differently, so fall back to the first animated-WebP
+// (/an_webp/) URL anywhere in the item. "" when there is none.
 std::string moving_thumbnail(const json& v) {
-    const json* m = find_key(v, "movingThumbnailRenderer");
-    if (!m || !m->is_object()) return "";
-    const json& thumbs = m->value("movingThumbnailDetails", json::object()).value("thumbnails", json::array());
-    if (!thumbs.empty() && thumbs[0].is_object()) return thumbs[0].value("url", "");
-    return "";
+    if (const json* m = find_key(v, "movingThumbnailRenderer"); m && m->is_object()) {
+        const json& thumbs = m->value("movingThumbnailDetails", json::object()).value("thumbnails", json::array());
+        if (!thumbs.empty() && thumbs[0].is_object()) {
+            std::string url = thumbs[0].value("url", "");
+            if (!url.empty()) return url;
+        }
+    }
+    const std::string s = v.dump();
+    const size_t at = s.find("/an_webp/");
+    if (at == std::string::npos) return "";
+    const size_t start = s.rfind('"', at), end = s.find('"', at);
+    if (start == std::string::npos || end == std::string::npos) return "";
+    std::string url = s.substr(start + 1, end - start - 1);
+    if (url.compare(0, 2, "//") == 0) url = "https:" + url;
+    return url.compare(0, 4, "http") == 0 ? url : "";
 }
 
 void parse_video_renderer(const json& v, Feed& out) {

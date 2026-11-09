@@ -1,4 +1,7 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Threading.Tasks;
 using OmegaTube.Data;
 using Tizen.NUI;
 using Tizen.NUI.BaseComponents;
@@ -19,15 +22,22 @@ namespace OmegaTube.Ui
     public class Hero : View
     {
         private const int PreviewDelayMs = 600;   // dwell before the animated preview starts (avoids one per scroll tick)
-        // Tizen 5.5's NUI image decoder does not animate WebP (YouTube's only moving-thumbnail format), so a
-        // preview would just replace the sharp still with a low-res first frame. The core still provides
-        // item.Preview, so this can be switched on for a firmware that can animate it.
-        private const bool AnimatedPreviews = false;
+        private const int KeptSheets = 8;          // decoded preview sheets kept in the cache folder
+
+        // Animated previews: YouTube's moving thumbnail is an animated WebP, which the Tizen 5.5 image loader only
+        // shows as a still. The core decodes it into one BMP sprite sheet (all frames in a grid); we load that once
+        // and step the visible PixelArea from cell to cell on a timer — one texture, no reloads.
+        private static readonly Dictionary<string, PreviewSheet> sheets = new Dictionary<string, PreviewSheet>();
+        private static readonly HashSet<string> noPreview = new HashSet<string>();   // looked up: YouTube has none
 
         private readonly ImageView artBase, artHi, preview;
         private readonly TextLabel title, meta;
         private Animation fade, previewFade;
-        private Timer previewTimer;
+        private Timer previewTimer, frameTimer;
+        private VideoItem currentItem;
+        private PreviewSheet playing;
+        private string loadingId;   // a preview being looked up / decoded
+        private int frame;
         private string currentId = "";
 
         public Hero()
@@ -39,9 +49,9 @@ namespace OmegaTube.Ui
             Add(artBase);
             artHi = new ImageView { Size = new Size(1920, 1080), FittingMode = FittingModeType.ScaleToFill };
             Add(artHi);
-            // Animated-preview layer (richThumbnail WebP), faded in over the stills after a short dwell. NUI plays
-            // animated images loaded by URL; if the firmware can't animate the WebP it just shows its first frame.
-            preview = new ImageView { Size = new Size(1920, 1080), FittingMode = FittingModeType.ScaleToFill, Opacity = 0f };
+            // Animated-preview layer: shows one cell (PixelArea) of the decoded sprite sheet, faded in over the stills.
+            // No fitting mode: the whole sheet must load unscaled so the cells line up.
+            preview = new ImageView { Size = new Size(1920, 1080), Opacity = 0f };
             Add(preview);
 
             // Left fade: solid black at the left edge -> clear by the centre (full-screen, so no vertical seam).
@@ -68,14 +78,21 @@ namespace OmegaTube.Ui
 
         private static string Frame(string id, string variant) => "https://i.ytimg.com/vi/" + id + "/" + variant + ".jpg";
 
-        // Sets the item's artwork + title + metadata. No-op when it is already the shown item.
+        // Sets the item's artwork + title + metadata. Already the shown item: only resumes its preview (the hero
+        // was hidden meanwhile).
         public void Display(VideoItem item)
         {
-            if (item == null || item.Id == currentId)
+            if (item == null)
             {
                 return;
             }
+            if (item.Id == currentId)
+            {
+                ResumePreview();
+                return;
+            }
             currentId = item.Id;
+            currentItem = item;
             if (!string.IsNullOrEmpty(item.Id))
             {
                 artBase.ResourceUrl = Frame(item.Id, "hqdefault");
@@ -99,36 +116,164 @@ namespace OmegaTube.Ui
         // Clears any running preview, then (if this item has one) starts it after a short dwell.
         private void SchedulePreview(VideoItem item)
         {
-            previewTimer?.Stop();
-            previewTimer = null;
-            previewFade?.Stop();
-            preview.Opacity = 0f;
-            preview.Image = new PropertyMap();   // drop the previous preview
-            if (!AnimatedPreviews || string.IsNullOrEmpty(item.Preview))
+            StopPreview();
+            // No preview URL in the item (the TV home feed's tiles carry none): the core looks it up by id.
+            if (string.IsNullOrEmpty(item.Id) || noPreview.Contains(item.Id) || loadingId == item.Id)
             {
                 return;
             }
-            string url = item.Preview, id = item.Id;
+            string url = item.Preview ?? "", id = item.Id;
             previewTimer = new Timer(PreviewDelayMs);
             previewTimer.Tick += (s, e) => UiGuard.Tick("Hero.preview", () =>
             {
+                previewTimer = null;
                 if (id == currentId)
                 {
-                    // Force the animated-image visual: YouTube's moving thumbnail is an animated WebP whose URL
-                    // carries a query string, so NUI's extension-based auto-detection would otherwise load it as a
-                    // single still frame.
-                    var map = new PropertyMap();
-                    map.Add((int)Visual.Property.Type, new PropertyValue((int)Visual.Type.AnimatedImage));
-                    map.Add((int)ImageVisualProperty.URL, new PropertyValue(url));
-                    preview.Image = map;
-                    previewFade?.Stop();
-                    previewFade = new Animation(300);
-                    previewFade.AnimateTo(preview, "Opacity", 1f, new AlphaFunction(AlphaFunction.BuiltinFunctions.EaseOut));
-                    previewFade.Play();
+                    UiGuard.Fire("Hero.preview", () => LoadPreview(id, url));
                 }
                 return false;   // one-shot
             });
             previewTimer.Start();
+        }
+
+        // Decodes the preview (core, off the UI thread) unless this video's sheet is already on disk, then plays it.
+        private async Task LoadPreview(string id, string url)
+        {
+            if (!sheets.TryGetValue(id, out PreviewSheet sheet) || !File.Exists(sheet.Path))
+            {
+                if (loadingId == id)
+                {
+                    return;
+                }
+                string path = System.IO.Path.Combine(CacheDir, "preview-" + id + ".bmp");
+                loadingId = id;
+                try
+                {
+                    sheet = await YouTube.Preview(id, url, path);
+                }
+                finally
+                {
+                    if (loadingId == id)
+                    {
+                        loadingId = null;
+                    }
+                }
+                if (sheet == null || sheet.None)
+                {
+                    noPreview.Add(id);   // none, or failed: not retried this session
+                    return;              // the still stays
+                }
+                sheets[id] = sheet;
+                Prune(path);
+            }
+            if (id == currentId && Visibility)
+            {
+                Play(sheet);
+            }
+        }
+
+        private void Play(PreviewSheet sheet)
+        {
+            playing = sheet;
+            frame = 0;
+            preview.ResourceUrl = sheet.Path;
+            ShowFrame();
+            previewFade?.Stop();
+            previewFade = new Animation(300);
+            previewFade.AnimateTo(preview, "Opacity", 1f, new AlphaFunction(AlphaFunction.BuiltinFunctions.EaseOut));
+            previewFade.Play();
+            StartFrames();
+        }
+
+        private void StartFrames()
+        {
+            frameTimer?.Stop();
+            frameTimer = new Timer((uint)Math.Max(40, playing.DelayMs));
+            frameTimer.Tick += (s, e) => UiGuard.Tick("Hero.frames", () =>
+            {
+                if (playing == null || !Visibility)
+                {
+                    frameTimer = null;   // hidden (later row, hosted screen): resumed by Display / ResumePreview
+                    return false;
+                }
+                frame = (frame + 1) % playing.Frames;
+                ShowFrame();
+                return true;
+            });
+            frameTimer.Start();
+        }
+
+        private void ShowFrame()
+        {
+            int col = frame % playing.Cols, row = frame / playing.Cols;
+            preview.PixelArea = new RelativeVector4((float)col / playing.Cols, (float)row / playing.Rows,
+                                                    1f / playing.Cols, 1f / playing.Rows);
+        }
+
+        private void StopPreview()
+        {
+            previewTimer?.Stop();
+            previewTimer = null;
+            frameTimer?.Stop();
+            frameTimer = null;
+            previewFade?.Stop();
+            playing = null;
+            preview.Opacity = 0f;
+            preview.ResourceUrl = "";   // release the sheet's texture
+        }
+
+        // The hero stopped being on screen (another screen opened): stop stepping frames, keep the sheet.
+        public void PausePreview()
+        {
+            previewTimer?.Stop();
+            previewTimer = null;
+            frameTimer?.Stop();
+            frameTimer = null;
+        }
+
+        private void ResumePreview()
+        {
+            if (playing != null)
+            {
+                if (frameTimer == null)
+                {
+                    StartFrames();
+                }
+            }
+            else if (previewTimer == null && currentItem != null)
+            {
+                SchedulePreview(currentItem);
+            }
+        }
+
+        private static string CacheDir => Tizen.Applications.Application.Current.DirectoryInfo.Cache;
+
+        // Keeps the most recent sheets on disk (about 6 MB each), deletes the rest.
+        private static void Prune(string keep)
+        {
+            try
+            {
+                FileInfo[] files = new DirectoryInfo(CacheDir).GetFiles("preview-*.bmp");
+                Array.Sort(files, (a, b) => b.LastWriteTimeUtc.CompareTo(a.LastWriteTimeUtc));
+                for (int i = KeptSheets; i < files.Length; i++)
+                {
+                    if (files[i].FullName != keep)
+                    {
+                        files[i].Delete();
+                    }
+                }
+                foreach (string key in new List<string>(sheets.Keys))
+                {
+                    if (!File.Exists(sheets[key].Path))
+                    {
+                        sheets.Remove(key);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Tizen.Log.Warn("OmegaTube", "preview prune: " + e.Message);
+            }
         }
 
         // "Channel · 1.2M views · 3 days ago", skipping the parts YouTube did not give.

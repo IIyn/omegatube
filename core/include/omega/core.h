@@ -127,6 +127,11 @@ OMEGA_API char* omega_yt_channel(const char* channel_id, const char* continuatio
 //  "continuation","count" (display text, first page),"sortTop","sortNewest" (continuations reloading the list
 //  in that order),"createParams" (for omega_yt_post_comment),"disabled":bool} or {"error"}.
 OMEGA_API char* omega_yt_comments(const char* video_id, const char* continuation);
+// Downloads a video's animated preview (YouTube's moving-thumbnail WebP) and decodes it into a 24-bit BMP sprite
+// sheet at out_path (the Tizen 5.5 image loader cannot animate WebP itself). url: the item's preview URL; empty =
+// look it up by video_id (WEB search). Returns JSON {"cols","rows","frames","w","h","delay"} (frame grid,
+// row-major; delay in ms per frame) or {"error"} (plus "none": true when the video has no preview).
+OMEGA_API char* omega_preview_sheet(const char* video_id, const char* url, const char* out_path);
 // As the signed-in account: {"ok":true,"comment":{...} or null} or {"error"}.
 OMEGA_API char* omega_yt_post_comment(const char* create_params, const char* text);
 // A reply in the thread of comment_id (a top-level comment): as omega_yt_post_comment.

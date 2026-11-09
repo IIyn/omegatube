@@ -18,6 +18,15 @@ namespace OmegaTube.Data
         public bool IsList => Kind == "playlist" || Kind == "mix";
     }
 
+    // An animated preview decoded by the core into one sprite-sheet image: Frames cells of a Cols x Rows grid
+    // (row-major), each shown DelayMs. Path is the BMP on disk.
+    public class PreviewSheet
+    {
+        public string Path;
+        public int Cols, Rows, Frames, DelayMs;
+        public bool None;   // the video has no animated preview (nothing to retry)
+    }
+
     public class SkipSegment
     {
         public string Category;
@@ -169,6 +178,26 @@ namespace OmegaTube.Data
                     Dislikes = (long)Json.Num(root, "dislikes", -1), LikeStatus = Json.Str(root, "likeStatus"),
                     Subscribed = (int)Json.Num(root, "subscribed", -1), Error = Json.Str(root, "error", null),
                 };
+            });
+        }
+
+        // Downloads and decodes a video's animated preview into a sprite sheet at `path`. url: the item's preview
+        // URL, or "" to look it up by id. Null on a (possibly transient) failure; None = the video has no preview.
+        public static Task<PreviewSheet> Preview(string videoId, string url, string path)
+        {
+            return Task.Run(() =>
+            {
+                object root = Call(NativeCore.PreviewSheet(videoId, url ?? "", path));
+                if (Json.Str(root, "error", null) != null)
+                {
+                    return Json.Bool(root, "none") ? new PreviewSheet { None = true } : null;
+                }
+                var sheet = new PreviewSheet
+                {
+                    Path = path, Cols = (int)Json.Num(root, "cols"), Rows = (int)Json.Num(root, "rows"),
+                    Frames = (int)Json.Num(root, "frames"), DelayMs = (int)Json.Num(root, "delay", 100),
+                };
+                return sheet.Cols > 0 && sheet.Rows > 0 && sheet.Frames > 0 ? sheet : null;
             });
         }
 

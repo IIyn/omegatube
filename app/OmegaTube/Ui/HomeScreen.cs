@@ -179,6 +179,7 @@ namespace OmegaTube.Ui
             openTimer?.Stop();
             prewarmTimer?.Stop();
             prewarmTimer = null;
+            hero?.PausePreview();   // resumed by UpdateHero -> Display when the home is shown again
             shown?.OnHide();
         }
 
