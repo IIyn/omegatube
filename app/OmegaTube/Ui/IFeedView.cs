@@ -8,6 +8,7 @@ namespace OmegaTube.Ui
         int Count { get; }
         VideoItem FocusedItem { get; }
         int FocusedRow { get; }   // Glorious: the hero backdrop is shown only on the first row
+        Tizen.NUI.BaseComponents.View FocusedCardView { get; }   // the focused card (preview ring), or null
         void SetFocused(bool value);
         bool Move(string key);
         void RefreshProgress();

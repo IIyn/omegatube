@@ -26,7 +26,7 @@ namespace OmegaTube.Ui
     {
         private const uint DwellMs = 3000;          // rest this long on a first-row video before it plays
         private const long PreviewCapMs = 120000;   // then give the decoder (and the data) back
-        private const double StartTimeoutS = 15;    // never reached PLAYING: stay on the still
+        private const double StartTimeoutS = 20;    // from the request: never playing by then -> stay on the still
         private const int Playing = 3;              // esp::State PLAYING
 
         private readonly App app;
@@ -41,7 +41,8 @@ namespace OmegaTube.Ui
         private bool active;        // on screen: first row of a Glorious feed, home visible
         private bool revealed;      // the still has faded out over the playing video
         private long firstPlayingMs = -1;   // position at the first PLAYING sample: motion is measured from it
-        private DateTime videoReadyAt;
+        private DateTime requestedAt;       // when the preview was asked for (end of the dwell)
+        private readonly PreviewRing ring = new PreviewRing();   // countdown / loading on the focused card
         private readonly System.Diagnostics.Stopwatch clock = new System.Diagnostics.Stopwatch();   // timing log
 
         // The layers under the hero (window, home root) must turn see-through while the video plane shows.
@@ -163,6 +164,7 @@ namespace OmegaTube.Ui
                 return;
             }
             VideoItem item = currentItem;
+            ring.Countdown(DwellMs);
             dwellTimer = new Timer(DwellMs);
             dwellTimer.Tick += (s, e) => UiGuard.Tick("Hero.dwell", () =>
             {
@@ -172,11 +174,41 @@ namespace OmegaTube.Ui
                     // Always from the start: a preview is a taster (OK still resumes where the user left off).
                     clock.Restart();
                     Log("start " + item.Id);
+                    ring.Loading();
+                    requestedAt = DateTime.Now;
+                    firstPlayingMs = -1;
                     video.Start(app, item.Id, 0);
+                    // Watched from the request on, so a preview that never comes up also ends (and the ring stops).
+                    watchTimer = new Timer(150);
+                    watchTimer.Tick += (s2, e2) => UiGuard.Tick("Hero.watch", Watch);
+                    watchTimer.Start();
+                }
+                else
+                {
+                    ring.Off();
                 }
                 return false;
             });
             dwellTimer.Start();
+        }
+
+        // Puts the countdown ring on the top-right corner of the focused card (it then moves and zooms with it).
+        public void AttachRing(View card)
+        {
+            if (card == null || ring.GetParent() == card)
+            {
+                return;
+            }
+            try
+            {
+                ring.GetParent()?.Remove(ring);
+                ring.Position = new Position(card.SizeWidth - PreviewRing.Diameter - 10, 10);
+                card.Add(ring);
+            }
+            catch (Exception e)
+            {
+                Tizen.Log.Warn("OmegaTube", "preview ring: " + e.Message);
+            }
         }
 
         private void OnVideoReady()
@@ -190,28 +222,29 @@ namespace OmegaTube.Ui
             // The still still covers everything: making the layers under it see-through changes nothing yet.
             BackgroundColor = Color.Transparent;
             SeeThrough?.Invoke(true);
-            videoReadyAt = DateTime.Now;
-            firstPlayingMs = -1;
-            watchTimer = new Timer(150);
-            watchTimer.Tick += (s, e) => UiGuard.Tick("Hero.watch", Watch);
-            watchTimer.Start();
         }
 
         // Reveals the video once its clock moves (measured from the first PLAYING sample, so wherever it started);
         // ends the preview at the end, after the cap, or if it never starts.
         private bool Watch()
         {
+            bool tooLate = !revealed && (DateTime.Now - requestedAt).TotalSeconds > StartTimeoutS;
             if (!video.Stats(out NativeCore.PlayerStats s))
             {
-                watchTimer = null;
-                return false;
+                if (tooLate || video.VideoId == null)
+                {
+                    watchTimer = null;   // never came up (or stopped): StopVideo must not stop this running timer
+                    doneId = currentId;
+                    StopVideo("never started");
+                    return false;
+                }
+                return true;   // still being created
             }
             if (s.State == Playing && firstPlayingMs < 0)
             {
                 firstPlayingMs = s.PositionMs;
                 Log("playing at " + s.PositionMs);
             }
-            bool tooLate = !revealed && (DateTime.Now - videoReadyAt).TotalSeconds > StartTimeoutS;
             bool capped = revealed && firstPlayingMs >= 0 && s.PositionMs - firstPlayingMs > PreviewCapMs;
             if (s.Eos != 0 || tooLate || capped)
             {
@@ -223,6 +256,7 @@ namespace OmegaTube.Ui
             if (!revealed && s.State == Playing && firstPlayingMs >= 0 && s.PositionMs > firstPlayingMs + 200)
             {
                 Log("revealed at " + s.PositionMs);
+                ring.Off();
                 revealed = true;
                 reveal?.Stop();
                 reveal = new Animation(500);
@@ -245,6 +279,7 @@ namespace OmegaTube.Ui
             dwellTimer = null;
             watchTimer?.Stop();
             watchTimer = null;
+            ring.Off();
             reveal?.Stop();
             artBase.Opacity = 1f;
             artHi.Opacity = 1f;

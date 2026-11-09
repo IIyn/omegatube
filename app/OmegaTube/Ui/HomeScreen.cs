@@ -560,6 +560,7 @@ namespace OmegaTube.Ui
             if (item != null)
             {
                 hero.Display(item);
+                hero.AttachRing(Feed.FocusedCardView);   // preview countdown on that card's corner
             }
         }
 
