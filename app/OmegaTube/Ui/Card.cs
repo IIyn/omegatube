@@ -10,12 +10,16 @@ namespace OmegaTube.Ui
     // duration badge bottom right, red progress bar for started videos.
     // Built in two steps for smooth scrolling: the constructor only makes the cheap frame (grey thumbnail and
     // info box); Fill() adds the texts and starts the thumbnail, when the card is about to be seen (UiWork).
+    //
+    // thumbOnly: a bare rounded thumbnail with no info box (Glorious's featured first row, where the title and
+    // metadata already live on the hero backdrop) — so the cards are smaller and show more of the background.
     public class Card : View
     {
         public VideoItem Item { get; private set; }
         public bool Filled { get; private set; }
 
         private readonly int width, thumbH;
+        private readonly bool thumbOnly;
         private readonly ImageView thumb;
         private readonly ImageView info;
         private readonly View infoTopPatch;
@@ -24,38 +28,41 @@ namespace OmegaTube.Ui
         private bool focused;
         private Animation zoom;
 
-        public Card(VideoItem item, int width = Theme.CardWidth)
+        public Card(VideoItem item, int width = Theme.CardWidth, bool thumbOnly = false)
         {
             Item = item;
             this.width = width;
+            this.thumbOnly = thumbOnly;
             thumbH = Theme.ThumbHeight(width);
-            Size = new Size(width, Theme.CardHeight(width));
+            Size = new Size(width, thumbOnly ? thumbH : Theme.CardHeight(width));
             // Scale around the centre so neighbours are overlapped evenly.
             PivotPoint = Tizen.NUI.PivotPoint.Center;
             PositionUsesPivotPoint = false;  // positions stay top-left based
 
-            // TizenFX 8 only has a uniform corner radius. The "glued" look (rounded outer corners only) is
-            // made by overlap: the thumbnail extends one radius under the info box (which hides its rounded
-            // bottom), and a square patch covers the info box's rounded top corners.
             // Rounding on Tizen 5.5: the firmware's NUI has no CornerRadius, so we round with image techniques
             // that it does support. The thumbnail is clipped by a rounded-rect alpha mask; the info box is a
             // white rounded-rect nine-patch tinted to the panel colour (fixed corners at any width).
+            // Without an info box the thumbnail rounds all four corners; with one it extends a radius under the
+            // info box (the "glued" look) and a square patch hides the info box's rounded top corners.
             thumb = new ImageView
             {
-                Size = new Size(width, thumbH + Theme.CardRadius),
+                Size = new Size(width, thumbOnly ? thumbH : thumbH + Theme.CardRadius),
             };
             Add(thumb);
 
-            info = new ImageView
+            if (!thumbOnly)
             {
-                Position = new Position(0, thumbH),
-                Size = new Size(width, Theme.CardInfoHeight),
-                ResourceUrl = Theme.Image("round9.9"),
-                Color = Theme.CardInfo,
-            };
-            Add(info);
-            infoTopPatch = Widgets.Box(Theme.CardInfo, width, Theme.CardRadius);
-            info.Add(infoTopPatch);
+                info = new ImageView
+                {
+                    Position = new Position(0, thumbH),
+                    Size = new Size(width, Theme.CardInfoHeight),
+                    ResourceUrl = Theme.Image("round9.9"),
+                    Color = Theme.CardInfo,
+                };
+                Add(info);
+                infoTopPatch = Widgets.Box(Theme.CardInfo, width, Theme.CardRadius);
+                info.Add(infoTopPatch);
+            }
 
             // On top of the info box's edge: the watched-fraction bar sits on the seam.
             progress = Widgets.Box(Theme.Accent, 0, 5);
@@ -85,15 +92,18 @@ namespace OmegaTube.Ui
                 thumb.Add(duration);
             }
 
-            title = Widgets.Label(Item.Title, Theme.BodySize, Theme.Text, width - 24, 62);
-            title.MultiLine = true;
-            title.Position = new Position(12, 8);
-            info.Add(title);
+            if (!thumbOnly)
+            {
+                title = Widgets.Label(Item.Title, Theme.BodySize, Theme.Text, width - 24, 62);
+                title.MultiLine = true;
+                title.Position = new Position(12, 8);
+                info.Add(title);
 
-            meta = Widgets.Label(MetaLine(Item), Theme.SmallSize, Theme.TextDim, width - 24);
-            meta.Position = new Position(12, 70);
-            info.Add(meta);
-            ApplyFocusColors();
+                meta = Widgets.Label(MetaLine(Item), Theme.SmallSize, Theme.TextDim, width - 24);
+                meta.Position = new Position(12, 70);
+                info.Add(meta);
+                ApplyFocusColors();
+            }
 
             if (!string.IsNullOrEmpty(Item.Thumbnail))
             {
@@ -105,7 +115,7 @@ namespace OmegaTube.Ui
         public void Rebind(VideoItem item)
         {
             Item = item;
-            if (Filled)
+            if (Filled && !thumbOnly)
             {
                 title.Text = item.Title;
                 meta.Text = MetaLine(item);
@@ -156,6 +166,10 @@ namespace OmegaTube.Ui
 
         private void ApplyFocusColors()
         {
+            if (thumbOnly)
+            {
+                return;   // no info box to recolour
+            }
             Color infoColor = focused ? Theme.CardInfoFocused : Theme.CardInfo;
             info.Color = infoColor;   // tints the white nine-patch
             infoTopPatch.BackgroundColor = infoColor;

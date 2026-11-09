@@ -25,7 +25,7 @@ namespace OmegaTube.Ui
         // Glorious hero mode: the first row sits below the hero text; moving off it scrolls the rows up to fill
         // the screen (and the home screen hides the hero). RowChanged fires when the focused row changes.
         public System.Action RowChanged;
-        private const int HeroFirstRowTop = 384;   // where row 0 renders while the hero backdrop is shown
+        private const int HeroFirstRowTop = 430;   // where row 0 renders while the hero backdrop is shown
 
         private readonly int width;
         private readonly int leftInset;   // Glorious: rows start here; earlier cards slide under the nav
@@ -176,7 +176,7 @@ namespace OmegaTube.Ui
                     // Items beyond the shelf's first ones: the same browse call with the row's continuation.
                     bool big = bigFirst && i == 0;
                     row = new FeedRow(title, c => YouTube.Browse("", c), width,
-                                      big ? Theme.BigCardWidth : Theme.CardWidth, leftInset, RowHeightAt(i))
+                                      big ? Theme.BigCardWidth : Theme.CardWidth, leftInset, RowHeightAt(i), thumbOnly: big)
                     {
                         Position = new Position(0, RowTop(i)),
                         RequestWork = () => UiWork.Request(pump),

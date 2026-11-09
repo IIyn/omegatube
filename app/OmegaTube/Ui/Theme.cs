@@ -28,8 +28,8 @@ namespace OmegaTube.Ui
         // translucent fill over the artwork, a brighter fill for the focused pill, and a hairline highlight
         // stand in for it. GlassPanel darkens the nav column; GlassHigh lifts the focused entry; GlassEdge is
         // the 1 px top/edge highlight that reads as a glass rim.
-        public static readonly Color GlassPanel = new Color(0.10f, 0.11f, 0.13f, 0.62f);
-        public static readonly Color GlassHigh = new Color(1f, 1f, 1f, 0.16f);
+        public static readonly Color GlassPanel = new Color(0.10f, 0.11f, 0.14f, 0.34f);   // see-through nav panel
+        public static readonly Color GlassHigh = new Color(1f, 1f, 1f, 0.16f);             // selected pill (translucent)
         public static readonly Color GlassEdge = new Color(1f, 1f, 1f, 0.22f);
         public static readonly Color GlassScrim = new Color(0f, 0f, 0f, 0.55f);
 
@@ -51,8 +51,8 @@ namespace OmegaTube.Ui
 
         // Glorious home geometry.
         public const int GloriousInset = 150;      // rows start here, clearing the nav; earlier cards slide under it
-        public const int BigCardWidth = 536;       // featured first row
-        public const int BigRowHeight = 560;
+        public const int BigCardWidth = 440;       // featured first row (thumbnail-only, kept smaller to show more backdrop)
+        public const int BigRowHeight = 360;
 
         public static int ThumbHeight(int cardWidth) => cardWidth * 9 / 16;
         public static int CardHeight(int cardWidth) => ThumbHeight(cardWidth) + CardInfoHeight;

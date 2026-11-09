@@ -40,6 +40,7 @@ namespace OmegaTube.Ui
         private Animation slide;
         private readonly int cardWidth;
         private readonly int leftInset;   // x of the focused card; earlier cards slide left of it (under the nav)
+        private readonly bool thumbOnly;  // Glorious featured row: bare thumbnails (title/meta live on the hero)
 
         private int Step => cardWidth + Theme.CardGap;
 
@@ -51,12 +52,14 @@ namespace OmegaTube.Ui
         // cardWidth / leftInset default to the Omega look; the Glorious home passes a larger featured width and
         // an inset that clears the nav column.
         public FeedRow(string title, Func<string, Task<FeedPage>> loader, int width,
-                       int cardWidth = Theme.CardWidth, int leftInset = Theme.FocusMargin, int rowHeight = Theme.RowHeight)
+                       int cardWidth = Theme.CardWidth, int leftInset = Theme.FocusMargin, int rowHeight = Theme.RowHeight,
+                       bool thumbOnly = false)
         {
             Title = title;
             this.loader = loader;
             this.cardWidth = cardWidth;
             this.leftInset = leftInset;
+            this.thumbOnly = thumbOnly;
             pump = BuildNext;
             RequestWork = () => UiWork.Request(pump);
             Size = new Size(width, rowHeight);
@@ -136,7 +139,7 @@ namespace OmegaTube.Ui
                 }
                 else
                 {
-                    card = new Card(items[i], cardWidth) { Position = new Position(i * Step, 16) };
+                    card = new Card(items[i], cardWidth, thumbOnly) { Position = new Position(i * Step, 16) };
                     strip.Add(card);
                 }
                 cards.Add(card);
@@ -156,7 +159,7 @@ namespace OmegaTube.Ui
             last = Math.Min(last, items.Count - 1);
             while (cards.Count <= last)
             {
-                var card = new Card(items[cards.Count], cardWidth) { Position = new Position(cards.Count * Step, 16) };
+                var card = new Card(items[cards.Count], cardWidth, thumbOnly) { Position = new Position(cards.Count * Step, 16) };
                 cards.Add(card);
                 strip.Add(card);
             }
