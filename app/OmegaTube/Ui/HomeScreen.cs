@@ -43,6 +43,7 @@ namespace OmegaTube.Ui
         private readonly View feedHost;
         private View feedView;     // feed on display, if any
         private readonly View embedHost;
+        private Hero hero;
         private Rail rail;
         private TextLabel updateBanner;
         private Screen shown;      // hosted screen on display, if any
@@ -56,6 +57,9 @@ namespace OmegaTube.Ui
         public HomeScreen(App app) : base(app)
         {
             Root.BackgroundColor = Theme.Background;
+            hero = new Hero();   // backmost: the Glorious full-screen backdrop (hidden in Omega)
+            hero.Hide();
+            Root.Add(hero);
             header = Widgets.Label("", Theme.TitleSize + 2, Theme.Text, 1200);
             header.Position = new Position(ContentX + Theme.FocusMargin, 44);
             Root.Add(header);
@@ -275,7 +279,7 @@ namespace OmegaTube.Ui
             {
                 entries.Add(new Rail.Entry { Icon = s.Icon, Label = s.Title });
             }
-            rail = new Rail(entries);
+            rail = new Rail(entries, Glorious);
             Root.Add(rail);  // last: the expanded rail draws over the content
             RefreshAvatar();
 
@@ -325,15 +329,19 @@ namespace OmegaTube.Ui
                     screen.OnShow();
                 }
                 embedHost.Show();
+                UpdateHero();   // a hosted screen covers the hero
                 return;
             }
             HideEmbedded();
             embedHost.Hide();
-            header.Show();
+            // Glorious shows the item info on the hero and gives each row its own title, so the big section
+            // header is only for Omega.
+            Widgets.SetVisible(header, !Glorious);
             header.Text = s.Title;
             bool built = feeds.ContainsKey(s.Key);
             View v = FeedFor(s);
             ShowFeed(v);
+            UpdateHero();
             if (built)
             {
                 Feed.RefreshProgress();
@@ -371,15 +379,23 @@ namespace OmegaTube.Ui
             {
                 return v;
             }
+            // Glorious puts the rows in the lower band (the hero fills the top); Omega keeps today's layout.
+            int shelfTop = Glorious ? 540 : GridTop - 20;
+            int gridTop = Glorious ? 600 : GridTop;
             if (s.Shelves && s.Loader != null)
             {
-                var list = new ShelfList(1920 - ContentX, 1080 - GridTop + 20) { Position = new Position(ContentX, GridTop - 20) };
+                // Full-width so cards scroll left under the translucent nav; the first (recommendations) row is
+                // the large featured one, the rest are normal.
+                var list = Glorious
+                    ? new ShelfList(1920, 1080 - shelfTop, Theme.GloriousInset, bigFirst: true) { Position = new Position(0, shelfTop) }
+                    : new ShelfList(1920 - ContentX, 1080 - shelfTop) { Position = new Position(ContentX, shelfTop) };
                 list.Show(s.Loader, s.CacheKey);
                 v = list;
             }
             else
             {
-                var grid = new FeedGrid(1920 - ContentX, 1080 - GridTop) { Position = new Position(ContentX, GridTop) };
+                int cx = Glorious ? 120 : ContentX;
+                var grid = new FeedGrid(1920 - cx, 1080 - gridTop) { Position = new Position(cx, gridTop) };
                 grid.Show(s.Loader, s.CacheKey, s.EmptyText);
                 v = grid;
             }
@@ -478,11 +494,34 @@ namespace OmegaTube.Ui
             return Feed != null && Feed.Count > 0;
         }
 
+        private bool Glorious => App.Config.UiStyle == "glorious";
+
+        // Glorious only: the focused item's artwork fills the backdrop; hidden for hosted screens and in Omega.
+        private void UpdateHero()
+        {
+            if (hero == null)
+            {
+                return;
+            }
+            if (!Glorious || sections.Count == 0 || current >= sections.Count || sections[current].Embed != null)
+            {
+                hero.Hide();
+                return;
+            }
+            hero.Show();
+            VideoItem item = Feed?.FocusedItem;
+            if (item != null)
+            {
+                hero.Display(item);
+            }
+        }
+
         private void UpdateFocus()
         {
             rail.SetFocused(inRail && !avatarFocused);
             rail.SetAvatarFocused(inRail && avatarFocused);
             Feed?.SetFocused(!inRail && shown == null);
+            UpdateHero();
         }
 
         // Shows the active account's photo on the top-left avatar (default icon when signed out).

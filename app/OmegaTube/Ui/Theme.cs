@@ -24,6 +24,15 @@ namespace OmegaTube.Ui
         // Grey rather than a white tint: as light as before on dark scenes, but it darkens bright ones under the icons.
         public static readonly Color GlassButton = new Color(0.24f, 0.24f, 0.24f, 0.6f);
 
+        // "Liquid glass" (frosted) tints for the Glorious theme. The TV's NUI has no backdrop blur, so a
+        // translucent fill over the artwork, a brighter fill for the focused pill, and a hairline highlight
+        // stand in for it. GlassPanel darkens the nav column; GlassHigh lifts the focused entry; GlassEdge is
+        // the 1 px top/edge highlight that reads as a glass rim.
+        public static readonly Color GlassPanel = new Color(0.10f, 0.11f, 0.13f, 0.62f);
+        public static readonly Color GlassHigh = new Color(1f, 1f, 1f, 0.16f);
+        public static readonly Color GlassEdge = new Color(1f, 1f, 1f, 0.22f);
+        public static readonly Color GlassScrim = new Color(0f, 0f, 0f, 0.55f);
+
         public const float TitleSize = 34f;
         public const float BodySize = 24f;
         public const float SmallSize = 19f;
@@ -33,11 +42,17 @@ namespace OmegaTube.Ui
         public const int CardWidth = 352;
         public const int CardGap = 30;
         public const int CardInfoHeight = 104;     // title (2 lines) + channel line
-        public const int CardRadius = 8;
+        public const int CardRadius = 14;          // soft corners (no sharp edges)
         public const float FocusScale = 1.1f;
         public const int FocusMargin = 30;         // room for the focused card's scale-up
         public const int RowHeight = 470;
         public const int PanelRadius = 20;
+        public const int GlassRadius = 28;         // rounded frosted panels / pills
+
+        // Glorious home geometry.
+        public const int GloriousInset = 150;      // rows start here, clearing the nav; earlier cards slide under it
+        public const int BigCardWidth = 536;       // featured first row
+        public const int BigRowHeight = 560;
 
         public static int ThumbHeight(int cardWidth) => cardWidth * 9 / 16;
         public static int CardHeight(int cardWidth) => ThumbHeight(cardWidth) + CardInfoHeight;

@@ -22,6 +22,8 @@ namespace OmegaTube.Ui
         public VideoItem FocusedItem => rows.Count > 0 ? rows[focus].FocusedItem : null;
 
         private readonly int width;
+        private readonly int leftInset;   // Glorious: rows start here; earlier cards slide under the nav
+        private readonly bool bigFirst;   // Glorious: the first (recommendations) row uses large featured cards
         private readonly View content;
         private readonly TextLabel status;
         private readonly List<FeedRow> rows = new List<FeedRow>();
@@ -33,18 +35,40 @@ namespace OmegaTube.Ui
         private readonly Func<bool> pump;
         private Animation scroll;
 
-        public ShelfList(int width, int height)
+        public ShelfList(int width, int height, int leftInset = Theme.FocusMargin, bool bigFirst = false)
         {
             this.width = width;
+            this.leftInset = leftInset;
+            this.bigFirst = bigFirst;
             pump = BuildNext;
             Size = new Size(width, height);
             ClippingMode = ClippingModeType.ClipChildren;
             content = new View { Size = new Size(width, 100000) };
             Add(content);
-            status = Widgets.Label("", Theme.BodySize, Theme.TextDim, width - 2 * Theme.FocusMargin, 120);
+            status = Widgets.Label("", Theme.BodySize, Theme.TextDim, width - leftInset - Theme.FocusMargin, 120);
             status.MultiLine = true;
-            status.Position = new Position(Theme.FocusMargin, Theme.FocusMargin + 20);
+            status.Position = new Position(leftInset, Theme.FocusMargin + 20);
             Add(status);
+        }
+
+        private int RowHeightAt(int i) => bigFirst && i == 0 ? Theme.BigRowHeight : Theme.RowHeight;
+
+        private int RowTop(int i)
+        {
+            int y = 0;
+            for (int k = 0; k < i; k++)
+            {
+                y += RowHeightAt(k);
+            }
+            return y;
+        }
+
+        private void LayoutRows()
+        {
+            for (int i = 0; i < rows.Count; i++)
+            {
+                rows[i].PositionY = RowTop(i);
+            }
         }
 
         // loader("") gives the first rows, loader(continuation) the next ones. cacheKey: shown meanwhile.
@@ -141,9 +165,11 @@ namespace OmegaTube.Ui
                 else
                 {
                     // Items beyond the shelf's first ones: the same browse call with the row's continuation.
-                    row = new FeedRow(title, c => YouTube.Browse("", c), width)
+                    bool big = bigFirst && i == 0;
+                    row = new FeedRow(title, c => YouTube.Browse("", c), width,
+                                      big ? Theme.BigCardWidth : Theme.CardWidth, leftInset, RowHeightAt(i))
                     {
-                        Position = new Position(0, i * Theme.RowHeight),
+                        Position = new Position(0, RowTop(i)),
                         RequestWork = () => UiWork.Request(pump),
                     };
                     content.Add(row);
@@ -215,6 +241,7 @@ namespace OmegaTube.Ui
 
         private void AfterChange()
         {
+            LayoutRows();
             for (int i = 0; i < rows.Count; i++)
             {
                 rows[i].SetFocused(focused && i == focus);
@@ -276,7 +303,7 @@ namespace OmegaTube.Ui
         // The focused row at the top; rows far from it are hidden (nothing to render).
         private void ScrollToFocus()
         {
-            scroll = Widgets.Slide(content, 0, -focus * Theme.RowHeight, scroll);
+            scroll = Widgets.Slide(content, 0, -RowTop(focus), scroll);
             for (int i = 0; i < rows.Count; i++)
             {
                 bool near = i >= focus - RowsAround && i <= focus + RowsAround + 1;

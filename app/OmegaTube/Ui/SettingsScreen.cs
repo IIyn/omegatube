@@ -332,6 +332,13 @@ namespace OmegaTube.Ui
 
         private void BuildGeneral(List<Row> l)
         {
+            l.Add(Choice(T("Interface"), T("Home screen style: Omega (classic) or Glorious (immersive)"),
+                         () => App.Config.UiStyle == "glorious" ? T("Glorious") : T("Omega"),
+                         d =>
+                         {
+                             App.Config.UiStyle = App.Config.UiStyle == "glorious" ? "omega" : "glorious";
+                             App.Home.InvalidateRows();
+                         }));
             l.Add(Choice(T("App language"), T("Language of the app's texts"),
                          () => I18n.Names[Math.Max(0, Array.IndexOf(I18n.Codes, App.Config.UiLanguage))],
                          d =>

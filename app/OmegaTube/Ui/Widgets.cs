@@ -78,6 +78,36 @@ namespace OmegaTube.Ui
             return new View { BackgroundColor = color, Size = new Size(width, height) };
         }
 
+        // View.Borderline* arrived with API 8 (Vector/float), so set it through reflection like CornerRadius;
+        // older TizenFX simply draws no rim.
+        private static readonly System.Reflection.PropertyInfo borderWidth = typeof(View).GetProperty("BorderlineWidth");
+        private static readonly System.Reflection.PropertyInfo borderColor = typeof(View).GetProperty("BorderlineColor");
+        private static readonly System.Reflection.PropertyInfo borderOffset = typeof(View).GetProperty("BorderlineOffset");
+
+        public static T Border<T>(T view, Color color, float width) where T : View
+        {
+            try
+            {
+                borderWidth?.SetValue(view, width);
+                borderColor?.SetValue(view, color);
+                borderOffset?.SetValue(view, -1f);   // draw the rim inside the rounded edge
+            }
+            catch (System.Exception e)
+            {
+                Tizen.Log.Warn("OmegaTube", "Borderline: " + e.Message);
+            }
+            return view;
+        }
+
+        // Frosted "liquid glass" panel: a translucent rounded fill with a hairline rim. The TV cannot blur the
+        // backdrop, so the tint + rim stand in for it. Used by the Glorious nav and hero.
+        public static View Glass(Color fill, int width, int height, float radius)
+        {
+            var v = Rounded(fill, width, height, radius);
+            Border(v, Theme.GlassEdge, 1.2f);
+            return v;
+        }
+
         public static void SetVisible(View view, bool visible)
         {
             if (visible)

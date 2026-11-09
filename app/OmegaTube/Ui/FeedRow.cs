@@ -38,31 +38,38 @@ namespace OmegaTube.Ui
         private bool loading;
         private bool focused;
         private Animation slide;
+        private readonly int cardWidth;
+        private readonly int leftInset;   // x of the focused card; earlier cards slide left of it (under the nav)
 
-        private static int Step => Theme.CardWidth + Theme.CardGap;
+        private int Step => cardWidth + Theme.CardGap;
 
         public FeedRow(string title, string query, int width) : this(title, c => YouTube.Search(query, c), width)
         {
             Query = query;
         }
 
-        public FeedRow(string title, Func<string, Task<FeedPage>> loader, int width)
+        // cardWidth / leftInset default to the Omega look; the Glorious home passes a larger featured width and
+        // an inset that clears the nav column.
+        public FeedRow(string title, Func<string, Task<FeedPage>> loader, int width,
+                       int cardWidth = Theme.CardWidth, int leftInset = Theme.FocusMargin, int rowHeight = Theme.RowHeight)
         {
             Title = title;
             this.loader = loader;
+            this.cardWidth = cardWidth;
+            this.leftInset = leftInset;
             pump = BuildNext;
             RequestWork = () => UiWork.Request(pump);
-            Size = new Size(width, Theme.RowHeight);
+            Size = new Size(width, rowHeight);
 
-            var header = Widgets.Label(title, Theme.TitleSize - 4, Theme.Text, width - 40);
-            header.PositionX = Theme.FocusMargin;
+            var header = Widgets.Label(title, Theme.TitleSize - 4, Theme.Text, width - leftInset - 40);
+            header.PositionX = leftInset;
             Add(header);
 
-            status = Widgets.Label(T("Loading…"), Theme.BodySize, Theme.TextDim, width - 40);
-            status.Position = new Position(Theme.FocusMargin, 140);
+            status = Widgets.Label(T("Loading…"), Theme.BodySize, Theme.TextDim, width - leftInset - 40);
+            status.Position = new Position(leftInset, 140);
             Add(status);
 
-            strip = new View { Position = new Position(Theme.FocusMargin, StripY), Size = new Size(20000, Theme.CardHeight(Theme.CardWidth) + 40) };
+            strip = new View { Position = new Position(leftInset, StripY), Size = new Size(20000, Theme.CardHeight(cardWidth) + 40) };
             Add(strip);
         }
 
@@ -129,7 +136,7 @@ namespace OmegaTube.Ui
                 }
                 else
                 {
-                    card = new Card(items[i]) { Position = new Position(i * Step, 16) };
+                    card = new Card(items[i], cardWidth) { Position = new Position(i * Step, 16) };
                     strip.Add(card);
                 }
                 cards.Add(card);
@@ -140,7 +147,7 @@ namespace OmegaTube.Ui
                 c.Dispose();
             }
             FocusIndex = Math.Min(FocusIndex, Math.Max(0, items.Count - 1));
-            slide = Widgets.Slide(strip, Theme.FocusMargin - FocusIndex * Step, StripY, slide);
+            slide = Widgets.Slide(strip, leftInset - FocusIndex * Step, StripY, slide);
         }
 
         // Builds the (unfilled, cheap) cards up to index `last`.
@@ -149,7 +156,7 @@ namespace OmegaTube.Ui
             last = Math.Min(last, items.Count - 1);
             while (cards.Count <= last)
             {
-                var card = new Card(items[cards.Count]) { Position = new Position(cards.Count * Step, 16) };
+                var card = new Card(items[cards.Count], cardWidth) { Position = new Position(cards.Count * Step, 16) };
                 cards.Add(card);
                 strip.Add(card);
             }
@@ -222,7 +229,7 @@ namespace OmegaTube.Ui
                 cards[FocusIndex].SetFocused(false);
             }
             FocusIndex = 0;
-            slide = Widgets.Slide(strip, Theme.FocusMargin, StripY, slide);
+            slide = Widgets.Slide(strip, leftInset, StripY, slide);
             UpdateVisible();
         }
 
@@ -238,7 +245,7 @@ namespace OmegaTube.Ui
             cards[FocusIndex].SetFocused(false);
             FocusIndex = next;
             cards[FocusIndex].SetFocused(true);
-            slide = Widgets.Slide(strip, Theme.FocusMargin - FocusIndex * Step, StripY, slide);
+            slide = Widgets.Slide(strip, leftInset - FocusIndex * Step, StripY, slide);
             UpdateVisible();
             if (fresh && FocusIndex >= items.Count - VisibleAhead && !string.IsNullOrEmpty(continuation))
             {
