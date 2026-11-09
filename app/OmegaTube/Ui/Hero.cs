@@ -6,13 +6,16 @@ using Tizen.NUI.BaseComponents;
 namespace OmegaTube.Ui
 {
     // Full-screen backdrop for the "Glorious" home style: the focused item's thumbnail fills the screen and
-    // fades to black on the left (under the nav) and along the bottom (under the text), with the item's title and
-    // a metadata line over it. Hero.Display(item) is called by HomeScreen as focus moves.
+    // fades to black on the left (under the nav / behind the text) and along the bottom (under the rows), with
+    // the item's title and a metadata line over it. Hero.Display(item) is called by HomeScreen as focus moves.
     //
     // The feed only carries the small mqdefault thumbnail (320×180), which is why a stretched backdrop looked
     // blurry. For the backdrop we fetch the full-resolution frames from the id instead: a reliable hqdefault
     // base layer with the sharp maxresdefault on top of it, so when maxres is missing (not every video has one)
     // the hqdefault still shows rather than a blank or a stale frame.
+    //
+    // The darkening is two full-screen gradients (not cropped rectangles), so there is no visible band/seam
+    // where a gradient rectangle used to end; multiple stops keep the ramp short enough to limit TV banding.
     public class Hero : View
     {
         private readonly ImageView artBase, artHi;
@@ -25,25 +28,30 @@ namespace OmegaTube.Ui
             Size = new Size(1920, 1080);
             BackgroundColor = Theme.Background;
 
-            // Base: hqdefault (480×360, always present). It is 4:3 with letterbox bars baked in; ScaleToFill
-            // crops to the centre 16:9, which is exactly the frame without the bars.
             artBase = new ImageView { Size = new Size(1920, 1080), FittingMode = FittingModeType.ScaleToFill };
             Add(artBase);
-            // High: maxresdefault (1280×720, 16:9) when the video has it; drawn over the base.
             artHi = new ImageView { Size = new Size(1920, 1080), FittingMode = FittingModeType.ScaleToFill };
             Add(artHi);
 
-            // Left fade (solid black under the nav column -> transparent) and bottom fade (for the text).
-            Add(Gradient(new Vector2(-0.5f, 0f), new Vector2(0.5f, 0f), 1180, 1080, 0, 0));
-            Add(Gradient(new Vector2(0f, 0.5f), new Vector2(0f, -0.5f), 1920, 600, 0, 480));
+            // Left fade: solid black at the left edge -> clear by the centre (full-screen, so no vertical seam).
+            Add(Widgets.Gradient(new Vector2(-0.5f, 0f), new Vector2(0.5f, 0f),
+                new[] { 0f, 0.28f, 0.5f },
+                new[] { new Vector4(0, 0, 0, 1f), new Vector4(0, 0, 0, 0.55f), new Vector4(0, 0, 0, 0f) },
+                1920, 1080, 0, 0));
+            // Bottom fade: clear in the upper screen -> dark across the lower band under the rows.
+            Add(Widgets.Gradient(new Vector2(0f, 0.5f), new Vector2(0f, -0.5f),
+                new[] { 0f, 0.5f, 1f },
+                new[] { new Vector4(0, 0, 0, 0.92f), new Vector4(0, 0, 0, 0.15f), new Vector4(0, 0, 0, 0f) },
+                1920, 1080, 0, 0));
 
-            title = Widgets.Label("", Theme.TitleSize + 30, Theme.Text, 960, 180);
-            title.Position = new Position(Theme.GloriousInset, 200);
+            title = Widgets.Label("", Theme.TitleSize + 8, Theme.Text, 760, 118);
+            title.Position = new Position(Theme.GloriousInset, 196);
             title.MultiLine = true;
+            Widgets.Bold(title);
             Add(title);
 
-            meta = Widgets.Label("", Theme.BodySize + 4, Theme.TextDim, 960, 46);
-            meta.Position = new Position(Theme.GloriousInset, 404);
+            meta = Widgets.Label("", Theme.BodySize + 2, Theme.TextDim, 760, 44);
+            meta.Position = new Position(Theme.GloriousInset, 322);
             Add(meta);
         }
 
@@ -84,25 +92,6 @@ namespace OmegaTube.Ui
             if (!string.IsNullOrEmpty(item.Views)) parts.Add(item.Views);
             if (!string.IsNullOrEmpty(item.Published)) parts.Add(item.Published);
             return string.Join("   ·   ", parts);
-        }
-
-        private static View Gradient(Vector2 start, Vector2 end, int w, int h, int x, int y)
-        {
-            var v = new View { Size = new Size(w, h), Position = new Position(x, y) };
-            var map = new PropertyMap();
-            map.Add((int)Visual.Property.Type, new PropertyValue((int)Visual.Type.Gradient));
-            map.Add((int)GradientVisualProperty.StartPosition, new PropertyValue(start));
-            map.Add((int)GradientVisualProperty.EndPosition, new PropertyValue(end));
-            var offsets = new PropertyArray();
-            offsets.Add(new PropertyValue(0f));
-            offsets.Add(new PropertyValue(1f));
-            map.Add((int)GradientVisualProperty.StopOffset, new PropertyValue(offsets));
-            var colors = new PropertyArray();
-            colors.Add(new PropertyValue(new Vector4(0f, 0f, 0f, 1f)));
-            colors.Add(new PropertyValue(new Vector4(0f, 0f, 0f, 0f)));
-            map.Add((int)GradientVisualProperty.StopColor, new PropertyValue(colors));
-            v.Background = map;
-            return v;
         }
     }
 }

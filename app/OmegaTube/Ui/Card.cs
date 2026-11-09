@@ -39,18 +39,16 @@ namespace OmegaTube.Ui
             thumb = new ImageView
             {
                 Size = new Size(width, thumbH + Theme.CardRadius),
-                BackgroundColor = Theme.Surface,
             };
-            Widgets.Round(thumb, Theme.CardRadius);
+            Widgets.FillRounded(thumb, Theme.Surface, Theme.CardRadius);   // rounded placeholder until the image loads
             Add(thumb);
 
             info = new View
             {
                 Position = new Position(0, thumbH),
                 Size = new Size(width, Theme.CardInfoHeight),
-                BackgroundColor = Theme.CardInfo,
             };
-            Widgets.Round(info, Theme.CardRadius);
+            Widgets.FillRounded(info, Theme.CardInfo, Theme.CardRadius);
             Add(info);
             infoTopPatch = Widgets.Box(Theme.CardInfo, width, Theme.CardRadius);
             info.Add(infoTopPatch);
@@ -95,7 +93,7 @@ namespace OmegaTube.Ui
 
             if (!string.IsNullOrEmpty(Item.Thumbnail))
             {
-                thumb.ResourceUrl = Item.Thumbnail;
+                Widgets.RoundImage(thumb, Item.Thumbnail, Theme.CardRadius);
             }
         }
 
@@ -154,8 +152,9 @@ namespace OmegaTube.Ui
 
         private void ApplyFocusColors()
         {
-            info.BackgroundColor = focused ? Theme.CardInfoFocused : Theme.CardInfo;
-            infoTopPatch.BackgroundColor = info.BackgroundColor;
+            Color infoColor = focused ? Theme.CardInfoFocused : Theme.CardInfo;
+            Widgets.SetFill(info, infoColor, Theme.CardRadius);   // re-apply as a rounded fill, not a plain colour
+            infoTopPatch.BackgroundColor = infoColor;
             if (Filled)
             {
                 title.TextColor = focused ? Theme.CardTextFocused : Theme.Text;

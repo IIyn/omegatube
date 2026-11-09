@@ -26,7 +26,7 @@ namespace OmegaTube.Ui
         public int Count => items.Count + highlights.Count;
         public VideoItem FocusedItem => inHighlights ? highlights[hlFocus].Item : items.Count > 0 ? items[focus] : null;
 
-        private readonly int cardW, rowStep;
+        private readonly int cardW, rowStep, height;
         private readonly View content;
         private readonly View hlStrip;
         private readonly TextLabel hlHeading, gridHeading;
@@ -45,10 +45,15 @@ namespace OmegaTube.Ui
         private int generation;   // ignores pages of a previous Show()
         private Animation scroll, hlScroll;
         private readonly Func<bool> pump;
+        private View emptyView;           // centered sign-in / empty-state card (built on first use)
+        private TextLabel emptyMessage;
+        private readonly int width;
 
         public FeedGrid(int width, int height)
         {
             pump = BuildNext;
+            this.width = width;
+            this.height = height;
             Size = new Size(width, height);
             ClippingMode = ClippingModeType.ClipChildren;
             cardW = (width - 2 * Pad - (Columns - 1) * GapX) / Columns;
@@ -87,9 +92,11 @@ namespace OmegaTube.Ui
             content.PositionY = Pad;
             if (loader == null)
             {
-                status.Text = emptyText ?? "";
+                status.Text = "";
+                ShowEmpty(emptyText ?? "");
                 return;
             }
+            emptyView?.Hide();
             status.Text = T("Loading…");
             AfterChange();
             if (cacheKey != null)
@@ -116,6 +123,34 @@ namespace OmegaTube.Ui
         public void Wake()
         {
             UiWork.Request(pump);
+        }
+
+        // Centered sign-in / empty-state card (used when a section has no loader, e.g. signed out): an account
+        // glyph in a glass circle over the message, instead of a bare line of text in the corner.
+        private void ShowEmpty(string message)
+        {
+            if (emptyView == null)
+            {
+                int panelW = Math.Min(width - 2 * Pad, 1040);
+                const int panelH = 360;
+                emptyView = Widgets.Rounded(Theme.GlassPanel, panelW, panelH, Theme.GlassRadius);
+                emptyView.Position = new Position((width - panelW) / 2, Math.Max(Pad, (height - panelH) / 2 - 30));
+
+                var circle = Widgets.Rounded(Theme.GlassHigh, 128, 128, 64);
+                circle.Position = new Position((panelW - 128) / 2, 46);
+                emptyView.Add(circle);
+                var icon = new ImageView { ResourceUrl = Theme.Icon("set_account"), Size = new Size(66, 66), Position = new Position(31, 31) };
+                circle.Add(icon);
+
+                emptyMessage = Widgets.Label("", Theme.BodySize + 4, Theme.Text, panelW - 160, 150);
+                emptyMessage.MultiLine = true;
+                emptyMessage.HorizontalAlignment = HorizontalAlignment.Center;
+                emptyMessage.Position = new Position(80, 210);
+                emptyView.Add(emptyMessage);
+                Add(emptyView);
+            }
+            emptyMessage.Text = message;
+            emptyView.Show();
         }
 
         // Asks the first page again (new videos come first), back at the top right away so they do not land

@@ -73,6 +73,70 @@ namespace OmegaTube.Ui
             return view;
         }
 
+        // DALi corner radius lives at MixColor + 3 in the visual property map (devel API). TizenFX 6.0 (the
+        // Tizen 5.5 baseline) exposes no View.CornerRadius, but the firmware's DALi still honours this raw key
+        // on a visual, so colour fills and images round even there. We set it on the visual AND call Round()
+        // (for the TizenFX versions that do have CornerRadius).
+        private static readonly int VisualCornerRadius = (int)Visual.Property.MixColor + 3;
+
+        // A rounded solid-colour fill, applied as a ColorVisual (so it rounds on Tizen 5.5). Use SetFill to
+        // recolour later without losing the radius (a plain BackgroundColor assignment would drop it).
+        public static void FillRounded(View v, Color color, float radius)
+        {
+            var map = new PropertyMap();
+            map.Add((int)Visual.Property.Type, new PropertyValue((int)Visual.Type.Color));
+            map.Add((int)ColorVisualProperty.MixColor, new PropertyValue(color));
+            if (radius > 0f)
+            {
+                map.Add(VisualCornerRadius, new PropertyValue(radius));
+            }
+            v.Background = map;
+            Round(v, radius);
+        }
+
+        public static void SetFill(View v, Color color, float radius) => FillRounded(v, color, radius);
+
+        // A rounded image, applied as an ImageVisual carrying the corner radius. Falls back to a plain
+        // ResourceUrl if the visual map is rejected, so the thumbnail still shows (just square).
+        public static void RoundImage(ImageView iv, string url, float radius)
+        {
+            try
+            {
+                var map = new PropertyMap();
+                map.Add((int)Visual.Property.Type, new PropertyValue((int)Visual.Type.Image));
+                map.Add((int)ImageVisualProperty.URL, new PropertyValue(url));
+                if (radius > 0f)
+                {
+                    map.Add(VisualCornerRadius, new PropertyValue(radius));
+                }
+                iv.Image = map;
+            }
+            catch (System.Exception e)
+            {
+                Tizen.Log.Warn("OmegaTube", "RoundImage: " + e.Message);
+                iv.ResourceUrl = url;
+            }
+        }
+
+        // A linear gradient fill View (no image asset). offsets/colors are the stops; start/end are in the
+        // view's normalized space (-0.5 .. 0.5).
+        public static View Gradient(Vector2 start, Vector2 end, float[] offsets, Vector4[] colors, int w, int h, int x, int y)
+        {
+            var v = new View { Size = new Size(w, h), Position = new Position(x, y) };
+            var map = new PropertyMap();
+            map.Add((int)Visual.Property.Type, new PropertyValue((int)Visual.Type.Gradient));
+            map.Add((int)GradientVisualProperty.StartPosition, new PropertyValue(start));
+            map.Add((int)GradientVisualProperty.EndPosition, new PropertyValue(end));
+            var off = new PropertyArray();
+            foreach (float o in offsets) off.Add(new PropertyValue(o));
+            map.Add((int)GradientVisualProperty.StopOffset, new PropertyValue(off));
+            var col = new PropertyArray();
+            foreach (Vector4 c in colors) col.Add(new PropertyValue(c));
+            map.Add((int)GradientVisualProperty.StopColor, new PropertyValue(col));
+            v.Background = map;
+            return v;
+        }
+
         public static View Box(Color color, int width, int height)
         {
             return new View { BackgroundColor = color, Size = new Size(width, height) };
@@ -155,7 +219,9 @@ namespace OmegaTube.Ui
 
         public static View Rounded(Color color, int width, int height, float radius)
         {
-            return Round(new View { BackgroundColor = color, Size = new Size(width, height) }, radius);
+            var v = new View { Size = new Size(width, height) };
+            FillRounded(v, color, radius);
+            return v;
         }
 
         // On/off switch (settings rows). Update with SetSwitch.

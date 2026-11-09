@@ -43,6 +43,7 @@ namespace OmegaTube.Ui
         private readonly View feedHost;
         private View feedView;     // feed on display, if any
         private readonly View embedHost;
+        private readonly View rowFadeLeft, rowFadeRight;   // Glorious: edge fades over the rows band
         private Hero hero;
         private Rail rail;
         private TextLabel updateBanner;
@@ -65,6 +66,16 @@ namespace OmegaTube.Ui
             Root.Add(header);
             feedHost = new View { Size = new Size(1920, 1080) };   // under the rail, which is added last
             Root.Add(feedHost);
+            // Glorious: fades over the rows band (above the feed, under the nav) so the left cards tuck under the
+            // nav and both ends of a row fade out instead of clipping hard at the screen edges.
+            rowFadeLeft = Widgets.Gradient(new Vector2(-0.5f, 0f), new Vector2(0.5f, 0f),
+                new[] { 0f, 1f }, new[] { new Vector4(0, 0, 0, 1f), new Vector4(0, 0, 0, 0f) }, 340, 600, 0, 480);
+            rowFadeRight = Widgets.Gradient(new Vector2(-0.5f, 0f), new Vector2(0.5f, 0f),
+                new[] { 0f, 1f }, new[] { new Vector4(0, 0, 0, 0f), new Vector4(0, 0, 0, 1f) }, 240, 600, 1680, 480);
+            rowFadeLeft.Hide();
+            rowFadeRight.Hide();
+            Root.Add(rowFadeLeft);
+            Root.Add(rowFadeRight);
             embedHost = new View { Position = new Position(Theme.RailWidth, 0), Size = new Size(1920 - Theme.RailWidth, 1080),
                                    ClippingMode = ClippingModeType.ClipChildren };
             embedHost.Hide();
@@ -506,9 +517,13 @@ namespace OmegaTube.Ui
             if (!Glorious || sections.Count == 0 || current >= sections.Count || sections[current].Embed != null)
             {
                 hero.Hide();
+                rowFadeLeft?.Hide();
+                rowFadeRight?.Hide();
                 return;
             }
             hero.Show();
+            rowFadeLeft?.Show();
+            rowFadeRight?.Show();
             VideoItem item = Feed?.FocusedItem;
             if (item != null)
             {
