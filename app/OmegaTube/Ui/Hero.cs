@@ -19,6 +19,10 @@ namespace OmegaTube.Ui
     public class Hero : View
     {
         private const int PreviewDelayMs = 600;   // dwell before the animated preview starts (avoids one per scroll tick)
+        // Tizen 5.5's NUI image decoder does not animate WebP (YouTube's only moving-thumbnail format), so a
+        // preview would just replace the sharp still with a low-res first frame. The core still provides
+        // item.Preview, so this can be switched on for a firmware that can animate it.
+        private const bool AnimatedPreviews = false;
 
         private readonly ImageView artBase, artHi, preview;
         private readonly TextLabel title, meta;
@@ -100,7 +104,7 @@ namespace OmegaTube.Ui
             previewFade?.Stop();
             preview.Opacity = 0f;
             preview.Image = new PropertyMap();   // drop the previous preview
-            if (string.IsNullOrEmpty(item.Preview))
+            if (!AnimatedPreviews || string.IsNullOrEmpty(item.Preview))
             {
                 return;
             }
