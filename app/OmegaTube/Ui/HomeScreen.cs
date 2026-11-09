@@ -559,6 +559,7 @@ namespace OmegaTube.Ui
             VideoItem item = Feed?.FocusedItem;
             if (item != null)
             {
+                hero.SetUpcoming(Feed.ItemsAfterFocus(2));   // their streams are resolved ahead
                 hero.Display(item);
                 hero.AttachRing(Feed.FocusedCardView);   // preview countdown on that card's corner
             }

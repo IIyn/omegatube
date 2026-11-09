@@ -22,6 +22,7 @@ namespace OmegaTube.Ui
         public VideoItem FocusedItem => rows.Count > 0 ? rows[focus].FocusedItem : null;
         public int FocusedRow => focus;
         public View FocusedCardView => rows.Count > 0 ? rows[focus].FocusedCard : null;
+        public List<VideoItem> ItemsAfterFocus(int count) => rows.Count > 0 ? rows[focus].ItemsAfterFocus(count) : new List<VideoItem>();
 
         // Glorious hero mode: the first row sits below the hero text; moving off it scrolls the rows up to fill
         // the screen (and the home screen hides the hero). RowChanged fires when the focused row changes.

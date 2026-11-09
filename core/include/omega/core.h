@@ -78,6 +78,10 @@ OMEGA_API omega_player* omega_player_create_youtube(void* ecore_wl2_window, int 
 OMEGA_API omega_player* omega_player_create_preview(void* ecore_wl2_window, int width, int height,
                                                     const char* video_id, int max_height, const char* codecs,
                                                     int64_t start_ms);
+// Resolves a video's streams ahead of its preview (InnerTube "player" only: no decoder, no watch history) and
+// keeps them (a few videos, 90 min), so omega_player_create_preview starts with the media fetch. Blocking
+// (network): call it off the UI thread. Returns 1 when resolved (or already cached), 0 on failure.
+OMEGA_API int omega_preview_prefetch(const char* video_id);
 // Why the last omega_player_create_youtube returned NULL: {"kind","status","reason","detail","signedIn"}.
 // kind: login | age | upcoming | unplayable | unavailable | rate_limited | http | network | formats | player | other;
 // status: YouTube's playabilityStatus ("LOGIN_REQUIRED"...) or "HTTP_<code>"; reason: YouTube's own message

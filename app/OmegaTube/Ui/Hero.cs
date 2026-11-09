@@ -26,6 +26,8 @@ namespace OmegaTube.Ui
     {
         private const uint DwellMs = 3000;          // the countdown: the video shows when it completes
         private const uint PrefetchMs = 1000;       // start loading this far into it (scrolling past costs nothing)
+        private const uint ResolveMs = 400;         // resolve this one and the next ones' streams after this long
+        private const int ResolveAhead = 2;         // how many of the next cards
         private const long PreviewCapMs = 120000;   // then give the decoder (and the data) back
         private const double CreateTimeoutS = 45;   // YouTube can be slow to hand over a stream
         private const double PlayTimeoutS = 15;     // created but never playing
@@ -37,7 +39,8 @@ namespace OmegaTube.Ui
         private readonly VideoPreview video = new VideoPreview();
         private readonly PreviewRing ring = new PreviewRing();   // countdown on the focused card
         private Animation fade, reveal;
-        private Timer prefetchTimer, watchTimer;
+        private Timer resolveTimer, prefetchTimer, watchTimer;
+        private List<VideoItem> upcoming = new List<VideoItem>();   // the cards after the focused one
         private VideoItem currentItem;
         private string currentId = "";
         private string armedId;     // its countdown is running or its preview is on
@@ -141,6 +144,12 @@ namespace OmegaTube.Ui
             }
         }
 
+        // The cards after the focused one, whose streams are resolved ahead (see Arm).
+        public void SetUpcoming(List<VideoItem> next)
+        {
+            upcoming = next ?? new List<VideoItem>();
+        }
+
         // Puts the countdown ring on the top-right corner of the focused card (it then moves and zooms with it).
         public void AttachRing(View card)
         {
@@ -194,6 +203,24 @@ namespace OmegaTube.Ui
             clock.Restart();
             Log("countdown " + item.Id);
             ring.Countdown(DwellMs, CountdownDone);
+            // Resolve this video's streams (and the next cards') ahead: no decoder needed, so it runs while the
+            // ring fills and the player creation at PrefetchMs only has to fetch media. Not while scrolling past.
+            resolveTimer = new Timer(ResolveMs);
+            resolveTimer.Tick += (s, e) => UiGuard.Tick("Hero.resolve", () =>
+            {
+                resolveTimer = null;
+                if (active && armedId == item.Id)
+                {
+                    var ids = new List<string> { item.Id };
+                    for (int i = 0; i < upcoming.Count && i < ResolveAhead; i++)
+                    {
+                        ids.Add(upcoming[i].Id);
+                    }
+                    PreviewPrefetcher.Want(ids);
+                }
+                return false;
+            });
+            resolveTimer.Start();
             prefetchTimer = new Timer(PrefetchMs);
             prefetchTimer.Tick += (s, e) => UiGuard.Tick("Hero.prefetch", () =>
             {
@@ -324,6 +351,9 @@ namespace OmegaTube.Ui
             }
             armedId = null;
             countdownDone = false;
+            resolveTimer?.Stop();
+            resolveTimer = null;
+            PreviewPrefetcher.Clear();   // the next focus (if any) asks for its own neighbours
             prefetchTimer?.Stop();
             prefetchTimer = null;
             watchTimer?.Stop();

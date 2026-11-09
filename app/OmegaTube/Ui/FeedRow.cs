@@ -22,6 +22,9 @@ namespace OmegaTube.Ui
         public int FocusIndex { get; private set; }
         public VideoItem FocusedItem => items.Count > 0 ? items[FocusIndex] : null;
         public Card FocusedCard => FocusIndex < cards.Count ? cards[FocusIndex] : null;
+
+        public List<VideoItem> ItemsAfterFocus(int count) =>
+            items.GetRange(Math.Min(FocusIndex + 1, items.Count), Math.Max(0, Math.Min(count, items.Count - FocusIndex - 1)));
         public VideoItem FirstItem => items.Count > 0 ? items[0] : null;
 
         // Asks UiWork to call BuildNext. A ShelfList replaces it to order the work of all its rows.

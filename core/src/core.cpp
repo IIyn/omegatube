@@ -4,9 +4,12 @@
 #include <cctype>
 #include <chrono>
 #include <climits>
+#include <condition_variable>
 #include <cstdlib>
 #include <cstring>
+#include <map>
 #include <mutex>
+#include <set>
 
 #include <nlohmann/json.hpp>
 #include <stdexcept>
@@ -287,13 +290,91 @@ omega_player* omega_player_create_youtube(void* window, int width, int height, c
     }
 }
 
+namespace {
+
+// Previews: the InnerTube "player" answers (stream URLs, valid for hours) of the videos around the focus,
+// resolved ahead by omega_preview_prefetch so a preview only has to fetch media when it starts. Two requests for
+// the same video at once share one resolution (the second waits for the first).
+struct PreviewResolution {
+    omega::yt::VideoInfo info;
+    omega::net::Headers headers;
+    std::chrono::steady_clock::time_point at;
+};
+std::mutex g_preview_mutex;
+std::condition_variable g_preview_cv;
+std::map<std::string, PreviewResolution> g_preview_cache;
+std::set<std::string> g_preview_resolving;
+constexpr auto kPreviewTtl = std::chrono::minutes(90);
+constexpr size_t kPreviewCacheSize = 8;
+
+bool resolve_preview(const std::string& id, omega::yt::VideoInfo& info, omega::net::Headers& headers,
+                     std::string& error) {
+    std::unique_lock<std::mutex> lock(g_preview_mutex);
+    g_preview_cv.wait(lock, [&] { return g_preview_resolving.count(id) == 0; });
+    auto now = std::chrono::steady_clock::now();
+    auto hit = g_preview_cache.find(id);
+    if (hit != g_preview_cache.end() && now - hit->second.at < kPreviewTtl) {
+        info = hit->second.info;
+        headers = hit->second.headers;
+        return true;
+    }
+    g_preview_resolving.insert(id);
+    lock.unlock();
+
+    bool ok = false;
+    try {
+        omega::yt::Client client;
+        ok = client.player(id, info, error);
+        if (ok) headers = info.user_agent.empty() ? client.stream_headers() : omega::net::Headers{{"User-Agent", info.user_agent}};
+    } catch (const std::exception& e) {
+        // Never leave the id marked as resolving: waiters (the decoder chain) would block forever.
+        error = std::string("preview resolve: ") + e.what();
+        ok = false;
+    }
+
+    lock.lock();
+    g_preview_resolving.erase(id);
+    if (ok) {
+        for (auto it = g_preview_cache.begin(); it != g_preview_cache.end();)
+            it = now - it->second.at >= kPreviewTtl ? g_preview_cache.erase(it) : std::next(it);
+        while (g_preview_cache.size() >= kPreviewCacheSize) {
+            auto oldest = g_preview_cache.begin();
+            for (auto it = g_preview_cache.begin(); it != g_preview_cache.end(); ++it)
+                if (it->second.at < oldest->second.at) oldest = it;
+            g_preview_cache.erase(oldest);
+        }
+        g_preview_cache[id] = PreviewResolution{info, headers, now};
+    }
+    g_preview_cv.notify_all();
+    return ok;
+}
+
+void forget_preview(const std::string& id) {
+    std::lock_guard<std::mutex> lock(g_preview_mutex);
+    g_preview_cache.erase(id);
+}
+
+}  // namespace
+
+int omega_preview_prefetch(const char* video_id) {
+    std::string id = video_id ? video_id : "", error;
+    omega::yt::VideoInfo info;
+    omega::net::Headers headers;
+    if (id.empty() || !resolve_preview(id, info, headers, error)) {
+        OLOG("preview prefetch %s: %s", id.c_str(), error.c_str());
+        return 0;
+    }
+    return 1;
+}
+
 omega_player* omega_player_create_preview(void* window, int width, int height, const char* video_id, int max_height,
                                           const char* codecs, int64_t start_ms) {
-    omega::yt::Client client;
+    std::string id = video_id ? video_id : "";
     omega::yt::VideoInfo info;
+    omega::net::Headers headers;
     std::string error;
-    if (!client.player(video_id ? video_id : "", info, error)) {
-        OLOG("preview %s: %s", video_id ? video_id : "-", error.c_str());
+    if (!resolve_preview(id, info, headers, error)) {
+        OLOG("preview %s: %s", id.c_str(), error.c_str());
         return nullptr;
     }
     if (info.is_live) return nullptr;  // broadcasts: numbered segments from the live edge, not a quick preview
@@ -311,8 +392,7 @@ omega_player* omega_player_create_preview(void* window, int width, int height, c
         cfg.width = width;
         cfg.height = height;
         cfg.video_url = video->url;
-        cfg.stream_headers = info.user_agent.empty() ? client.stream_headers()
-                                                     : omega::net::Headers{{"User-Agent", info.user_agent}};
+        cfg.stream_headers = headers;
         cfg.fps = video->fps > 0 ? video->fps : 30;
         cfg.max_width = video->width;
         cfg.max_height = video->height;
@@ -333,6 +413,7 @@ omega_player* omega_player_create_preview(void* window, int width, int height, c
         OLOG("preview start failed: %s", p->impl.error().c_str());
         delete p;
     }
+    forget_preview(id);  // possibly stale / refused URLs: resolve afresh next time
     return nullptr;
 }
 

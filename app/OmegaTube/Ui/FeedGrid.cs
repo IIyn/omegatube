@@ -27,6 +27,9 @@ namespace OmegaTube.Ui
         public VideoItem FocusedItem => inHighlights ? highlights[hlFocus].Item : items.Count > 0 ? items[focus] : null;
         public int FocusedRow => inHighlights ? 0 : focus / Columns;
         public View FocusedCardView => FocusedCard();
+        public List<VideoItem> ItemsAfterFocus(int count) =>
+            inHighlights || focus + 1 >= items.Count ? new List<VideoItem>()
+                         : items.GetRange(focus + 1, Math.Min(count, items.Count - focus - 1));
 
         private readonly int cardW, rowStep, height;
         private readonly View content;
