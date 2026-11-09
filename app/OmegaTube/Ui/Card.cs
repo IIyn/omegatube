@@ -17,7 +17,8 @@ namespace OmegaTube.Ui
 
         private readonly int width, thumbH;
         private readonly ImageView thumb;
-        private readonly View info, infoTopPatch;
+        private readonly ImageView info;
+        private readonly View infoTopPatch;
         private readonly View progress;
         private TextLabel title, meta;
         private bool focused;
@@ -36,19 +37,24 @@ namespace OmegaTube.Ui
             // TizenFX 8 only has a uniform corner radius. The "glued" look (rounded outer corners only) is
             // made by overlap: the thumbnail extends one radius under the info box (which hides its rounded
             // bottom), and a square patch covers the info box's rounded top corners.
+            // Rounding on Tizen 5.5: the firmware's NUI has no CornerRadius, so we round with image techniques
+            // that it does support. The thumbnail is clipped by a rounded-rect alpha mask; the info box is a
+            // white rounded-rect nine-patch tinted to the panel colour (fixed corners at any width).
             thumb = new ImageView
             {
                 Size = new Size(width, thumbH + Theme.CardRadius),
+                AlphaMaskURL = Theme.Image("round_mask"),
+                CropToMask = true,
             };
-            Widgets.FillRounded(thumb, Theme.Surface, Theme.CardRadius);   // rounded placeholder until the image loads
             Add(thumb);
 
-            info = new View
+            info = new ImageView
             {
                 Position = new Position(0, thumbH),
                 Size = new Size(width, Theme.CardInfoHeight),
+                ResourceUrl = Theme.Image("round9.9"),
+                Color = Theme.CardInfo,
             };
-            Widgets.FillRounded(info, Theme.CardInfo, Theme.CardRadius);
             Add(info);
             infoTopPatch = Widgets.Box(Theme.CardInfo, width, Theme.CardRadius);
             info.Add(infoTopPatch);
@@ -93,7 +99,7 @@ namespace OmegaTube.Ui
 
             if (!string.IsNullOrEmpty(Item.Thumbnail))
             {
-                Widgets.RoundImage(thumb, Item.Thumbnail, Theme.CardRadius);
+                thumb.ResourceUrl = Item.Thumbnail;   // clipped by the alpha mask set in the constructor
             }
         }
 
@@ -153,7 +159,7 @@ namespace OmegaTube.Ui
         private void ApplyFocusColors()
         {
             Color infoColor = focused ? Theme.CardInfoFocused : Theme.CardInfo;
-            Widgets.SetFill(info, infoColor, Theme.CardRadius);   // re-apply as a rounded fill, not a plain colour
+            info.Color = infoColor;   // tints the white nine-patch
             infoTopPatch.BackgroundColor = infoColor;
             if (Filled)
             {
