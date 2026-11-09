@@ -99,7 +99,7 @@ namespace OmegaTube.Ui
             previewTimer = null;
             previewFade?.Stop();
             preview.Opacity = 0f;
-            preview.ResourceUrl = "";
+            preview.Image = new PropertyMap();   // drop the previous preview
             if (string.IsNullOrEmpty(item.Preview))
             {
                 return;
@@ -110,7 +110,13 @@ namespace OmegaTube.Ui
             {
                 if (id == currentId)
                 {
-                    preview.ResourceUrl = url;
+                    // Force the animated-image visual: YouTube's moving thumbnail is an animated WebP whose URL
+                    // carries a query string, so NUI's extension-based auto-detection would otherwise load it as a
+                    // single still frame.
+                    var map = new PropertyMap();
+                    map.Add((int)Visual.Property.Type, new PropertyValue((int)Visual.Type.AnimatedImage));
+                    map.Add((int)ImageVisualProperty.URL, new PropertyValue(url));
+                    preview.Image = map;
                     previewFade?.Stop();
                     previewFade = new Animation(300);
                     previewFade.AnimateTo(preview, "Opacity", 1f, new AlphaFunction(AlphaFunction.BuiltinFunctions.EaseOut));
