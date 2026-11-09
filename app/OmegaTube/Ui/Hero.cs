@@ -18,31 +18,35 @@ namespace OmegaTube.Ui
     // The darkening is two full-screen gradients (not cropped rectangles), so there is no visible band/seam
     // where a gradient rectangle used to end; multiple stops keep the ramp short enough to limit TV banding.
     //
-    // Video preview: after resting DwellMs on the item, the video itself plays (muted, 720p, no watch history)
-    // on the TV's video plane under the UI. The still stays on top until the video is actually PLAYING, then
-    // fades out to reveal it (the gradients and texts stay). Any move or hide puts the still back first, then
-    // releases the decoder, so there is no black flash either way.
+    // Video preview: resting on the item starts a 3 s countdown ring on its card. The video itself (muted,
+    // 720p, no watch history) starts loading after PrefetchMs, hidden on the TV's video plane under the still,
+    // and is revealed when the ring completes — or, if it is not ready by then, as soon as it plays (the full
+    // ring spins meanwhile). Any move or hide puts the still back first, then releases the decoder.
     public class Hero : View
     {
-        private const uint DwellMs = 3000;          // rest this long on a first-row video before it plays
+        private const uint DwellMs = 3000;          // the countdown: the video shows when it completes
+        private const uint PrefetchMs = 1000;       // start loading this far into it (scrolling past costs nothing)
         private const long PreviewCapMs = 120000;   // then give the decoder (and the data) back
-        private const double StartTimeoutS = 20;    // from the request: never playing by then -> stay on the still
+        private const double CreateTimeoutS = 45;   // YouTube can be slow to hand over a stream
+        private const double PlayTimeoutS = 15;     // created but never playing
         private const int Playing = 3;              // esp::State PLAYING
 
         private readonly App app;
         private readonly ImageView artBase, artHi;
         private readonly TextLabel title, meta;
         private readonly VideoPreview video = new VideoPreview();
+        private readonly PreviewRing ring = new PreviewRing();   // countdown on the focused card
         private Animation fade, reveal;
-        private Timer dwellTimer, watchTimer;
+        private Timer prefetchTimer, watchTimer;
         private VideoItem currentItem;
         private string currentId = "";
-        private string doneId;      // its preview ended (end, cap, never started): not replayed until it changes
+        private string armedId;     // its countdown is running or its preview is on
+        private string doneId;      // its preview ended / failed: not retried until the focus leaves and comes back
         private bool active;        // on screen: first row of a Glorious feed, home visible
+        private bool countdownDone;
         private bool revealed;      // the still has faded out over the playing video
         private long firstPlayingMs = -1;   // position at the first PLAYING sample: motion is measured from it
-        private DateTime requestedAt;       // when the preview was asked for (end of the dwell)
-        private readonly PreviewRing ring = new PreviewRing();   // countdown / loading on the focused card
+        private DateTime requestedAt, readyAt;
         private readonly System.Diagnostics.Stopwatch clock = new System.Diagnostics.Stopwatch();   // timing log
 
         // The layers under the hero (window, home root) must turn see-through while the video plane shows.
@@ -81,11 +85,13 @@ namespace OmegaTube.Ui
             Add(meta);
 
             video.Ready += () => UiGuard.Run("Hero.VideoReady", OnVideoReady);
+            video.Failed += () => UiGuard.Run("Hero.VideoFailed", () => GiveUp("refused"));
         }
 
         private static string Frame(string id, string variant) => "https://i.ytimg.com/vi/" + id + "/" + variant + ".jpg";
 
-        // Sets the item's artwork + title + metadata. Already the shown item: only (re)arms its preview.
+        // Sets the item's artwork + title + metadata and starts its countdown. Already the shown item: nothing is
+        // restarted (keys that do not move the focus keep the countdown / preview going).
         public void Display(VideoItem item)
         {
             if (item == null)
@@ -97,10 +103,10 @@ namespace OmegaTube.Ui
                 Arm();
                 return;
             }
-            StopVideo();
+            StopVideo("moved");
             currentId = item.Id;
             currentItem = item;
-            doneId = null;
+            doneId = null;   // back on a card after leaving it: its countdown runs again
             if (!string.IsNullOrEmpty(item.Id))
             {
                 artBase.ResourceUrl = Frame(item.Id, "hqdefault");
@@ -135,6 +141,25 @@ namespace OmegaTube.Ui
             }
         }
 
+        // Puts the countdown ring on the top-right corner of the focused card (it then moves and zooms with it).
+        public void AttachRing(View card)
+        {
+            if (card == null || ring.GetParent() == card)
+            {
+                return;
+            }
+            try
+            {
+                ring.GetParent()?.Remove(ring);
+                ring.Position = new Position(card.SizeWidth - PreviewRing.Diameter - 10, 10);
+                card.Add(ring);
+            }
+            catch (Exception e)
+            {
+                Tizen.Log.Warn("OmegaTube", "preview ring: " + e.Message);
+            }
+        }
+
         // OK on the shown item: where the full player should start, -1 for its usual resume point. A preview that
         // was playing continues from its position, unless the user had already watched further (resume point).
         // The preview stops, so the decoder is on its way back before the player asks for it.
@@ -155,59 +180,53 @@ namespace OmegaTube.Ui
 
         private void Log(string what) => NativeCore.Log("preview: " + what + " +" + clock.ElapsedMilliseconds + "ms");
 
-        // Starts the dwell countdown for the shown item, unless its preview is already starting or playing.
+        // Starts the countdown (and the hidden prefetch) for the shown item, unless it is already running for it.
         private void Arm()
         {
-            if (!active || currentItem == null || string.IsNullOrEmpty(currentId) || dwellTimer != null
-                || video.VideoId == currentId || doneId == currentId)
+            if (!active || currentItem == null || string.IsNullOrEmpty(currentId) || armedId == currentId
+                || doneId == currentId)
             {
                 return;
             }
             VideoItem item = currentItem;
-            ring.Countdown(DwellMs);
-            dwellTimer = new Timer(DwellMs);
-            dwellTimer.Tick += (s, e) => UiGuard.Tick("Hero.dwell", () =>
+            armedId = item.Id;
+            countdownDone = false;
+            clock.Restart();
+            Log("countdown " + item.Id);
+            ring.Countdown(DwellMs, CountdownDone);
+            prefetchTimer = new Timer(PrefetchMs);
+            prefetchTimer.Tick += (s, e) => UiGuard.Tick("Hero.prefetch", () =>
             {
-                dwellTimer = null;
-                if (active && item.Id == currentId)
+                prefetchTimer = null;
+                if (active && armedId == item.Id)
                 {
-                    // Always from the start: a preview is a taster (OK still resumes where the user left off).
-                    clock.Restart();
-                    Log("start " + item.Id);
-                    ring.Loading();
-                    requestedAt = DateTime.Now;
-                    firstPlayingMs = -1;
-                    video.Start(app, item.Id, 0);
-                    // Watched from the request on, so a preview that never comes up also ends (and the ring stops).
-                    watchTimer = new Timer(150);
-                    watchTimer.Tick += (s2, e2) => UiGuard.Tick("Hero.watch", Watch);
-                    watchTimer.Start();
-                }
-                else
-                {
-                    ring.Off();
+                    StartVideo(item);
                 }
                 return false;
             });
-            dwellTimer.Start();
+            prefetchTimer.Start();
         }
 
-        // Puts the countdown ring on the top-right corner of the focused card (it then moves and zooms with it).
-        public void AttachRing(View card)
+        // Always from the start: a preview is a taster (OK still resumes where the user left off).
+        private void StartVideo(VideoItem item)
         {
-            if (card == null || ring.GetParent() == card)
+            Log("request");
+            requestedAt = DateTime.Now;
+            readyAt = default;
+            firstPlayingMs = -1;
+            video.Start(app, item.Id, 0);
+            watchTimer = new Timer(150);
+            watchTimer.Tick += (s, e) => UiGuard.Tick("Hero.watch", Watch);
+            watchTimer.Start();
+        }
+
+        private void CountdownDone()
+        {
+            countdownDone = true;
+            Log("countdown done");
+            if (!TryReveal())
             {
-                return;
-            }
-            try
-            {
-                ring.GetParent()?.Remove(ring);
-                ring.Position = new Position(card.SizeWidth - PreviewRing.Diameter - 10, 10);
-                card.Add(ring);
-            }
-            catch (Exception e)
-            {
-                Tizen.Log.Warn("OmegaTube", "preview ring: " + e.Message);
+                ring.Spin();   // not playing yet: shows as soon as it does
             }
         }
 
@@ -219,23 +238,22 @@ namespace OmegaTube.Ui
                 return;
             }
             Log("player ready");
+            readyAt = DateTime.Now;
             // The still still covers everything: making the layers under it see-through changes nothing yet.
             BackgroundColor = Color.Transparent;
             SeeThrough?.Invoke(true);
         }
 
-        // Reveals the video once its clock moves (measured from the first PLAYING sample, so wherever it started);
-        // ends the preview at the end, after the cap, or if it never starts.
+        // Tracks the preview: reveals it once the countdown is over and its clock moves; ends it at the end, after
+        // the cap, or when it does not come up in time.
         private bool Watch()
         {
-            bool tooLate = !revealed && (DateTime.Now - requestedAt).TotalSeconds > StartTimeoutS;
             if (!video.Stats(out NativeCore.PlayerStats s))
             {
-                if (tooLate || video.VideoId == null)
+                if ((DateTime.Now - requestedAt).TotalSeconds > CreateTimeoutS)
                 {
-                    watchTimer = null;   // never came up (or stopped): StopVideo must not stop this running timer
-                    doneId = currentId;
-                    StopVideo("never started");
+                    watchTimer = null;   // GiveUp -> StopVideo must not stop the timer running this tick
+                    GiveUp("not created in time");
                     return false;
                 }
                 return true;   // still being created
@@ -245,38 +263,69 @@ namespace OmegaTube.Ui
                 firstPlayingMs = s.PositionMs;
                 Log("playing at " + s.PositionMs);
             }
-            bool capped = revealed && firstPlayingMs >= 0 && s.PositionMs - firstPlayingMs > PreviewCapMs;
-            if (s.Eos != 0 || tooLate || capped)
+            if (s.Eos != 0 || (revealed && firstPlayingMs >= 0 && s.PositionMs - firstPlayingMs > PreviewCapMs))
             {
-                watchTimer = null;   // StopVideo must not stop the timer that is running this tick
+                watchTimer = null;
                 doneId = currentId;
-                StopVideo(s.Eos != 0 ? "end" : tooLate ? "never played" : "cap");
+                StopVideo(s.Eos != 0 ? "end" : "cap");
                 return false;
             }
-            if (!revealed && s.State == Playing && firstPlayingMs >= 0 && s.PositionMs > firstPlayingMs + 200)
+            if (!revealed && readyAt != default && (DateTime.Now - readyAt).TotalSeconds > PlayTimeoutS)
             {
-                Log("revealed at " + s.PositionMs);
-                ring.Off();
-                revealed = true;
-                reveal?.Stop();
-                reveal = new Animation(500);
-                var ease = new AlphaFunction(AlphaFunction.BuiltinFunctions.EaseInOut);
-                reveal.AnimateTo(artBase, "Opacity", 0f, ease);
-                reveal.AnimateTo(artHi, "Opacity", 0f, ease);
-                reveal.Play();
+                watchTimer = null;
+                GiveUp("never played");
+                return false;
+            }
+            if (!revealed && countdownDone)
+            {
+                TryReveal();
             }
             return true;
         }
 
-        // Back to the still: cover the video plane first, then make the layers opaque, then free the decoder.
-        private void StopVideo(string why = "moved")
+        // Fades the still out over the video if it is playing (clock moved since the first PLAYING sample).
+        private bool TryReveal()
         {
-            if (video.VideoId != null)
+            if (revealed)
+            {
+                return true;
+            }
+            if (!video.Stats(out NativeCore.PlayerStats s) || s.State != Playing || firstPlayingMs < 0
+                || s.PositionMs <= firstPlayingMs + 200)
+            {
+                return false;
+            }
+            Log("revealed at " + s.PositionMs);
+            revealed = true;
+            ring.Off();
+            reveal?.Stop();
+            reveal = new Animation(500);
+            var ease = new AlphaFunction(AlphaFunction.BuiltinFunctions.EaseInOut);
+            reveal.AnimateTo(artBase, "Opacity", 0f, ease);
+            reveal.AnimateTo(artHi, "Opacity", 0f, ease);
+            reveal.Play();
+            return true;
+        }
+
+        // The preview cannot come up: back to the still, red ring, not retried until the focus comes back.
+        private void GiveUp(string why)
+        {
+            doneId = currentId;
+            StopVideo(why);
+            ring.Fail();
+        }
+
+        // Back to the still: cover the video plane first, then make the layers opaque, then free the decoder.
+        private void StopVideo(string why)
+        {
+            if (armedId != null)
             {
                 Log("stop (" + why + ")");
             }
-            dwellTimer?.Stop();
-            dwellTimer = null;
+            armedId = null;
+            countdownDone = false;
+            prefetchTimer?.Stop();
+            prefetchTimer = null;
             watchTimer?.Stop();
             watchTimer = null;
             ring.Off();

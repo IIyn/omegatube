@@ -22,6 +22,8 @@ namespace OmegaTube.Ui
 
         // The player exists (on the UI thread). Frames follow once it reaches PLAYING: see Stats.
         public event Action Ready;
+        // The core could not start it (refused / no format); the reason is in the core log. UI thread.
+        public event Action Failed;
 
         public void Start(App app, string videoId, long startMs)
         {
@@ -48,6 +50,18 @@ namespace OmegaTube.Ui
                 IntPtr p = NativeCore.PlayerCreatePreview(window, w, h, videoId, MaxHeight, codecs, startMs);
                 if (p == IntPtr.Zero)
                 {
+                    ui?.Post(_ => UiGuard.Run("VideoPreview.Failed", () =>
+                    {
+                        bool current;
+                        lock (sync)
+                        {
+                            current = gen == generation;
+                        }
+                        if (current)
+                        {
+                            Failed?.Invoke();
+                        }
+                    }), null);
                     return;
                 }
                 bool keep;

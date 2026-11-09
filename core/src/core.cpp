@@ -298,8 +298,13 @@ omega_player* omega_player_create_preview(void* window, int width, int height, c
     }
     if (info.is_live) return nullptr;  // broadcasts: numbered segments from the live edge, not a quick preview
     std::vector<std::string> prefs = omega::yt::parse_codec_list(codecs && *codecs ? codecs : "avc1,vp9");
+    std::vector<const omega::yt::Format*> videos =
+        omega::yt::rank_videos(info, max_height > 0 ? max_height : 720, prefs);
+    // 60 fps doubles the data (and the time to the first frames) for no visible gain in a muted backdrop:
+    // try the <= 30 fps formats first, best resolution first among them.
+    std::stable_partition(videos.begin(), videos.end(), [](const omega::yt::Format* f) { return f->fps <= 30; });
     int tries = 0;
-    for (const omega::yt::Format* video : omega::yt::rank_videos(info, max_height > 0 ? max_height : 720, prefs)) {
+    for (const omega::yt::Format* video : videos) {
         if (++tries > 3) break;  // codecs the TV refuses: try a couple of others, not every format
         omega::PlayerConfig cfg;
         cfg.window = window;
