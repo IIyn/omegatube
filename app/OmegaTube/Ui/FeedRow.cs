@@ -39,10 +39,11 @@ namespace OmegaTube.Ui
         private bool focused;
         private Animation slide;
         private readonly int cardWidth;
+        private readonly int cardGap;
         private readonly int leftInset;   // x of the focused card; earlier cards slide left of it (under the nav)
         private readonly bool thumbOnly;  // Glorious featured row: bare thumbnails (title/meta live on the hero)
 
-        private int Step => cardWidth + Theme.CardGap;
+        private int Step => cardWidth + cardGap;
 
         public FeedRow(string title, string query, int width) : this(title, c => YouTube.Search(query, c), width)
         {
@@ -53,11 +54,12 @@ namespace OmegaTube.Ui
         // an inset that clears the nav column.
         public FeedRow(string title, Func<string, Task<FeedPage>> loader, int width,
                        int cardWidth = Theme.CardWidth, int leftInset = Theme.FocusMargin, int rowHeight = Theme.RowHeight,
-                       bool thumbOnly = false)
+                       bool thumbOnly = false, int cardGap = Theme.CardGap)
         {
             Title = title;
             this.loader = loader;
             this.cardWidth = cardWidth;
+            this.cardGap = cardGap;
             this.leftInset = leftInset;
             this.thumbOnly = thumbOnly;
             pump = BuildNext;

@@ -51,8 +51,9 @@ namespace OmegaTube.Ui
 
         // Glorious home geometry.
         public const int GloriousInset = 150;      // rows start here, clearing the nav; earlier cards slide under it
-        public const int BigCardWidth = 440;       // featured first row (thumbnail-only, kept smaller to show more backdrop)
-        public const int BigRowHeight = 360;
+        public const int BigCardWidth = 352;       // featured first row (thumbnail-only, small to show more backdrop)
+        public const int BigCardGap = 56;          // more spacing between featured cards
+        public const int BigRowHeight = 300;
 
         public static int ThumbHeight(int cardWidth) => cardWidth * 9 / 16;
         public static int CardHeight(int cardWidth) => ThumbHeight(cardWidth) + CardInfoHeight;

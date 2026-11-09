@@ -43,7 +43,7 @@ namespace OmegaTube.Ui
         private readonly View feedHost;
         private View feedView;     // feed on display, if any
         private readonly View embedHost;
-        private readonly View rowFadeLeft, rowFadeRight;   // Glorious: edge fades over the rows band
+        private readonly View rowFadeLeft, rowFadeRight, rowFadeBottom;   // Glorious: edge fades over the rows band
         private Hero hero;
         private Rail rail;
         private TextLabel updateBanner;
@@ -73,10 +73,15 @@ namespace OmegaTube.Ui
                                           Position = new Position(0, 460), FittingMode = FittingModeType.ScaleToFill };
             rowFadeRight = new ImageView { ResourceUrl = Theme.Image("scrim_right"), Size = new Size(260, 620),
                                           Position = new Position(1660, 460), FittingMode = FittingModeType.ScaleToFill };
+            // Bottom fade: while on the featured first row, the next row peeking at the bottom is faded out.
+            rowFadeBottom = new ImageView { ResourceUrl = Theme.Image("scrim_rowbottom"), Size = new Size(1920, 300),
+                                            Position = new Position(0, 780), FittingMode = FittingModeType.ScaleToFill };
             rowFadeLeft.Hide();
             rowFadeRight.Hide();
+            rowFadeBottom.Hide();
             Root.Add(rowFadeLeft);
             Root.Add(rowFadeRight);
+            Root.Add(rowFadeBottom);
             embedHost = new View { Position = new Position(Theme.RailWidth, 0), Size = new Size(1920 - Theme.RailWidth, 1080),
                                    ClippingMode = ClippingModeType.ClipChildren };
             embedHost.Hide();
@@ -534,11 +539,13 @@ namespace OmegaTube.Ui
                 hero.Hide();
                 rowFadeLeft?.Hide();
                 rowFadeRight?.Hide();
+                rowFadeBottom?.Hide();
                 return;
             }
             hero.Show();
             rowFadeLeft?.Show();
             rowFadeRight?.Show();
+            rowFadeBottom?.Show();
             VideoItem item = Feed?.FocusedItem;
             if (item != null)
             {

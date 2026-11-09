@@ -176,7 +176,8 @@ namespace OmegaTube.Ui
                     // Items beyond the shelf's first ones: the same browse call with the row's continuation.
                     bool big = bigFirst && i == 0;
                     row = new FeedRow(title, c => YouTube.Browse("", c), width,
-                                      big ? Theme.BigCardWidth : Theme.CardWidth, leftInset, RowHeightAt(i), thumbOnly: big)
+                                      big ? Theme.BigCardWidth : Theme.CardWidth, leftInset, RowHeightAt(i),
+                                      thumbOnly: big, cardGap: big ? Theme.BigCardGap : Theme.CardGap)
                     {
                         Position = new Position(0, RowTop(i)),
                         RequestWork = () => UiWork.Request(pump),
