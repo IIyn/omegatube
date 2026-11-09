@@ -16,6 +16,7 @@
 #include <string>
 #include <thread>
 
+#include "media/webp_anim.h"
 #include "net/http.h"
 #include "player/player.h"
 #include "yt/auth.h"
@@ -298,7 +299,7 @@ namespace {
 struct PreviewResolution {
     omega::yt::VideoInfo info;
     omega::net::Headers headers;
-    std::chrono::steady_clock::time_point at;
+    std::chrono::system_clock::time_point at;   // wall clock: a TV in standby must not look younger than it is
 };
 std::mutex g_preview_mutex;
 std::condition_variable g_preview_cv;
@@ -306,14 +307,36 @@ std::map<std::string, PreviewResolution> g_preview_cache;
 std::set<std::string> g_preview_resolving;
 constexpr auto kPreviewTtl = std::chrono::minutes(90);
 constexpr size_t kPreviewCacheSize = 8;
+constexpr int kPreviewFrames = 36;   // animated-preview frames kept in a sprite sheet (6x6 cells of 320x180)
+constexpr size_t kPreviewMaxBytes = 4u << 20;   // an animated preview is a few hundred KB
+
+// Preview ids are YouTube video ids: 11 characters of [A-Za-z0-9_-].
+bool valid_video_id(const std::string& id) {
+    if (id.size() != 11) return false;
+    for (char c : id)
+        if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-')) return false;
+    return true;
+}
+
+// Preview images only come from YouTube's image hosts, over https.
+bool allowed_preview_url(const std::string& url) {
+    static const char kScheme[] = "https://";
+    if (url.compare(0, sizeof(kScheme) - 1, kScheme) != 0) return false;
+    const size_t host_end = url.find_first_of("/?#", sizeof(kScheme) - 1);
+    const std::string host = url.substr(sizeof(kScheme) - 1, host_end == std::string::npos ? std::string::npos : host_end - (sizeof(kScheme) - 1));
+    for (const char* suffix : {".ytimg.com", ".ggpht.com", ".googleusercontent.com"}) {
+        const std::string s = suffix;
+        if (host.size() > s.size() && host.compare(host.size() - s.size(), s.size(), s) == 0) return true;
+    }
+    return false;
+}
 
 bool resolve_preview(const std::string& id, omega::yt::VideoInfo& info, omega::net::Headers& headers,
                      std::string& error) {
     std::unique_lock<std::mutex> lock(g_preview_mutex);
     g_preview_cv.wait(lock, [&] { return g_preview_resolving.count(id) == 0; });
-    auto now = std::chrono::steady_clock::now();
     auto hit = g_preview_cache.find(id);
-    if (hit != g_preview_cache.end() && now - hit->second.at < kPreviewTtl) {
+    if (hit != g_preview_cache.end() && std::chrono::system_clock::now() - hit->second.at < kPreviewTtl) {
         info = hit->second.info;
         headers = hit->second.headers;
         return true;
@@ -321,32 +344,50 @@ bool resolve_preview(const std::string& id, omega::yt::VideoInfo& info, omega::n
     g_preview_resolving.insert(id);
     lock.unlock();
 
+    // From here on the id is "in flight": whatever happens (even an exception while caching), it is released and
+    // the waiters are woken, or the decoder chain would block on it for ever.
+    struct Release {
+        std::unique_lock<std::mutex>& lock;
+        const std::string& id;
+        ~Release() {
+            if (!lock.owns_lock()) lock.lock();
+            g_preview_resolving.erase(id);
+            g_preview_cv.notify_all();
+        }
+    } release{lock, id};
+
     bool ok = false;
     try {
         omega::yt::Client client;
+        client.adopt_session(omega::yt::shared_client());   // no home page fetch per resolution
         ok = client.player(id, info, error);
-        if (ok) headers = info.user_agent.empty() ? client.stream_headers() : omega::net::Headers{{"User-Agent", info.user_agent}};
-    } catch (const std::exception& e) {
-        // Never leave the id marked as resolving: waiters (the decoder chain) would block forever.
-        error = std::string("preview resolve: ") + e.what();
-        ok = false;
+        if (ok) {
+            headers = info.user_agent.empty() ? client.stream_headers()
+                                              : omega::net::Headers{{"User-Agent", info.user_agent}};
+            omega::yt::shared_client().adopt_session(client);   // (and the other way round, if it had none yet)
+        }
+    } catch (...) {
+        error = "preview resolve: unexpected failure";
+        return false;
     }
+    if (!ok) return false;
 
-    lock.lock();
-    g_preview_resolving.erase(id);
-    if (ok) {
+    try {
+        lock.lock();
+        const auto now = std::chrono::system_clock::now();
         for (auto it = g_preview_cache.begin(); it != g_preview_cache.end();)
             it = now - it->second.at >= kPreviewTtl ? g_preview_cache.erase(it) : std::next(it);
-        while (g_preview_cache.size() >= kPreviewCacheSize) {
+        while (g_preview_cache.size() >= kPreviewCacheSize) {   // oldest first (entries live a fixed time: FIFO is LRU)
             auto oldest = g_preview_cache.begin();
             for (auto it = g_preview_cache.begin(); it != g_preview_cache.end(); ++it)
                 if (it->second.at < oldest->second.at) oldest = it;
             g_preview_cache.erase(oldest);
         }
         g_preview_cache[id] = PreviewResolution{info, headers, now};
+    } catch (...) {
+        // Out of memory while caching: the answer is still good for this caller, it just is not kept.
     }
-    g_preview_cv.notify_all();
-    return ok;
+    return true;
 }
 
 void forget_preview(const std::string& id) {
@@ -357,64 +398,72 @@ void forget_preview(const std::string& id) {
 }  // namespace
 
 int omega_preview_prefetch(const char* video_id) {
-    std::string id = video_id ? video_id : "", error;
-    omega::yt::VideoInfo info;
-    omega::net::Headers headers;
-    if (id.empty() || !resolve_preview(id, info, headers, error)) {
-        OLOG("preview prefetch %s: %s", id.c_str(), error.c_str());
+    try {
+        std::string id = video_id ? video_id : "", error;
+        omega::yt::VideoInfo info;
+        omega::net::Headers headers;
+        if (!valid_video_id(id) || !resolve_preview(id, info, headers, error)) {
+            OLOG("preview prefetch %s: %s", id.c_str(), error.empty() ? "bad id" : error.c_str());
+            return 0;
+        }
+        return 1;
+    } catch (...) {
         return 0;
     }
-    return 1;
 }
 
 omega_player* omega_player_create_preview(void* window, int width, int height, const char* video_id, int max_height,
                                           const char* codecs, int64_t start_ms) {
-    std::string id = video_id ? video_id : "";
-    omega::yt::VideoInfo info;
-    omega::net::Headers headers;
-    std::string error;
-    if (!resolve_preview(id, info, headers, error)) {
-        OLOG("preview %s: %s", id.c_str(), error.c_str());
+    try {
+        const std::string id = video_id ? video_id : "";
+        if (!valid_video_id(id)) return nullptr;
+        omega::yt::VideoInfo info;
+        omega::net::Headers headers;
+        std::string error;
+        if (!resolve_preview(id, info, headers, error)) {
+            OLOG("preview %s: %s", id.c_str(), error.c_str());
+            return nullptr;
+        }
+        if (info.is_live) return nullptr;  // broadcasts: numbered segments from the live edge, not a quick preview
+        std::vector<std::string> prefs = omega::yt::parse_codec_list(codecs && *codecs ? codecs : "avc1,vp9");
+        std::vector<const omega::yt::Format*> videos =
+            omega::yt::rank_videos(info, max_height > 0 ? max_height : 720, prefs);
+        // 60 fps doubles the data (and the time to the first frames) for no visible gain in a muted backdrop: try the
+        // <= 30 fps formats first (the best resolution, then codec preference, among them), the 60 fps ones after.
+        std::stable_partition(videos.begin(), videos.end(), [](const omega::yt::Format* f) { return f->fps <= 30; });
+        int tries = 0;
+        for (const omega::yt::Format* video : videos) {
+            if (++tries > 3) break;  // codecs the TV refuses: try a couple of others, not every format
+            omega::PlayerConfig cfg;
+            cfg.window = window;
+            cfg.width = width;
+            cfg.height = height;
+            cfg.video_url = video->url;
+            cfg.stream_headers = headers;
+            cfg.fps = video->fps > 0 ? video->fps : 30;
+            cfg.max_width = video->width;
+            cfg.max_height = video->height;
+            cfg.duration_ms = info.length_s * 1000;
+            cfg.start_ms = start_ms > 0 ? start_ms : 0;
+            cfg.use_audio = false;      // muted: no audio stream at all (also less data)
+            cfg.max_queue_ms = 10000;   // short read-ahead: the user often moves on after a few seconds
+            cfg.feed_ahead_ms = 6000;
+            cfg.app_id = "org.omegatube.app";
+            cfg.app_version = kVersion;
+            std::unique_ptr<omega_player> p(new omega_player(std::move(cfg)));
+            if (p->impl.start()) {
+                // No WatchReporter: a preview is not a watch (no history entry, no view).
+                OLOG("preview %s: itag %d %dx%d %s, video only", id.c_str(), video->itag, video->width, video->height,
+                     video->codecs.c_str());
+                return p.release();
+            }
+            OLOG("preview start failed: %s", p->impl.error().c_str());
+        }
+        forget_preview(id);  // possibly stale / refused URLs: resolve afresh next time
+        return nullptr;
+    } catch (...) {
         return nullptr;
     }
-    if (info.is_live) return nullptr;  // broadcasts: numbered segments from the live edge, not a quick preview
-    std::vector<std::string> prefs = omega::yt::parse_codec_list(codecs && *codecs ? codecs : "avc1,vp9");
-    std::vector<const omega::yt::Format*> videos =
-        omega::yt::rank_videos(info, max_height > 0 ? max_height : 720, prefs);
-    // 60 fps doubles the data (and the time to the first frames) for no visible gain in a muted backdrop:
-    // try the <= 30 fps formats first, best resolution first among them.
-    std::stable_partition(videos.begin(), videos.end(), [](const omega::yt::Format* f) { return f->fps <= 30; });
-    int tries = 0;
-    for (const omega::yt::Format* video : videos) {
-        if (++tries > 3) break;  // codecs the TV refuses: try a couple of others, not every format
-        omega::PlayerConfig cfg;
-        cfg.window = window;
-        cfg.width = width;
-        cfg.height = height;
-        cfg.video_url = video->url;
-        cfg.stream_headers = headers;
-        cfg.fps = video->fps > 0 ? video->fps : 30;
-        cfg.max_width = video->width;
-        cfg.max_height = video->height;
-        cfg.duration_ms = info.length_s * 1000;
-        cfg.start_ms = start_ms > 0 ? start_ms : 0;
-        cfg.use_audio = false;      // muted: no audio stream at all (also less data)
-        cfg.max_queue_ms = 10000;   // short read-ahead: the user often moves on after a few seconds
-        cfg.feed_ahead_ms = 6000;
-        cfg.app_id = "org.omegatube.app";
-        cfg.app_version = kVersion;
-        auto* p = new omega_player(std::move(cfg));
-        if (p->impl.start()) {
-            // No WatchReporter: a preview is not a watch (no history entry, no view).
-            OLOG("preview %s: itag %d %dx%d %s, video only", video_id, video->itag, video->width, video->height,
-                 video->codecs.c_str());
-            return p;
-        }
-        OLOG("preview start failed: %s", p->impl.error().c_str());
-        delete p;
-    }
-    forget_preview(id);  // possibly stale / refused URLs: resolve afresh next time
-    return nullptr;
 }
 
 void omega_player_toggle_pause(omega_player* p) {
@@ -480,6 +529,7 @@ nlohmann::json items_json(const std::vector<omega::yt::FeedItem>& list) {
                          {"views", it.views},
                          {"published", it.published},
                          {"thumbnail", it.thumbnail},
+                         {"preview", it.preview},
                          {"live", it.is_live},
                          {"watched", it.watched_percent},
                          {"playlistId", it.playlist_id},
@@ -646,6 +696,44 @@ char* omega_yt_comments(const char* video_id, const char* continuation) {
                       {"sortNewest", page.sort_newest},
                       {"createParams", page.create_params},
                       {"disabled", page.disabled}});
+}
+
+char* omega_preview_sheet(const char* video_id, const char* url, const char* out_path) {
+    try {
+        const std::string id = video_id ? video_id : "";
+        std::string preview = url ? url : "";
+        if (!valid_video_id(id)) return to_c_json({{"error", "preview: bad id"}});
+        if (preview.empty()) {
+            // Feeds whose items carry no preview URL (the TV client's home tiles): the WEB search for the video's id
+            // lists it with its richThumbnail. The URL is signed, so it cannot be built from the id. A client of its
+            // own (the shared one keeps per-request state), borrowing the shared session.
+            omega::yt::Client client;
+            client.adopt_session(omega::yt::shared_client());
+            omega::yt::Feed feed;
+            std::string error;
+            if (!client.search(id, "", feed, error)) return to_c_json({{"error", "preview: " + error}});
+            omega::yt::shared_client().adopt_session(client);
+            for (const auto& it : feed.items)
+                if (it.video_id == id && !it.preview.empty()) {
+                    preview = it.preview;
+                    break;
+                }
+            if (preview.empty()) return to_c_json({{"error", "preview: none"}, {"none", true}});
+        }
+        if (!allowed_preview_url(preview)) return to_c_json({{"error", "preview: unexpected host"}, {"none", true}});
+        omega::net::Request req;
+        req.url = preview;
+        omega::net::Response res = omega::net::fetch(req, kPreviewMaxBytes);
+        if (!res.ok())
+            return to_c_json({{"error", "preview: " + (res.error.empty() ? "http " + std::to_string(res.status) : res.error)}});
+        omega::media::SpriteSheet sheet;
+        std::string error;
+        if (!omega::media::webp_to_sheet(res.body, out_path ? out_path : "", kPreviewFrames, sheet, error))
+            return sheet.none ? to_c_json({{"error", error}, {"none", true}}) : to_c_json({{"error", error}});
+        return to_c_json({{"cols", sheet.cols}, {"rows", sheet.rows}, {"frames", sheet.frames}, {"delay", sheet.delay_ms}});
+    } catch (const std::exception& e) {
+        return to_c_json({{"error", std::string("preview: ") + e.what()}});
+    }
 }
 
 char* omega_yt_post_comment(const char* create_params, const char* text) {

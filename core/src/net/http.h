@@ -82,8 +82,9 @@ struct Response {
     bool ok() const { return error.empty() && status >= 200 && status < 300; }
 };
 
-// Convenience one-shot exchange (new connection each time).
-Response fetch(const Request& req);
+// Convenience one-shot exchange (new connection each time). A body longer than max_body is an error ("response
+// too large"), not silently cut: small assets (previews) pass a small limit.
+Response fetch(const Request& req, size_t max_body = 64 * 1024 * 1024);
 
 // Forward-only byte stream of a media track, as the demuxers consume it.
 class StreamSource {

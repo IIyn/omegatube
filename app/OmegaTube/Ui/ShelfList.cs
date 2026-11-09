@@ -27,7 +27,7 @@ namespace OmegaTube.Ui
         // Glorious hero mode: the first row sits below the hero text; moving off it scrolls the rows up to fill
         // the screen (and the home screen hides the hero). RowChanged fires when the focused row changes.
         public System.Action RowChanged;
-        private const int HeroFirstRowTop = 500;   // push row 0 low so the hero backdrop gets most of the screen
+        private const int HeroFirstRowTop = Theme.HeroFirstRowTop;   // push row 0 low so the hero backdrop gets most of the screen
 
         private readonly int width;
         private readonly int leftInset;   // Glorious: rows start here; earlier cards slide under the nav
@@ -62,23 +62,27 @@ namespace OmegaTube.Ui
             Add(status);
         }
 
-        private int RowHeightAt(int i) => bigFirst && i == 0 ? Theme.BigRowHeight : Theme.RowHeight;
+        private int RowHeightAt(int i) => bigFirst ? (i == 0 ? Theme.BigRowHeight : Theme.GloriousRowHeight) : Theme.RowHeight;
 
+        // Rows differ in height (featured, regular, grid rows with or without a heading): a row starts under the ones
+        // before it. Managed heights only; a long feed has hundreds of rows.
         private int RowTop(int i)
         {
             int y = 0;
-            for (int k = 0; k < i; k++)
+            for (int k = 0; k < i && k < rows.Count; k++)
             {
-                y += RowHeightAt(k);
+                y += rows[k].RowHeight;
             }
             return y;
         }
 
         private void LayoutRows()
         {
-            for (int i = 0; i < rows.Count; i++)
+            int y = 0;
+            foreach (FeedRow row in rows)
             {
-                rows[i].PositionY = RowTop(i);
+                row.PositionY = y;
+                y += row.RowHeight;
             }
         }
 
@@ -166,9 +170,10 @@ namespace OmegaTube.Ui
         {
             foreach (Shelf s in shelves)
             {
-                string title = s.Title.Length > 0 ? s.Title : T("Recommended");
+                bool grid = s.Grid;
+                string title = grid || s.Title.Length > 0 ? s.Title : T("Recommended");
                 int i = rows.Count;
-                FeedRow row = reuse != null && i < reuse.Count && reuse[i]?.Title == title ? reuse[i] : null;
+                FeedRow row = reuse != null && i < reuse.Count && reuse[i]?.Title == title && reuse[i].IsGrid == grid ? reuse[i] : null;
                 if (row != null)
                 {
                     reuse[i] = null;
@@ -177,9 +182,11 @@ namespace OmegaTube.Ui
                 {
                     // Items beyond the shelf's first ones: the same browse call with the row's continuation.
                     bool big = bigFirst && i == 0;
-                    row = new FeedRow(title, c => YouTube.Browse("", c), width,
-                                      big ? Theme.BigCardWidth : Theme.CardWidth, leftInset, RowHeightAt(i),
-                                      thumbOnly: big, cardGap: big ? Theme.BigCardGap : Theme.CardGap)
+                    row = new FeedRow(title, s.Loader ?? (c => YouTube.Browse("", c)), width,
+                                      big ? Theme.BigCardWidth : grid ? Theme.GridCardWidth : Theme.CardWidth, leftInset,
+                                      grid ? (title.Length > 0 ? Theme.GridTitledRowHeight : Theme.GridRowHeight) : RowHeightAt(i),
+                                      thumbOnly: big, cardGap: big ? Theme.BigCardGap : grid ? Theme.GridGap : Theme.CardGap, grid: grid,
+                                      glass: heroMode)
                     {
                         Position = new Position(0, RowTop(i)),
                         RequestWork = () => UiWork.Request(pump),
@@ -199,7 +206,20 @@ namespace OmegaTube.Ui
             }
             loading = true;
             int gen = generation;
-            FeedPage page = await loader(fresh ? continuation : "");
+            FeedPage page;
+            try
+            {
+                page = await loader(fresh ? continuation : "");
+            }
+            catch (Exception e)
+            {
+                if (gen == generation)
+                {
+                    loading = false;   // or no later page would ever be asked for
+                }
+                UiGuard.Report("ShelfList.Load", e);
+                return;
+            }
             if (gen != generation || disposed)
             {
                 return;
@@ -301,8 +321,13 @@ namespace OmegaTube.Ui
                     int next = Math.Max(0, Math.Min(rows.Count - 1, focus + (key == "Up" ? -1 : 1)));
                     if (next != focus)
                     {
+                        int column = rows[focus].FocusIndex;
                         rows[focus].SetFocused(false);
                         focus = next;
+                        if (rows[focus].IsGrid)
+                        {
+                            rows[focus].FocusAt(Math.Min(column, Theme.GridColumns - 1));   // keep the column going down the grid
+                        }
                         rows[focus].SetFocused(true);
                         ScrollToFocus();
                         MaybePrefetch();
@@ -325,11 +350,7 @@ namespace OmegaTube.Ui
             scroll = Widgets.Slide(content, 0, target, scroll);
             for (int i = 0; i < rows.Count; i++)
             {
-                bool near = i >= focus - RowsAround && i <= focus + RowsAround + 1;
-                if (near != rows[i].Visibility)
-                {
-                    Widgets.SetVisible(rows[i], near);
-                }
+                rows[i].SetShown(i >= focus - RowsAround && i <= focus + RowsAround + 1);
             }
             UiWork.Request(pump);
         }

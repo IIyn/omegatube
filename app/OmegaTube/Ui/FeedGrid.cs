@@ -522,11 +522,7 @@ namespace OmegaTube.Ui
             EnsureCards();
             for (int i = 0; i < cards.Count; i++)
             {
-                bool near = NearFocus(i / Columns);
-                if (near != cards[i].Visibility)
-                {
-                    Widgets.SetVisible(cards[i], near);
-                }
+                cards[i].SetShown(NearFocus(i / Columns));
             }
             UiWork.Request(pump);
         }

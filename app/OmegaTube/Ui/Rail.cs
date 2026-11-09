@@ -7,10 +7,10 @@ namespace OmegaTube.Ui
     // Navigation rail. Two styles:
     //  - Omega (default): a panel that shows icons only while the content has focus, icons + labels while the
     //    rail has focus.
-    //  - Glorious (overlay): a thin column of outline icons floating over the hero artwork, with a round profile
-    //    avatar on top. Idle (content focused) it is dimmed with a thick accent underline marking the current
-    //    section; focused it slides out a frosted "liquid glass" panel with the labels and a glass pill on the
-    //    focused entry. No opaque drawer.
+    //  - Glorious (overlay): while the content has the focus the nav is folded into one dark glass pill with the
+    //    current section's icon and name; focused (or with the profile avatar focused) it opens into the column of
+    //    outline icons with their labels over a dark fade, a glass pill on the focused entry and the round profile
+    //    avatar on top. No opaque drawer.
     public class Rail : View
     {
         public struct Entry
@@ -23,7 +23,8 @@ namespace OmegaTube.Ui
         private const int VisibleItems = 11;       // beyond this the list scrolls with the focus
         private const int IconX = 56;              // icon left edge inside the rail (breathing space from the screen edge)
         private const int IconSize = 40;
-        private const float IdleOpacity = 0.25f;   // overlay, content focused: the whole rail fades back
+        private const float IdleOpacity = 0.25f;   // overlay: entries other than the current one, while the nav is not open
+        private const int ChipHeight = 60, ChipTextX = 96, ChipPadRight = 28;   // the folded pill: icon + name of the current entry
 
         private readonly bool overlay;
         private readonly List<View> items = new List<View>();
@@ -39,6 +40,16 @@ namespace OmegaTube.Ui
         private int index;
         private bool focused;
         private Animation widen;
+        private View railClip;       // overlay: the entry list (hidden while the nav is folded)
+        private View chip;           // overlay, folded: a single pill with the current section
+        private View chipGlass;
+        private ImageView chipIcon;
+        private TextLabel chipLabel;
+        private readonly List<string> entryLabels = new List<string>();
+        private bool avatarOn;       // the profile avatar has the focus (the nav is open then too)
+        private bool opened;         // overlay: the list is open (not folded into the pill)
+        private int drawnIndex = -1, chipIndex = -1;   // what Refresh / UpdateChip last drew: skipped when unchanged
+        private bool drawnFocused, drawnOpen;
 
         public int Index => index;
         public int Count => items.Count;
@@ -51,11 +62,15 @@ namespace OmegaTube.Ui
             if (overlay)
             {
                 // Frosted panel, shown (widened) only while the rail is focused.
-                panel = Widgets.Glass(Theme.GlassPanel, Theme.RailWidth, 1080, 0);
-                panel.Opacity = 0f;
+                // The whole nav sits NavShift in from the screen edge; its backdrop is a dark fade that starts at the
+                // screen edge and eases out to the right (so labels stay legible without a visible panel edge).
+                Position = new Position(Theme.NavShift, 0);
+                panel = new ImageView { ResourceUrl = Theme.Image("nav_fade"), FittingMode = FittingModeType.ScaleToFill,
+                                        Size = new Size(FadeWidth(false), 1080), Position = new Position(-Theme.NavShift, 0),
+                                        Opacity = 0f };
                 Add(panel);
                 // The pill that lifts the focused entry; parked until the rail is focused.
-                glassPill = Widgets.Glass(Theme.GlassHigh, Theme.RailExpandedWidth - 24, ItemHeight - 14, Theme.GlassRadius);
+                glassPill = Widgets.GlassCard(true, Theme.RailExpandedWidth - 24, ItemHeight - 14, true);
                 glassPill.Hide();
                 Add(glassPill);
 
@@ -84,6 +99,7 @@ namespace OmegaTube.Ui
 
             var clip = new View { Position = new Position(0, Top), Size = new Size(Theme.RailExpandedWidth, 1080 - Top),
                                   ClippingMode = ClippingModeType.ClipChildren };
+            railClip = clip;
             Add(clip);
             list = new View { Size = new Size(Theme.RailExpandedWidth, 2000) };
             clip.Add(list);
@@ -126,6 +142,31 @@ namespace OmegaTube.Ui
                 list.Add(item);
                 items.Add(item);
                 labels.Add(label);
+                entryLabels.Add(entries[i].Label);
+            }
+            if (overlay)
+            {
+                // Folded pill (the nav's resting state): dark smoked glass so it reads on any artwork.
+                chip = new View { Position = new Position(0, 38), Size = new Size(240, ChipHeight) };
+                chipGlass = new ImageView { ResourceUrl = Theme.Image("glass_dark9.9"), Size = new Size(240, ChipHeight) };
+                chip.Add(chipGlass);
+                var chevron = Widgets.Label("‹", Theme.BodySize + 8, Theme.TextDim, 30, ChipHeight);
+                chevron.VerticalAlignment = VerticalAlignment.Center;
+                chevron.Position = new Position(18, -2);
+                chip.Add(chevron);
+                chipIcon = new ImageView { Size = new Size(34, 34), Position = new Position(52, (ChipHeight - 34) / 2) };
+                chip.Add(chipIcon);
+                chipLabel = Widgets.Bold(Widgets.Label("", Theme.BodySize + 2, Theme.Text, 0, ChipHeight));
+                chipLabel.WidthResizePolicy = ResizePolicyType.UseNaturalSize;   // exactly as wide as the text
+                chipLabel.HeightResizePolicy = ResizePolicyType.Fixed;
+                chipLabel.SizeHeight = ChipHeight;
+                chipLabel.VerticalAlignment = VerticalAlignment.Center;
+                chipLabel.Position = new Position(ChipTextX, 0);
+                chip.Add(chipLabel);
+                Add(chip);
+                // Starts folded: the list and avatar are faded out until the nav gets the focus.
+                railClip.Opacity = 0f;
+                avatar.Opacity = 0f;
             }
             Refresh();
         }
@@ -146,30 +187,33 @@ namespace OmegaTube.Ui
             {
                 Widgets.SetVisible(avatarRing, value);
             }
+            if (avatarOn == value)
+            {
+                return;
+            }
+            avatarOn = value;
+            if (overlay)
+            {
+                ApplyOpen();
+            }
         }
 
         public void SetFocused(bool value)
         {
+            if (focused == value)
+            {
+                return;   // asked on every key press: only a change needs animating
+            }
             focused = value;
             if (overlay)
             {
-                widen?.Stop();
-                widen = new Animation(180);
-                var ease = new AlphaFunction(AlphaFunction.BuiltinFunctions.EaseOut);
-                widen.AnimateTo(panel, "SizeWidth", (float)(value ? Theme.RailExpandedWidth : Theme.RailWidth), ease);
-                widen.AnimateTo(panel, "Opacity", value ? 1f : 0f, ease);
-                widen.Play();
-                foreach (TextLabel l in labels)
-                {
-                    Widgets.SetVisible(l, value);
-                }
-                Refresh();
+                ApplyOpen();
                 return;
             }
             widen?.Stop();
             widen = new Animation(160);
             float w = value ? Theme.RailExpandedWidth : Theme.RailWidth;
-            widen.AnimateTo(panel, "SizeWidth", w, new AlphaFunction(AlphaFunction.BuiltinFunctions.EaseOut));
+            widen.AnimateTo(panel, "SizeWidth", w, Widgets.EaseOut);
             widen.Play();
             foreach (View item in items)
             {
@@ -182,6 +226,72 @@ namespace OmegaTube.Ui
             panel.BackgroundColor = value ? Theme.Surface : Theme.Background;
             Refresh();
         }
+
+        // Overlay: the nav is folded into a single pill with the current section while the content has the focus,
+        // and opens into the full list (with the fade behind it) while the nav or the profile avatar has it.
+        private void ApplyOpen()
+        {
+            bool open = focused || avatarOn;
+            if (open == opened)
+            {
+                Refresh();   // still open or still folded (only the focused entry may differ)
+                return;
+            }
+            opened = open;
+            widen?.Stop();
+            widen = new Animation(180);
+            var ease = Widgets.EaseOut;
+            widen.AnimateTo(panel, "SizeWidth", (float)FadeWidth(open), ease);
+            widen.AnimateTo(panel, "Opacity", open ? 1f : 0f, ease);
+            widen.AnimateTo(railClip, "Opacity", open ? 1f : 0f, ease);
+            widen.AnimateTo(avatar, "Opacity", open ? 1f : 0f, ease);
+            widen.AnimateTo(chip, "Opacity", open ? 0f : 1f, ease);
+            widen.Play();
+            foreach (TextLabel l in labels)
+            {
+                Widgets.SetVisible(l, open);
+            }
+            Refresh();
+        }
+
+        // The folded pill shows the current entry: its icon and name, sized to the text.
+        private void UpdateChip()
+        {
+            if (chip == null || index < 0 || index >= entryLabels.Count)
+            {
+                return;
+            }
+            if (index == chipIndex)
+            {
+                return;
+            }
+            chipIndex = index;
+            string text = entryLabels[index];
+            chipLabel.Text = text;
+            chipIcon.ResourceUrl = icons[index].ResourceUrl;
+            // Fit the pill to the text: ask the label for its natural width (falls back to an estimate if the
+            // toolkit has not measured it yet).
+            int textW = 0;
+            try
+            {
+                textW = (int)System.Math.Ceiling((double)chipLabel.NaturalSize2D.Width);
+            }
+            catch (System.Exception)
+            {
+            }
+            if (textW <= 0)
+            {
+                textW = (int)(text.Length * 15f);
+            }
+            textW = System.Math.Min(textW, 300);
+            int w = ChipTextX + textW + ChipPadRight;
+            chip.Size = new Size(w, ChipHeight);
+            chipGlass.Size = new Size(w, ChipHeight);
+        }
+
+        // Width of the overlay's fade, from the screen's left edge: icons only, or past the labels when expanded.
+        private static int FadeWidth(bool expanded) =>
+            Theme.NavShift + (expanded ? Theme.RailExpandedWidth + Theme.NavFadeTail : Theme.RailWidth);
 
         public void Move(int delta)
         {
@@ -197,6 +307,14 @@ namespace OmegaTube.Ui
 
         private void Refresh()
         {
+            bool open = focused || avatarOn;
+            if (index == drawnIndex && focused == drawnFocused && open == drawnOpen)
+            {
+                return;   // nothing it draws has changed
+            }
+            drawnIndex = index;
+            drawnFocused = focused;
+            drawnOpen = open;
             int first = System.Math.Max(0, index - VisibleItems + 2);
             scroll = Widgets.Slide(list, 0, -first * ItemHeight, scroll);
             for (int i = 0; i < items.Count; i++)
@@ -206,8 +324,8 @@ namespace OmegaTube.Ui
                 {
                     // Focused: every entry is legible, the current one lit. Idle: unselected icons recede to
                     // 25%, the current section stays bright with its thick accent underline.
-                    items[i].Opacity = focused ? (current ? 1f : 0.7f) : (current ? 1f : IdleOpacity);
-                    Widgets.SetVisible(underlines[i], current && !focused);
+                    items[i].Opacity = open ? (current ? 1f : 0.7f) : (current ? 1f : IdleOpacity);
+                    Widgets.SetVisible(underlines[i], current && !open);
                 }
                 else
                 {
@@ -215,6 +333,7 @@ namespace OmegaTube.Ui
                                              : current ? Theme.SurfaceHigh : Color.Transparent;
                 }
             }
+            UpdateChip();
             if (overlay && glassPill != null)
             {
                 if (focused)

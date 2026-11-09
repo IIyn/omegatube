@@ -307,6 +307,7 @@ namespace OmegaTube
         private static V_ipStats _playerGetStats;
         private static Ip_b _ytSuggest, _reportUpload, _authPoll, _qrEncode, _ytRelated, _ytDetails, _sbSegments, _authSwitch;
         private static Ip_bb _ytSearch, _ytBrowse, _ytPlaylist, _ytPlaylistPage, _ytCaptions, _ytRate, _ytChannel, _ytComments, _ytPostComment;
+        private static Ip_bbb _previewSheet;
         private static Ip_bbb _ytPostReply, _ytCommentAction;
         private static Ip_bi _ytSubscribe;
         private static V_b _init;
@@ -354,6 +355,7 @@ namespace OmegaTube
             _ytSubscribe = Fn<Ip_bi>("omega_yt_subscribe");
             _ytChannel = Fn<Ip_bb>("omega_yt_channel");
             _ytComments = Fn<Ip_bb>("omega_yt_comments");
+            _previewSheet = Fn<Ip_bbb>("omega_preview_sheet");
             _ytPostComment = Fn<Ip_bb>("omega_yt_post_comment");
             _ytPostReply = Fn<Ip_bbb>("omega_yt_post_reply");
             _ytCommentAction = Fn<Ip_bbb>("omega_yt_comment_action");
@@ -405,6 +407,9 @@ namespace OmegaTube
         public static IntPtr YtRate(string videoId, string rating) => _ytRate(Utf8z(videoId), Utf8z(rating));
         public static IntPtr YtSubscribe(string channelId, bool subscribe) => _ytSubscribe(Utf8z(channelId), subscribe ? 1 : 0);
         public static IntPtr YtComments(string videoId, string continuation) => _ytComments(Utf8z(videoId), Utf8z(continuation));
+        // Animated WebP preview -> BMP sprite sheet at outPath; url "" = look it up by id (see omega_preview_sheet).
+        public static IntPtr PreviewSheet(string videoId, string url, string outPath) =>
+            _previewSheet(Utf8z(videoId), Utf8z(url), Utf8z(outPath));
         public static IntPtr YtPostComment(string createParams, string text) => _ytPostComment(Utf8z(createParams), Utf8z(text));
         public static IntPtr YtPostReply(string videoId, string commentId, string text) => _ytPostReply(Utf8z(videoId), Utf8z(commentId), Utf8z(text));
         public static IntPtr YtCommentAction(string videoId, string commentId, string action) => _ytCommentAction(Utf8z(videoId), Utf8z(commentId), Utf8z(action));

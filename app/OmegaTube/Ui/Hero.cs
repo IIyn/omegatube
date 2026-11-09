@@ -10,13 +10,12 @@ namespace OmegaTube.Ui
     // fades to black on the left (under the nav / behind the text) and along the bottom (under the rows), with
     // the item's title and a metadata line over it. Hero.Display(item) is called by HomeScreen as focus moves.
     //
-    // The feed only carries the small mqdefault thumbnail (320×180), which is why a stretched backdrop looked
-    // blurry. For the backdrop we fetch the full-resolution frames from the id instead: a reliable hqdefault
-    // base layer with the sharp maxresdefault on top of it, so when maxres is missing (not every video has one)
-    // the hqdefault still shows rather than a blank or a stale frame.
+    // The picture (Backdrop) is the video's sharp maxresdefault frame, fetched by id and cross-faded in once it is
+    // loaded, so the screen never shows a blurry or stretched half-loaded stage; a video with no such frame gets the
+    // small 16:9 one.
     //
-    // The darkening is two full-screen gradients (not cropped rectangles), so there is no visible band/seam
-    // where a gradient rectangle used to end; multiple stops keep the ramp short enough to limit TV banding.
+    // The darkening is two full-screen pre-rendered scrims (not cropped rectangles), so there is no visible band
+    // or seam where a rectangle used to end, and no banding (tools/hero-scrims).
     //
     // Video preview: resting on the item starts a 3 s countdown ring on its card. The video itself (muted,
     // 720p, no watch history) starts loading after PrefetchMs, hidden on the TV's video plane under the still,
@@ -33,12 +32,19 @@ namespace OmegaTube.Ui
         private const double PlayTimeoutS = 15;     // created but never playing
         private const int Playing = 3;              // esp::State PLAYING
 
+        // Text block geometry (bottom aligned, just above the first row's heading).
+        // The block ends just above the first row's heading; the title is 40% of the screen wide, up to two lines of 59 px,
+        // then an ellipsis.
+        private const int TextBottom = Theme.GloriousRowsTop + Theme.HeroFirstRowTop - 16;
+        private const int MetaH = 44, TitleGap = 26, TitleH = 150, TitleW = 768;
+        private const int TitleTop = TextBottom - MetaH - TitleGap - TitleH;
+
         private readonly App app;
-        private readonly ImageView artBase, artHi;
-        private readonly TextLabel title, meta;
+        private readonly Backdrop art;
+        private readonly TextLabel title, meta;   // title, then channel · views · age
         private readonly VideoPreview video = new VideoPreview();
         private readonly PreviewRing ring = new PreviewRing();   // countdown on the focused card
-        private Animation fade, reveal;
+        private Animation reveal;
         private Timer resolveTimer, prefetchTimer, watchTimer;
         private List<VideoItem> upcoming = new List<VideoItem>();   // the cards after the focused one
         private VideoItem currentItem;
@@ -61,30 +67,24 @@ namespace OmegaTube.Ui
             Size = new Size(1920, 1080);
             BackgroundColor = Theme.Background;
 
-            artBase = new ImageView { Size = new Size(1920, 1080), FittingMode = FittingModeType.ScaleToFill };
-            Add(artBase);
-            artHi = new ImageView { Size = new Size(1920, 1080), FittingMode = FittingModeType.ScaleToFill };
-            Add(artHi);
+            art = new Backdrop();
+            Add(art);
+            // Left fade: solid black at the left edge -> clear by the centre. Bottom fade: clear in the upper screen
+            // -> dark across the lower band under the rows. Both full-screen (so no seam), pre-rendered PNGs: the TV's
+            // gradient visuals band and cost a shader pass each (tools/hero-scrims).
+            Add(new ImageView { ResourceUrl = Theme.Image("hero_left"), Size = new Size(1920, 1080), FittingMode = FittingModeType.ScaleToFill });
+            Add(new ImageView { ResourceUrl = Theme.Image("hero_bottom"), Size = new Size(1920, 1080), FittingMode = FittingModeType.ScaleToFill });
 
-            // Left fade: solid black at the left edge -> clear by the centre (full-screen, so no vertical seam).
-            Add(Widgets.Gradient(new Vector2(-0.5f, 0f), new Vector2(0.5f, 0f),
-                new[] { 0f, 0.28f, 0.5f },
-                new[] { new Vector4(0, 0, 0, 1f), new Vector4(0, 0, 0, 0.55f), new Vector4(0, 0, 0, 0f) },
-                1920, 1080, 0, 0));
-            // Bottom fade: clear in the upper screen -> dark across the lower band under the rows.
-            Add(Widgets.Gradient(new Vector2(0f, 0.5f), new Vector2(0f, -0.5f),
-                new[] { 0f, 0.5f, 1f },
-                new[] { new Vector4(0, 0, 0, 0.92f), new Vector4(0, 0, 0, 0.15f), new Vector4(0, 0, 0, 0f) },
-                1920, 1080, 0, 0));
-
-            title = Widgets.Label("", Theme.TitleSize + 8, Theme.Text, 760, 118);
-            title.Position = new Position(Theme.GloriousInset, 196);
+            // The text block is bottom-aligned just above the first row: the channel, views and age on the last line
+            // and the title (one or two lines, growing upward) above it.
+            title = Widgets.Label("", 59f, Theme.Text, TitleW, TitleH);   // regular weight; wraps to a second line
+            title.Position = new Position(Theme.GloriousInset, TitleTop);
             title.MultiLine = true;
-            Widgets.Bold(title);
+            title.VerticalAlignment = VerticalAlignment.Bottom;
             Add(title);
 
-            meta = Widgets.Label("", Theme.BodySize + 2, Theme.TextDim, 760, 44);
-            meta.Position = new Position(Theme.GloriousInset, 322);
+            meta = Widgets.Label("", Theme.BodySize + 2, Theme.Text, 760, MetaH);
+            meta.Position = new Position(Theme.GloriousInset, TextBottom - MetaH);
             Add(meta);
 
             video.Ready += () => UiGuard.Run("Hero.VideoReady", OnVideoReady);
@@ -110,29 +110,36 @@ namespace OmegaTube.Ui
             currentId = item.Id;
             currentItem = item;
             doneId = null;   // back on a card after leaving it: its countdown runs again
+            title.Text = item.Title ?? "";
+            meta.Text = MetaLine(item);
+            // The sharp 1280x720 picture, shown once it is loaded (never a blurry stage first); the small 16:9 one for a
+            // video that has none.
             if (!string.IsNullOrEmpty(item.Id))
             {
-                artBase.ResourceUrl = Frame(item.Id, "hqdefault");
-                artHi.ResourceUrl = Frame(item.Id, "maxresdefault");
+                art.Show(item.Id, Frame(item.Id, "maxresdefault"), Frame(item.Id, "mqdefault"));
             }
             else
             {
-                artBase.ResourceUrl = item.Thumbnail ?? "";
-                artHi.ResourceUrl = "";
+                art.Show(null, item.Thumbnail ?? "", null);
             }
-            title.Text = item.Title ?? "";
-            meta.Text = MetaLine(item);
-            fade?.Stop();
-            artBase.Opacity = 0.5f;
-            fade = new Animation(260);
-            fade.AnimateTo(artBase, "Opacity", 1f, new AlphaFunction(AlphaFunction.BuiltinFunctions.EaseOut));
-            fade.Play();
             Arm();
+        }
+
+        // Another category opened: its first picture fades in from nothing instead of over the old category's.
+        public void ClearArt()
+        {
+            art.Clear();
+            currentId = "";
+            currentItem = null;
         }
 
         // The hero is (not) on screen. Off: any preview stops right away.
         public void SetActive(bool on)
         {
+            if (!on && !active && armedId == null && !revealed && !video.Exists)
+            {
+                return;   // already idle: nothing to stop (this is asked on keys that never involved the hero)
+            }
             active = on;
             if (on)
             {
@@ -153,12 +160,16 @@ namespace OmegaTube.Ui
         // Puts the countdown ring on the top-right corner of the focused card (it then moves and zooms with it).
         public void AttachRing(View card)
         {
-            if (card == null || ring.GetParent() == card)
+            if (card == null)
             {
                 return;
             }
             try
             {
+                if (ring.GetParent() == card)
+                {
+                    return;
+                }
                 ring.GetParent()?.Remove(ring);
                 ring.Position = new Position(card.SizeWidth - PreviewRing.Diameter - 10, 10);
                 card.Add(ring);
@@ -187,13 +198,15 @@ namespace OmegaTube.Ui
             return position;
         }
 
+        // Timing trace of a preview for the core log; compiled out unless built with OMEGA_TRACE (it runs on key presses).
+        [System.Diagnostics.Conditional("OMEGA_TRACE")]
         private void Log(string what) => NativeCore.Log("preview: " + what + " +" + clock.ElapsedMilliseconds + "ms");
 
         // Starts the countdown (and the hidden prefetch) for the shown item, unless it is already running for it.
         private void Arm()
         {
             if (!active || currentItem == null || string.IsNullOrEmpty(currentId) || armedId == currentId
-                || doneId == currentId)
+                || doneId == currentId || !app.Config.HeroPreview)
             {
                 return;
             }
@@ -327,9 +340,8 @@ namespace OmegaTube.Ui
             ring.Off();
             reveal?.Stop();
             reveal = new Animation(500);
-            var ease = new AlphaFunction(AlphaFunction.BuiltinFunctions.EaseInOut);
-            reveal.AnimateTo(artBase, "Opacity", 0f, ease);
-            reveal.AnimateTo(artHi, "Opacity", 0f, ease);
+            var ease = Widgets.EaseInOut;
+            art.AnimateOut(reveal, ease);
             reveal.Play();
             return true;
         }
@@ -360,8 +372,7 @@ namespace OmegaTube.Ui
             watchTimer = null;
             ring.Off();
             reveal?.Stop();
-            artBase.Opacity = 1f;
-            artHi.Opacity = 1f;
+            art.RestoreStill();
             revealed = false;
             BackgroundColor = Theme.Background;
             SeeThrough?.Invoke(false);

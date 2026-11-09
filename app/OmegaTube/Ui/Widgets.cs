@@ -79,8 +79,8 @@ namespace OmegaTube.Ui
         // (for the TizenFX versions that do have CornerRadius).
         private static readonly int VisualCornerRadius = (int)Visual.Property.MixColor + 3;
 
-        // A rounded solid-colour fill, applied as a ColorVisual (so it rounds on Tizen 5.5). Use SetFill to
-        // recolour later without losing the radius (a plain BackgroundColor assignment would drop it).
+        // A rounded solid-colour fill, applied as a ColorVisual (so it rounds on Tizen 5.5). Call it again
+        // to recolour later without losing the radius (a plain BackgroundColor assignment would drop it).
         public static void FillRounded(View v, Color color, float radius)
         {
             var map = new PropertyMap();
@@ -93,8 +93,6 @@ namespace OmegaTube.Ui
             v.Background = map;
             Round(v, radius);
         }
-
-        public static void SetFill(View v, Color color, float radius) => FillRounded(v, color, radius);
 
         // A rounded image: the URL and the rounded-rect alpha mask are set together in one Image visual (setting
         // AlphaMaskURL separately from ResourceUrl does not always combine into the same visual). Alpha masking
@@ -117,58 +115,39 @@ namespace OmegaTube.Ui
             }
         }
 
-        // A linear gradient fill View (no image asset). offsets/colors are the stops; start/end are in the
-        // view's normalized space (-0.5 .. 0.5).
-        public static View Gradient(Vector2 start, Vector2 end, float[] offsets, Vector4[] colors, int w, int h, int x, int y)
-        {
-            var v = new View { Size = new Size(w, h), Position = new Position(x, y) };
-            var map = new PropertyMap();
-            map.Add((int)Visual.Property.Type, new PropertyValue((int)Visual.Type.Gradient));
-            map.Add((int)GradientVisualProperty.StartPosition, new PropertyValue(start));
-            map.Add((int)GradientVisualProperty.EndPosition, new PropertyValue(end));
-            var off = new PropertyArray();
-            foreach (float o in offsets) off.Add(new PropertyValue(o));
-            map.Add((int)GradientVisualProperty.StopOffset, new PropertyValue(off));
-            var col = new PropertyArray();
-            foreach (Vector4 c in colors) col.Add(new PropertyValue(c));
-            map.Add((int)GradientVisualProperty.StopColor, new PropertyValue(col));
-            v.Background = map;
-            return v;
-        }
+        // One instance per easing: animations are created on key presses, the curves need not be.
+        public static readonly AlphaFunction EaseOut = new AlphaFunction(AlphaFunction.BuiltinFunctions.EaseOut);
+        public static readonly AlphaFunction EaseInOut = new AlphaFunction(AlphaFunction.BuiltinFunctions.EaseInOut);
+        public static readonly AlphaFunction Linear = new AlphaFunction(AlphaFunction.BuiltinFunctions.Linear);
 
         public static View Box(Color color, int width, int height)
         {
             return new View { BackgroundColor = color, Size = new Size(width, height) };
         }
 
-        // View.Borderline* arrived with API 8 (Vector/float), so set it through reflection like CornerRadius;
-        // older TizenFX simply draws no rim.
-        private static readonly System.Reflection.PropertyInfo borderWidth = typeof(View).GetProperty("BorderlineWidth");
-        private static readonly System.Reflection.PropertyInfo borderColor = typeof(View).GetProperty("BorderlineColor");
-        private static readonly System.Reflection.PropertyInfo borderOffset = typeof(View).GetProperty("BorderlineOffset");
-
-        public static T Border<T>(T view, Color color, float width) where T : View
-        {
-            try
-            {
-                borderWidth?.SetValue(view, width);
-                borderColor?.SetValue(view, color);
-                borderOffset?.SetValue(view, -1f);   // draw the rim inside the rounded edge
-            }
-            catch (System.Exception e)
-            {
-                Tizen.Log.Warn("OmegaTube", "Borderline: " + e.Message);
-            }
-            return view;
-        }
-
         // "Liquid glass" panel: a translucent, rounded fill. The Tizen 5.5 firmware has no backdrop-blur API, so
         // this is translucent + rounded (you see through it) rather than a true frosted blur. Built from the white
         // rounded nine-patch tinted by `fill` (keeps fixed corners at any size and rounds on 5.5, unlike
         // CornerRadius). `fill` carries the translucency in its alpha.
-        public static ImageView Glass(Color fill, int width, int height, float radius = 0f)
+        public static ImageView Glass(Color fill, int width, int height)
         {
             return new ImageView { ResourceUrl = Theme.Image("round9.9"), Size = new Size(width, height), Color = fill };
+        }
+
+        // Baked glass nine-patch (tools/glass-panel/make_glass.py): translucent fill, bright rim and a soft top
+        // highlight, rounded at any size. `lit` is the brighter variant for the focused entry. Drawn untinted;
+        // tint it through Color (e.g. accent) when needed.
+        // `pill` uses the rounder variant (buttons, selected entries) instead of the card one.
+        public static ImageView GlassCard(bool lit, int width, int height, bool pill = false)
+        {
+            string name = (pill ? "glass_pill" : "glass") + (lit ? "_lit" : "") + "9.9";
+            return new ImageView { ResourceUrl = Theme.Image(name), Size = new Size(width, height) };
+        }
+
+        // A card / panel background: glass in Glorious, the flat rounded fill otherwise.
+        public static View Panel(Color flat, int width, int height, float radius)
+        {
+            return Theme.Glorious ? (View)GlassCard(false, width, height) : Rounded(flat, width, height, radius);
         }
 
         public static void SetVisible(View view, bool visible)
@@ -245,11 +224,18 @@ namespace OmegaTube.Ui
         {
             private readonly TextLabel label;
             private readonly ImageView icon;
+            private readonly View glassLit;       // Glorious: brighter glass while focused
 
             public PillButton(string text, string iconName, int width, int height = 76)
             {
                 Size = new Size(width, height);
                 Round(this, height / 2f);
+                if (Theme.Glorious)
+                {
+                    Add(GlassCard(false, width, height, true));
+                    glassLit = GlassCard(true, width, height, true);
+                    Add(glassLit);
+                }
                 int x = 34;
                 if (iconName != null)
                 {
@@ -261,6 +247,13 @@ namespace OmegaTube.Ui
                 label = Label(text, Theme.BodySize + 2, Theme.Text, width - x - 24, height);
                 label.VerticalAlignment = VerticalAlignment.Center;
                 label.Position = new Position(x, 0);
+                if (Theme.Glorious && iconName == null)
+                {
+                    // A text-only pill (Yes / No ...): the text sits in the middle.
+                    label.Size = new Size(width, height);
+                    label.Position = new Position(0, 0);
+                    label.HorizontalAlignment = HorizontalAlignment.Center;
+                }
                 Add(label);
                 SetFocused(false);
             }
@@ -273,6 +266,14 @@ namespace OmegaTube.Ui
 
             public void SetFocused(bool focused)
             {
+                if (glassLit != null)
+                {
+                    // Glass: the focused pill is a brighter glass and keeps its light text and icon.
+                    SetVisible(glassLit, focused);
+                    label.TextColor = Theme.Text;
+                    Scale = focused ? new Vector3(1.04f, 1.04f, 1f) : Vector3.One;
+                    return;
+                }
                 BackgroundColor = focused ? Theme.CardInfoFocused : Theme.SurfaceHigh;
                 label.TextColor = focused ? Theme.CardTextFocused : Theme.Text;
                 if (icon != null)
@@ -387,11 +388,14 @@ namespace OmegaTube.Ui
         // Smoothly moves a view; returns the animation so callers can stop a running one.
         public static Animation Slide(View view, float x, float y, Animation previous, int ms = 180)
         {
-            previous?.Stop();
+            if (previous != null)
+            {
+                previous.Stop();
+                previous.Dispose();   // one per key press under key repeat: hand the native handle back at once
+            }
             var anim = new Animation(ms);
-            var ease = new AlphaFunction(AlphaFunction.BuiltinFunctions.EaseOut);
-            anim.AnimateTo(view, "PositionX", x, ease);
-            anim.AnimateTo(view, "PositionY", y, ease);
+            anim.AnimateTo(view, "PositionX", x, EaseOut);
+            anim.AnimateTo(view, "PositionY", y, EaseOut);
             anim.Play();
             return anim;
         }

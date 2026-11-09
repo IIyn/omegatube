@@ -8,6 +8,7 @@ JSON_VERSION=3.12.0
 QRCODEGEN_VERSION=1.8.0
 QUICKJS_VERSION=0.17.0
 EJS_VERSION=0.8.0
+WEBP_VERSION=1.5.0
 DEPS=build/deps
 mkdir -p "$DEPS"
 
@@ -40,6 +41,16 @@ if [ ! -f "$DEPS/ejs-$EJS_VERSION/core.min.js" ]; then
       "$WHEEL" "$f" > "$DEPS/ejs-$EJS_VERSION/$f"
   done
   rm -f "$WHEEL"
+fi
+# libwebp (BSD-3): decodes YouTube's animated WebP previews into frames, which the Tizen 5.5 image loader
+# cannot animate itself.
+# (extracted aside and moved into place, so an interrupted download never leaves a half-filled directory behind)
+if [ ! -f "$DEPS/libwebp-$WEBP_VERSION/src/webp/decode.h" ]; then
+  rm -rf "$DEPS/libwebp-$WEBP_VERSION" "$DEPS/libwebp-$WEBP_VERSION.tmp"
+  mkdir -p "$DEPS/libwebp-$WEBP_VERSION.tmp"
+  curl -sfL "https://github.com/webmproject/libwebp/archive/refs/tags/v$WEBP_VERSION.tar.gz" \
+    | tar -xz -C "$DEPS/libwebp-$WEBP_VERSION.tmp" --strip-components=1
+  mv "$DEPS/libwebp-$WEBP_VERSION.tmp" "$DEPS/libwebp-$WEBP_VERSION"
 fi
 # Mozilla CA bundle (as packaged by curl), embedded into the core for TLS verification.
 if [ ! -f "$DEPS/cacert.pem" ]; then

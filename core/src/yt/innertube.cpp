@@ -99,6 +99,42 @@ int watched_percent(const json& j) {
     return 0;
 }
 
+// The animated-preview WebP of an item, if YouTube offers one: richThumbnail.movingThumbnailRenderer in the WEB
+// layouts; other layouts (TV tiles) name the field differently, so fall back to the first animated-WebP
+// (/an_webp/) URL anywhere in the item. "" when there is none.
+// The first string value under `v` that is an animated-WebP URL (no copies: a TV feed page has dozens of items and
+// most have none).
+const std::string* find_animated_webp(const json& v) {
+    if (v.is_string()) {
+        const std::string& s = v.get_ref<const std::string&>();
+        return s.find("/an_webp/") != std::string::npos ? &s : nullptr;
+    }
+    if (v.is_array() || v.is_object())
+        for (const json& child : v)
+            if (const std::string* hit = find_animated_webp(child)) return hit;
+    return nullptr;
+}
+
+std::string moving_thumbnail(const json& v) {
+    if (const json* m = find_key(v, "movingThumbnailRenderer"); m && m->is_object()) {
+        auto details = m->find("movingThumbnailDetails");
+        if (details != m->end() && details->is_object()) {
+            auto thumbs = details->find("thumbnails");
+            if (thumbs != details->end() && thumbs->is_array() && !thumbs->empty() && (*thumbs)[0].is_object()) {
+                auto url = (*thumbs)[0].find("url");
+                if (url != (*thumbs)[0].end() && url->is_string() && !url->get_ref<const std::string&>().empty())
+                    return url->get<std::string>();
+            }
+        }
+    }
+    if (const std::string* hit = find_animated_webp(v)) {
+        std::string url = *hit;
+        if (url.compare(0, 2, "//") == 0) url = "https:" + url;
+        if (url.compare(0, 4, "http") == 0) return url;
+    }
+    return "";
+}
+
 void parse_video_renderer(const json& v, Feed& out) {
     FeedItem item;
     item.video_id = v.value("videoId", "");
@@ -109,6 +145,7 @@ void parse_video_renderer(const json& v, Feed& out) {
     item.views = text_of(v.value("shortViewCountText", v.value("viewCountText", json::object())));
     item.published = text_of(v.value("publishedTimeText", json::object()));
     item.thumbnail = "https://i.ytimg.com/vi/" + item.video_id + "/mqdefault.jpg";
+    item.preview = moving_thumbnail(v);
     for (const json& badge : v.value("badges", json::array()))
         if (badge.dump().find("LIVE") != std::string::npos) item.is_live = true;
     // Broadcasts have no length and count viewers ("18 k spectateurs" / "1.2K watching") instead of views.
@@ -165,6 +202,7 @@ void parse_tile(const json& t, Feed& out) {
     if (parts.size() > 1) item.views = parts[1];
     if (parts.size() > 2) item.published = parts[2];
     item.thumbnail = "https://i.ytimg.com/vi/" + item.video_id + "/mqdefault.jpg";
+    item.preview = moving_thumbnail(t);
     for (const json& o : header.value("thumbnailOverlays", json::array())) {
         const json& ts = o.value("thumbnailOverlayTimeStatusRenderer", json::object());
         if (ts.empty()) continue;
@@ -210,6 +248,7 @@ void parse_lockup(const json& l, Feed& out) {
     if (parts.size() > 1) item.views = parts[1];
     if (parts.size() > 2) item.published = parts[2];
     item.thumbnail = "https://i.ytimg.com/vi/" + item.video_id + "/mqdefault.jpg";
+    item.preview = moving_thumbnail(l);
     std::string image = l.value("contentImage", json::object()).dump();
     for (const char* key : {"\"text\":\""}) {
         // The duration / LIVE badge: first thumbnailBadgeViewModel text.
@@ -415,6 +454,21 @@ bool Client::ensure_visitor(std::string& error) {
     if (web_client_version_.empty()) web_client_version_ = cfg::str({"innertube", "search", "clientVersion"});
     OLOG("yt: visitorData %zu chars, web client %s", visitor_data_.size(), web_client_version_.c_str());
     return true;
+}
+
+void Client::adopt_session(Client& from) {
+    std::string visitor, version;
+    {
+        std::lock_guard<std::mutex> lock(from.mutex_);
+        visitor = from.visitor_data_;
+        version = from.web_client_version_;
+    }
+    if (visitor.empty()) return;
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (visitor_data_.empty()) {
+        visitor_data_ = std::move(visitor);
+        web_client_version_ = std::move(version);
+    }
 }
 
 net::Headers Client::stream_headers() const { return {{"User-Agent", cfg::str({"innertube", "player", "userAgent"})}}; }

@@ -123,7 +123,11 @@ namespace OmegaTube.Ui
 
         private void ShowFrame(int f)
         {
-            arc.PixelArea = new RelativeVector4((float)(f % Cols) / Cols, (float)(f / Cols) / Rows, 1f / Cols, 1f / Rows);
+            cell.X = (float)(f % Cols) / Cols;
+            cell.Y = (float)(f / Cols) / Rows;
+            arc.PixelArea = cell;
         }
+
+        private readonly RelativeVector4 cell = new RelativeVector4(0f, 0f, 1f / Cols, 1f / Rows);   // one object, moved per frame
     }
 }
