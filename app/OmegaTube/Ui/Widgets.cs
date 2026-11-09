@@ -96,24 +96,23 @@ namespace OmegaTube.Ui
 
         public static void SetFill(View v, Color color, float radius) => FillRounded(v, color, radius);
 
-        // A rounded image, applied as an ImageVisual carrying the corner radius. Falls back to a plain
-        // ResourceUrl if the visual map is rejected, so the thumbnail still shows (just square).
-        public static void RoundImage(ImageView iv, string url, float radius)
+        // A rounded image: the URL and the rounded-rect alpha mask are set together in one Image visual (setting
+        // AlphaMaskURL separately from ResourceUrl does not always combine into the same visual). Alpha masking
+        // is an old, widely supported NUI feature, so it rounds on Tizen 5.5 where CornerRadius is absent.
+        public static void MaskedImage(ImageView iv, string url, string maskUrl)
         {
             try
             {
                 var map = new PropertyMap();
                 map.Add((int)Visual.Property.Type, new PropertyValue((int)Visual.Type.Image));
                 map.Add((int)ImageVisualProperty.URL, new PropertyValue(url));
-                if (radius > 0f)
-                {
-                    map.Add(VisualCornerRadius, new PropertyValue(radius));
-                }
+                map.Add((int)ImageVisualProperty.AlphaMaskURL, new PropertyValue(maskUrl));
+                map.Add((int)ImageVisualProperty.CropToMask, new PropertyValue(true));
                 iv.Image = map;
             }
             catch (System.Exception e)
             {
-                Tizen.Log.Warn("OmegaTube", "RoundImage: " + e.Message);
+                Tizen.Log.Warn("OmegaTube", "MaskedImage: " + e.Message);
                 iv.ResourceUrl = url;
             }
         }

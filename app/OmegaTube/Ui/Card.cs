@@ -43,8 +43,6 @@ namespace OmegaTube.Ui
             thumb = new ImageView
             {
                 Size = new Size(width, thumbH + Theme.CardRadius),
-                AlphaMaskURL = Theme.Image("round_mask"),
-                CropToMask = true,
             };
             Add(thumb);
 
@@ -99,7 +97,7 @@ namespace OmegaTube.Ui
 
             if (!string.IsNullOrEmpty(Item.Thumbnail))
             {
-                thumb.ResourceUrl = Item.Thumbnail;   // clipped by the alpha mask set in the constructor
+                Widgets.MaskedImage(thumb, Item.Thumbnail, Theme.Image("round_mask"));
             }
         }
 
