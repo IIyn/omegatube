@@ -284,6 +284,7 @@ namespace OmegaTube
         [UnmanagedFunctionPointer(CallingConvention.Cdecl, CharSet = CharSet.Ansi)] private delegate void LogLineFn(string text);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl, CharSet = CharSet.Ansi)] private delegate IntPtr CreateFn(IntPtr win, int w, int h, string videoUrl, string audioUrl);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl, CharSet = CharSet.Ansi)] private delegate IntPtr CreateYtFn(IntPtr win, int w, int h, string videoId, int maxHeight, string codecs, long startMs, string audioTrack);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl, CharSet = CharSet.Ansi)] private delegate IntPtr CreatePreviewFn(IntPtr win, int w, int h, string videoId, int maxHeight, string codecs, long startMs);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl, CharSet = CharSet.Ansi)] private delegate void DiagnoseFn(IntPtr win, int w, int h, string videoUrl, string audioUrl);
 
         // --- Bound function pointers -------------------------------------------------------------------------
@@ -295,6 +296,7 @@ namespace OmegaTube
         private static LogLineFn _logLine;
         private static CreateFn _playerCreate;
         private static CreateYtFn _playerCreateYouTube;
+        private static CreatePreviewFn _playerCreatePreview;
         private static DiagnoseFn _playerDiagnose;
         private static V_ip _playerTogglePause, _playerDestroy, _free;
         private static Ip_ip _playerFormats;
@@ -317,6 +319,7 @@ namespace OmegaTube
             _logTail = Fn<I_buf>("omega_log_tail");
             _playerCreate = Fn<CreateFn>("omega_player_create");
             _playerCreateYouTube = Fn<CreateYtFn>("omega_player_create_youtube");
+            _playerCreatePreview = Fn<CreatePreviewFn>("omega_player_create_preview");
             _playerLastError = Fn<Ip_v>("omega_player_last_error");
             _playerTogglePause = Fn<V_ip>("omega_player_toggle_pause");
             _playerSeek = Fn<I_ipl>("omega_player_seek");
@@ -367,6 +370,8 @@ namespace OmegaTube
         public static IntPtr PlayerLastError() => _playerLastError();
         public static void PlayerTogglePause(IntPtr player) => _playerTogglePause(player);
         public static int PlayerSeek(IntPtr player, long positionMs) => _playerSeek(player, positionMs);
+        // Muted, video-only preview with no watch-history reporting (omega_player_create_preview). Blocking.
+        public static IntPtr PlayerCreatePreview(IntPtr ecoreWindow, int width, int height, string videoId, int maxHeight, string codecs, long startMs) => _playerCreatePreview(ecoreWindow, width, height, videoId, maxHeight, codecs, startMs);
         public static void PlayerGetStats(IntPtr player, out PlayerStats stats) => _playerGetStats(player, out stats);
         public static void PlayerDestroy(IntPtr player) => _playerDestroy(player);
         public static void PlayerDiagnose(IntPtr ecoreWindow, int width, int height, string videoUrl, string audioUrl) => _playerDiagnose(ecoreWindow, width, height, videoUrl, audioUrl);

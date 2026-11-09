@@ -72,6 +72,12 @@ OMEGA_API omega_player* omega_player_create(void* ecore_wl2_window, int width, i
 OMEGA_API omega_player* omega_player_create_youtube(void* ecore_wl2_window, int width, int height, const char* video_id,
                                                     int max_height, const char* codecs, int64_t start_ms,
                                                     const char* audio_track);
+// Muted preview of a YouTube video (the home's "rest on it to see it" playback): video track only (no audio),
+// at most max_height (0 = 720), short read-ahead, and no watch-history reporting. Blocking (network): call it
+// off the UI thread. Release with omega_player_destroy. Returns NULL on failure (the reason is in the log).
+OMEGA_API omega_player* omega_player_create_preview(void* ecore_wl2_window, int width, int height,
+                                                    const char* video_id, int max_height, const char* codecs,
+                                                    int64_t start_ms);
 // Why the last omega_player_create_youtube returned NULL: {"kind","status","reason","detail","signedIn"}.
 // kind: login | age | upcoming | unplayable | unavailable | rate_limited | http | network | formats | player | other;
 // status: YouTube's playabilityStatus ("LOGIN_REQUIRED"...) or "HTTP_<code>"; reason: YouTube's own message

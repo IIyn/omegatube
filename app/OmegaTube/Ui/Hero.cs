@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using OmegaTube.Data;
 using Tizen.NUI;
@@ -16,15 +17,38 @@ namespace OmegaTube.Ui
     //
     // The darkening is two full-screen gradients (not cropped rectangles), so there is no visible band/seam
     // where a gradient rectangle used to end; multiple stops keep the ramp short enough to limit TV banding.
+    //
+    // Video preview: after resting DwellMs on the item, the video itself plays (muted, 720p, no watch history)
+    // on the TV's video plane under the UI. The still stays on top until the video is actually PLAYING, then
+    // fades out to reveal it (the gradients and texts stay). Any move or hide puts the still back first, then
+    // releases the decoder, so there is no black flash either way.
     public class Hero : View
     {
+        private const uint DwellMs = 3000;          // rest this long on a first-row video before it plays
+        private const long PreviewCapMs = 120000;   // then give the decoder (and the data) back
+        private const double StartTimeoutS = 15;    // never reached PLAYING: stay on the still
+        private const int Playing = 3;              // esp::State PLAYING
+
+        private readonly App app;
         private readonly ImageView artBase, artHi;
         private readonly TextLabel title, meta;
-        private Animation fade;
+        private readonly VideoPreview video = new VideoPreview();
+        private Animation fade, reveal;
+        private Timer dwellTimer, watchTimer;
+        private VideoItem currentItem;
         private string currentId = "";
+        private string doneId;      // its preview ended (end, cap, never started): not replayed until it changes
+        private bool active;        // on screen: first row of a Glorious feed, home visible
+        private bool revealed;      // the still has faded out over the playing video
+        private long videoStartMs;
+        private DateTime videoReadyAt;
 
-        public Hero()
+        // The layers under the hero (window, home root) must turn see-through while the video plane shows.
+        public Action<bool> SeeThrough;
+
+        public Hero(App app)
         {
+            this.app = app;
             Size = new Size(1920, 1080);
             BackgroundColor = Theme.Background;
 
@@ -53,18 +77,28 @@ namespace OmegaTube.Ui
             meta = Widgets.Label("", Theme.BodySize + 2, Theme.TextDim, 760, 44);
             meta.Position = new Position(Theme.GloriousInset, 322);
             Add(meta);
+
+            video.Ready += () => UiGuard.Run("Hero.VideoReady", OnVideoReady);
         }
 
         private static string Frame(string id, string variant) => "https://i.ytimg.com/vi/" + id + "/" + variant + ".jpg";
 
-        // Sets the item's artwork + title + metadata. No-op when it is already the shown item.
+        // Sets the item's artwork + title + metadata. Already the shown item: only (re)arms its preview.
         public void Display(VideoItem item)
         {
-            if (item == null || item.Id == currentId)
+            if (item == null)
             {
                 return;
             }
+            if (item.Id == currentId)
+            {
+                Arm();
+                return;
+            }
+            StopVideo();
             currentId = item.Id;
+            currentItem = item;
+            doneId = null;
             if (!string.IsNullOrEmpty(item.Id))
             {
                 artBase.ResourceUrl = Frame(item.Id, "hqdefault");
@@ -82,6 +116,118 @@ namespace OmegaTube.Ui
             fade = new Animation(260);
             fade.AnimateTo(artBase, "Opacity", 1f, new AlphaFunction(AlphaFunction.BuiltinFunctions.EaseOut));
             fade.Play();
+            Arm();
+        }
+
+        // The hero is (not) on screen. Off: any preview stops right away.
+        public void SetActive(bool on)
+        {
+            active = on;
+            if (on)
+            {
+                Arm();
+            }
+            else
+            {
+                StopVideo();
+            }
+        }
+
+        // OK on the shown item: where its preview is (for the full player to continue from), -1 if it is not
+        // playing. The preview stops, so the decoder is on its way back before the player asks for it.
+        public long TakeVideoPosition(string id)
+        {
+            long position = -1;
+            if (video.VideoId == id && video.Stats(out NativeCore.PlayerStats s) && s.State == Playing)
+            {
+                position = s.PositionMs;
+            }
+            StopVideo();
+            return position;
+        }
+
+        // Starts the dwell countdown for the shown item, unless its preview is already starting or playing.
+        private void Arm()
+        {
+            if (!active || currentItem == null || string.IsNullOrEmpty(currentId) || dwellTimer != null
+                || video.VideoId == currentId || doneId == currentId)
+            {
+                return;
+            }
+            VideoItem item = currentItem;
+            dwellTimer = new Timer(DwellMs);
+            dwellTimer.Tick += (s, e) => UiGuard.Tick("Hero.dwell", () =>
+            {
+                dwellTimer = null;
+                if (active && item.Id == currentId)
+                {
+                    videoStartMs = PlayerScreen.ResumePoint(item);
+                    video.Start(app, item.Id, videoStartMs);
+                }
+                return false;
+            });
+            dwellTimer.Start();
+        }
+
+        private void OnVideoReady()
+        {
+            if (!active || video.VideoId != currentId)
+            {
+                StopVideo();
+                return;
+            }
+            // The still still covers everything: making the layers under it see-through changes nothing yet.
+            BackgroundColor = Color.Transparent;
+            SeeThrough?.Invoke(true);
+            videoReadyAt = DateTime.Now;
+            watchTimer = new Timer(150);
+            watchTimer.Tick += (s, e) => UiGuard.Tick("Hero.watch", Watch);
+            watchTimer.Start();
+        }
+
+        // Reveals the video once frames flow; ends the preview at the end, after the cap, or if it never starts.
+        private bool Watch()
+        {
+            if (!video.Stats(out NativeCore.PlayerStats s))
+            {
+                watchTimer = null;
+                return false;
+            }
+            bool tooLate = !revealed && (DateTime.Now - videoReadyAt).TotalSeconds > StartTimeoutS;
+            if (s.Eos != 0 || tooLate || (revealed && s.PositionMs - videoStartMs > PreviewCapMs))
+            {
+                watchTimer = null;   // StopVideo must not stop the timer that is running this tick
+                doneId = currentId;
+                StopVideo();
+                return false;
+            }
+            if (!revealed && s.State == Playing && s.PositionMs > videoStartMs + 200)
+            {
+                revealed = true;
+                reveal?.Stop();
+                reveal = new Animation(500);
+                var ease = new AlphaFunction(AlphaFunction.BuiltinFunctions.EaseInOut);
+                reveal.AnimateTo(artBase, "Opacity", 0f, ease);
+                reveal.AnimateTo(artHi, "Opacity", 0f, ease);
+                reveal.Play();
+            }
+            return true;
+        }
+
+        // Back to the still: cover the video plane first, then make the layers opaque, then free the decoder.
+        private void StopVideo()
+        {
+            dwellTimer?.Stop();
+            dwellTimer = null;
+            watchTimer?.Stop();
+            watchTimer = null;
+            reveal?.Stop();
+            artBase.Opacity = 1f;
+            artHi.Opacity = 1f;
+            revealed = false;
+            BackgroundColor = Theme.Background;
+            SeeThrough?.Invoke(false);
+            video.Stop();
         }
 
         // "Channel · 1.2M views · 3 days ago", skipping the parts YouTube did not give.

@@ -263,14 +263,15 @@ namespace OmegaTube
             Window.Instance.Add(dialog);
         }
 
-        public void Play(VideoItem item)
+        // startMs >= 0: start there (e.g. where the home's video preview was); -1: the usual resume point.
+        public void Play(VideoItem item, long startMs = -1)
         {
             if (item.Kind == "playlist")
             {
                 Push(new PlaylistScreen(this, item));
                 return;
             }
-            Push(new PlayerScreen(this, item));
+            Push(new PlayerScreen(this, item, startMs));
         }
 
         private void OnKeyEvent(object sender, Window.KeyEventArgs e)

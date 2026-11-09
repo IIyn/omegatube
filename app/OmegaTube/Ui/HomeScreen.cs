@@ -58,7 +58,13 @@ namespace OmegaTube.Ui
         public HomeScreen(App app) : base(app)
         {
             Root.BackgroundColor = Theme.Background;
-            hero = new Hero();   // backmost: the Glorious full-screen backdrop (hidden in Omega)
+            hero = new Hero(App);   // backmost: the Glorious full-screen backdrop (hidden in Omega)
+            // While its video preview plays, the TV's video plane (under the window) must show through.
+            hero.SeeThrough = on =>
+            {
+                Root.BackgroundColor = on ? Color.Transparent : Theme.Background;
+                Window.Instance.BackgroundColor = on ? Color.Transparent : Color.Black;
+            };
             hero.Hide();
             Root.Add(hero);
             header = Widgets.Label("", Theme.TitleSize + 2, Theme.Text, 1200);
@@ -179,11 +185,13 @@ namespace OmegaTube.Ui
             openTimer?.Stop();
             prewarmTimer?.Stop();
             prewarmTimer = null;
+            hero?.SetActive(false);   // a video preview gives the decoder back
             shown?.OnHide();
         }
 
         public override void OnPause()
         {
+            hero?.SetActive(false);   // leaving the app: release the decoder (re-armed by the next key press)
             shown?.OnPause();
         }
 
@@ -536,6 +544,7 @@ namespace OmegaTube.Ui
             bool onFirstRow = heroSection && (Feed?.FocusedRow ?? 0) == 0;
             if (!onFirstRow)
             {
+                hero.SetActive(false);   // stops a video preview
                 hero.Hide();
                 rowFadeLeft?.Hide();
                 rowFadeRight?.Hide();
@@ -543,6 +552,7 @@ namespace OmegaTube.Ui
                 return;
             }
             hero.Show();
+            hero.SetActive(true);
             rowFadeLeft?.Show();
             rowFadeRight?.Show();
             rowFadeBottom?.Show();
@@ -681,7 +691,9 @@ namespace OmegaTube.Ui
                 VideoItem item = Feed?.FocusedItem;
                 if (item != null)
                 {
-                    App.Play(item);
+                    // A preview playing: the full player carries on from where it is (the preview stops first).
+                    long from = hero.TakeVideoPosition(item.Id);
+                    App.Play(item, from);
                 }
                 return true;
             }

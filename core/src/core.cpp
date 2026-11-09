@@ -287,6 +287,50 @@ omega_player* omega_player_create_youtube(void* window, int width, int height, c
     }
 }
 
+omega_player* omega_player_create_preview(void* window, int width, int height, const char* video_id, int max_height,
+                                          const char* codecs, int64_t start_ms) {
+    omega::yt::Client client;
+    omega::yt::VideoInfo info;
+    std::string error;
+    if (!client.player(video_id ? video_id : "", info, error)) {
+        OLOG("preview %s: %s", video_id ? video_id : "-", error.c_str());
+        return nullptr;
+    }
+    if (info.is_live) return nullptr;  // broadcasts: numbered segments from the live edge, not a quick preview
+    std::vector<std::string> prefs = omega::yt::parse_codec_list(codecs && *codecs ? codecs : "avc1,vp9");
+    int tries = 0;
+    for (const omega::yt::Format* video : omega::yt::rank_videos(info, max_height > 0 ? max_height : 720, prefs)) {
+        if (++tries > 3) break;  // codecs the TV refuses: try a couple of others, not every format
+        omega::PlayerConfig cfg;
+        cfg.window = window;
+        cfg.width = width;
+        cfg.height = height;
+        cfg.video_url = video->url;
+        cfg.stream_headers = info.user_agent.empty() ? client.stream_headers()
+                                                     : omega::net::Headers{{"User-Agent", info.user_agent}};
+        cfg.fps = video->fps > 0 ? video->fps : 30;
+        cfg.max_width = video->width;
+        cfg.max_height = video->height;
+        cfg.duration_ms = info.length_s * 1000;
+        cfg.start_ms = start_ms > 0 ? start_ms : 0;
+        cfg.use_audio = false;      // muted: no audio stream at all (also less data)
+        cfg.max_queue_ms = 10000;   // short read-ahead: the user often moves on after a few seconds
+        cfg.feed_ahead_ms = 6000;
+        cfg.app_id = "org.omegatube.app";
+        cfg.app_version = kVersion;
+        auto* p = new omega_player(std::move(cfg));
+        if (p->impl.start()) {
+            // No WatchReporter: a preview is not a watch (no history entry, no view).
+            OLOG("preview %s: itag %d %dx%d %s, video only", video_id, video->itag, video->width, video->height,
+                 video->codecs.c_str());
+            return p;
+        }
+        OLOG("preview start failed: %s", p->impl.error().c_str());
+        delete p;
+    }
+    return nullptr;
+}
+
 void omega_player_toggle_pause(omega_player* p) {
     if (p) p->impl.toggle_pause();
 }
