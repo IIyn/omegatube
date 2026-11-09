@@ -25,7 +25,7 @@ namespace OmegaTube.Ui
         // Glorious hero mode: the first row sits below the hero text; moving off it scrolls the rows up to fill
         // the screen (and the home screen hides the hero). RowChanged fires when the focused row changes.
         public System.Action RowChanged;
-        private const int HeroFirstRowTop = 430;   // where row 0 renders while the hero backdrop is shown
+        private const int HeroFirstRowTop = 500;   // push row 0 low so the hero backdrop gets most of the screen
 
         private readonly int width;
         private readonly int leftInset;   // Glorious: rows start here; earlier cards slide under the nav

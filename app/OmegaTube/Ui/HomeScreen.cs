@@ -74,8 +74,8 @@ namespace OmegaTube.Ui
             rowFadeRight = new ImageView { ResourceUrl = Theme.Image("scrim_right"), Size = new Size(260, 620),
                                           Position = new Position(1660, 460), FittingMode = FittingModeType.ScaleToFill };
             // Bottom fade: while on the featured first row, the next row peeking at the bottom is faded out.
-            rowFadeBottom = new ImageView { ResourceUrl = Theme.Image("scrim_rowbottom"), Size = new Size(1920, 300),
-                                            Position = new Position(0, 780), FittingMode = FittingModeType.ScaleToFill };
+            rowFadeBottom = new ImageView { ResourceUrl = Theme.Image("scrim_rowbottom"), Size = new Size(1920, 180),
+                                            Position = new Position(0, 900), FittingMode = FittingModeType.ScaleToFill };
             rowFadeLeft.Hide();
             rowFadeRight.Hide();
             rowFadeBottom.Hide();

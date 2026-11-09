@@ -53,7 +53,7 @@ namespace OmegaTube.Ui
         public const int GloriousInset = 150;      // rows start here, clearing the nav; earlier cards slide under it
         public const int BigCardWidth = 352;       // featured first row (thumbnail-only, small to show more backdrop)
         public const int BigCardGap = 56;          // more spacing between featured cards
-        public const int BigRowHeight = 300;
+        public const int BigRowHeight = 340;       // tall so the next row's heading clears the featured thumbnails
 
         public static int ThumbHeight(int cardWidth) => cardWidth * 9 / 16;
         public static int CardHeight(int cardWidth) => ThumbHeight(cardWidth) + CardInfoHeight;
