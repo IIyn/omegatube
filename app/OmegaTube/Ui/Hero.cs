@@ -40,8 +40,9 @@ namespace OmegaTube.Ui
         private string doneId;      // its preview ended (end, cap, never started): not replayed until it changes
         private bool active;        // on screen: first row of a Glorious feed, home visible
         private bool revealed;      // the still has faded out over the playing video
-        private long videoStartMs;
+        private long firstPlayingMs = -1;   // position at the first PLAYING sample: motion is measured from it
         private DateTime videoReadyAt;
+        private readonly System.Diagnostics.Stopwatch clock = new System.Diagnostics.Stopwatch();   // timing log
 
         // The layers under the hero (window, home root) must turn see-through while the video plane shows.
         public Action<bool> SeeThrough;
@@ -129,22 +130,29 @@ namespace OmegaTube.Ui
             }
             else
             {
-                StopVideo();
+                StopVideo("hidden");
             }
         }
 
-        // OK on the shown item: where its preview is (for the full player to continue from), -1 if it is not
-        // playing. The preview stops, so the decoder is on its way back before the player asks for it.
+        // OK on the shown item: where the full player should start, -1 for its usual resume point. A preview that
+        // was playing continues from its position, unless the user had already watched further (resume point).
+        // The preview stops, so the decoder is on its way back before the player asks for it.
         public long TakeVideoPosition(string id)
         {
             long position = -1;
             if (video.VideoId == id && video.Stats(out NativeCore.PlayerStats s) && s.State == Playing)
             {
                 position = s.PositionMs;
+                if (currentItem != null)
+                {
+                    position = Math.Max(position, PlayerScreen.ResumePoint(currentItem));
+                }
             }
-            StopVideo();
+            StopVideo("play");
             return position;
         }
+
+        private void Log(string what) => NativeCore.Log("preview: " + what + " +" + clock.ElapsedMilliseconds + "ms");
 
         // Starts the dwell countdown for the shown item, unless its preview is already starting or playing.
         private void Arm()
@@ -161,8 +169,10 @@ namespace OmegaTube.Ui
                 dwellTimer = null;
                 if (active && item.Id == currentId)
                 {
-                    videoStartMs = PlayerScreen.ResumePoint(item);
-                    video.Start(app, item.Id, videoStartMs);
+                    // Always from the start: a preview is a taster (OK still resumes where the user left off).
+                    clock.Restart();
+                    Log("start " + item.Id);
+                    video.Start(app, item.Id, 0);
                 }
                 return false;
             });
@@ -173,19 +183,22 @@ namespace OmegaTube.Ui
         {
             if (!active || video.VideoId != currentId)
             {
-                StopVideo();
+                StopVideo("stale");
                 return;
             }
+            Log("player ready");
             // The still still covers everything: making the layers under it see-through changes nothing yet.
             BackgroundColor = Color.Transparent;
             SeeThrough?.Invoke(true);
             videoReadyAt = DateTime.Now;
+            firstPlayingMs = -1;
             watchTimer = new Timer(150);
             watchTimer.Tick += (s, e) => UiGuard.Tick("Hero.watch", Watch);
             watchTimer.Start();
         }
 
-        // Reveals the video once frames flow; ends the preview at the end, after the cap, or if it never starts.
+        // Reveals the video once its clock moves (measured from the first PLAYING sample, so wherever it started);
+        // ends the preview at the end, after the cap, or if it never starts.
         private bool Watch()
         {
             if (!video.Stats(out NativeCore.PlayerStats s))
@@ -193,16 +206,23 @@ namespace OmegaTube.Ui
                 watchTimer = null;
                 return false;
             }
+            if (s.State == Playing && firstPlayingMs < 0)
+            {
+                firstPlayingMs = s.PositionMs;
+                Log("playing at " + s.PositionMs);
+            }
             bool tooLate = !revealed && (DateTime.Now - videoReadyAt).TotalSeconds > StartTimeoutS;
-            if (s.Eos != 0 || tooLate || (revealed && s.PositionMs - videoStartMs > PreviewCapMs))
+            bool capped = revealed && firstPlayingMs >= 0 && s.PositionMs - firstPlayingMs > PreviewCapMs;
+            if (s.Eos != 0 || tooLate || capped)
             {
                 watchTimer = null;   // StopVideo must not stop the timer that is running this tick
                 doneId = currentId;
-                StopVideo();
+                StopVideo(s.Eos != 0 ? "end" : tooLate ? "never played" : "cap");
                 return false;
             }
-            if (!revealed && s.State == Playing && s.PositionMs > videoStartMs + 200)
+            if (!revealed && s.State == Playing && firstPlayingMs >= 0 && s.PositionMs > firstPlayingMs + 200)
             {
+                Log("revealed at " + s.PositionMs);
                 revealed = true;
                 reveal?.Stop();
                 reveal = new Animation(500);
@@ -215,8 +235,12 @@ namespace OmegaTube.Ui
         }
 
         // Back to the still: cover the video plane first, then make the layers opaque, then free the decoder.
-        private void StopVideo()
+        private void StopVideo(string why = "moved")
         {
+            if (video.VideoId != null)
+            {
+                Log("stop (" + why + ")");
+            }
             dwellTimer?.Stop();
             dwellTimer = null;
             watchTimer?.Stop();
