@@ -350,6 +350,7 @@ nlohmann::json items_json(const std::vector<omega::yt::FeedItem>& list) {
                          {"views", it.views},
                          {"published", it.published},
                          {"thumbnail", it.thumbnail},
+                         {"preview", it.preview},
                          {"live", it.is_live},
                          {"watched", it.watched_percent},
                          {"playlistId", it.playlist_id},

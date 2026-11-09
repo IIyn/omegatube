@@ -18,9 +18,12 @@ namespace OmegaTube.Ui
     // where a gradient rectangle used to end; multiple stops keep the ramp short enough to limit TV banding.
     public class Hero : View
     {
-        private readonly ImageView artBase, artHi;
+        private const int PreviewDelayMs = 600;   // dwell before the animated preview starts (avoids one per scroll tick)
+
+        private readonly ImageView artBase, artHi, preview;
         private readonly TextLabel title, meta;
-        private Animation fade;
+        private Animation fade, previewFade;
+        private Timer previewTimer;
         private string currentId = "";
 
         public Hero()
@@ -32,6 +35,10 @@ namespace OmegaTube.Ui
             Add(artBase);
             artHi = new ImageView { Size = new Size(1920, 1080), FittingMode = FittingModeType.ScaleToFill };
             Add(artHi);
+            // Animated-preview layer (richThumbnail WebP), faded in over the stills after a short dwell. NUI plays
+            // animated images loaded by URL; if the firmware can't animate the WebP it just shows its first frame.
+            preview = new ImageView { Size = new Size(1920, 1080), FittingMode = FittingModeType.ScaleToFill, Opacity = 0f };
+            Add(preview);
 
             // Left fade: solid black at the left edge -> clear by the centre (full-screen, so no vertical seam).
             Add(Widgets.Gradient(new Vector2(-0.5f, 0f), new Vector2(0.5f, 0f),
@@ -82,6 +89,36 @@ namespace OmegaTube.Ui
             fade = new Animation(260);
             fade.AnimateTo(artBase, "Opacity", 1f, new AlphaFunction(AlphaFunction.BuiltinFunctions.EaseOut));
             fade.Play();
+            SchedulePreview(item);
+        }
+
+        // Clears any running preview, then (if this item has one) starts it after a short dwell.
+        private void SchedulePreview(VideoItem item)
+        {
+            previewTimer?.Stop();
+            previewTimer = null;
+            previewFade?.Stop();
+            preview.Opacity = 0f;
+            preview.ResourceUrl = "";
+            if (string.IsNullOrEmpty(item.Preview))
+            {
+                return;
+            }
+            string url = item.Preview, id = item.Id;
+            previewTimer = new Timer(PreviewDelayMs);
+            previewTimer.Tick += (s, e) => UiGuard.Tick("Hero.preview", () =>
+            {
+                if (id == currentId)
+                {
+                    preview.ResourceUrl = url;
+                    previewFade?.Stop();
+                    previewFade = new Animation(300);
+                    previewFade.AnimateTo(preview, "Opacity", 1f, new AlphaFunction(AlphaFunction.BuiltinFunctions.EaseOut));
+                    previewFade.Play();
+                }
+                return false;   // one-shot
+            });
+            previewTimer.Start();
         }
 
         // "Channel · 1.2M views · 3 days ago", skipping the parts YouTube did not give.

@@ -9,6 +9,7 @@ namespace OmegaTube.Data
     public class VideoItem
     {
         public string Id, Title, Channel, Duration, Views, Published, Thumbnail;
+        public string Preview = "";   // animated-preview WebP (richThumbnail), empty when none
         public bool Live;
         public int WatchedPercent;   // account progress reported by YouTube (0 when unknown)
         // Playlist / mix card: plays Id within PlaylistId. Videos of a playlist keep Kind "video" + PlaylistId.
@@ -284,6 +285,7 @@ namespace OmegaTube.Data
                     Views = Json.Str(o, "views"),
                     Published = Json.Str(o, "published"),
                     Thumbnail = Json.Str(o, "thumbnail"),
+                    Preview = Json.Str(o, "preview"),
                     Live = Json.Bool(o, "live"),
                     WatchedPercent = (int)Json.Num(o, "watched"),
                     PlaylistId = Json.Str(o, "playlistId"),
