@@ -25,6 +25,7 @@ namespace OmegaTube.Ui
 
         public int Count => items.Count + highlights.Count;
         public VideoItem FocusedItem => inHighlights ? highlights[hlFocus].Item : items.Count > 0 ? items[focus] : null;
+        public int FocusedRow => inHighlights ? 0 : focus / Columns;
 
         private readonly int cardW, rowStep, height;
         private readonly View content;
@@ -133,11 +134,11 @@ namespace OmegaTube.Ui
             {
                 int panelW = Math.Min(width - 2 * Pad, 1040);
                 const int panelH = 360;
-                emptyView = Widgets.Rounded(Theme.GlassPanel, panelW, panelH, Theme.GlassRadius);
+                emptyView = Widgets.Glass(Theme.GlassPanel, panelW, panelH);
                 emptyView.Position = new Position((width - panelW) / 2, Math.Max(Pad, (height - panelH) / 2 - 30));
 
-                var circle = Widgets.Rounded(Theme.GlassHigh, 128, 128, 64);
-                circle.Position = new Position((panelW - 128) / 2, 46);
+                var circle = new ImageView { ResourceUrl = Theme.Image("circle_mask"), Color = Theme.GlassHigh,
+                                             Size = new Size(128, 128), Position = new Position((panelW - 128) / 2, 46) };
                 emptyView.Add(circle);
                 var icon = new ImageView { ResourceUrl = Theme.Icon("set_account"), Size = new Size(66, 66), Position = new Position(31, 31) };
                 circle.Add(icon);

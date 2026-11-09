@@ -21,7 +21,7 @@ namespace OmegaTube.Ui
         private const int ItemHeight = 84;
         private const int Top = 150;
         private const int VisibleItems = 11;       // beyond this the list scrolls with the focus
-        private const int IconX = 40;              // icon left edge inside the rail (clear of the screen edge)
+        private const int IconX = 56;              // icon left edge inside the rail (breathing space from the screen edge)
         private const int IconSize = 40;
         private const float IdleOpacity = 0.25f;   // overlay, content focused: the whole rail fades back
 

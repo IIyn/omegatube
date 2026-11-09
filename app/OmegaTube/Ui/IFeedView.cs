@@ -7,6 +7,7 @@ namespace OmegaTube.Ui
     {
         int Count { get; }
         VideoItem FocusedItem { get; }
+        int FocusedRow { get; }   // Glorious: the hero backdrop is shown only on the first row
         void SetFocused(bool value);
         bool Move(string key);
         void RefreshProgress();

@@ -20,10 +20,18 @@ namespace OmegaTube.Ui
 
         public int Count => rows.Count;
         public VideoItem FocusedItem => rows.Count > 0 ? rows[focus].FocusedItem : null;
+        public int FocusedRow => focus;
+
+        // Glorious hero mode: the first row sits below the hero text; moving off it scrolls the rows up to fill
+        // the screen (and the home screen hides the hero). RowChanged fires when the focused row changes.
+        public System.Action RowChanged;
+        private const int HeroFirstRowTop = 384;   // where row 0 renders while the hero backdrop is shown
 
         private readonly int width;
         private readonly int leftInset;   // Glorious: rows start here; earlier cards slide under the nav
         private readonly bool bigFirst;   // Glorious: the first (recommendations) row uses large featured cards
+        private readonly bool heroMode;   // Glorious: hero backdrop on row 0 only
+        private int lastReportedRow = -1;
         private readonly View content;
         private readonly TextLabel status;
         private readonly List<FeedRow> rows = new List<FeedRow>();
@@ -35,11 +43,12 @@ namespace OmegaTube.Ui
         private readonly Func<bool> pump;
         private Animation scroll;
 
-        public ShelfList(int width, int height, int leftInset = Theme.FocusMargin, bool bigFirst = false)
+        public ShelfList(int width, int height, int leftInset = Theme.FocusMargin, bool bigFirst = false, bool heroMode = false)
         {
             this.width = width;
             this.leftInset = leftInset;
             this.bigFirst = bigFirst;
+            this.heroMode = heroMode;
             pump = BuildNext;
             Size = new Size(width, height);
             ClippingMode = ClippingModeType.ClipChildren;
@@ -300,10 +309,17 @@ namespace OmegaTube.Ui
             return true;
         }
 
-        // The focused row at the top; rows far from it are hidden (nothing to render).
+        // The focused row at the top; rows far from it are hidden (nothing to render). In hero mode the first row
+        // is held lower (so the hero title shows above it); moving to any later row scrolls the list up to the top.
         private void ScrollToFocus()
         {
-            scroll = Widgets.Slide(content, 0, -RowTop(focus), scroll);
+            if (focus != lastReportedRow)
+            {
+                lastReportedRow = focus;
+                RowChanged?.Invoke();
+            }
+            float target = heroMode && focus == 0 ? HeroFirstRowTop : -RowTop(focus);
+            scroll = Widgets.Slide(content, 0, target, scroll);
             for (int i = 0; i < rows.Count; i++)
             {
                 bool near = i >= focus - RowsAround && i <= focus + RowsAround + 1;

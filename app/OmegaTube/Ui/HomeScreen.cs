@@ -393,15 +393,24 @@ namespace OmegaTube.Ui
                 return v;
             }
             // Glorious puts the rows in the lower band (the hero fills the top); Omega keeps today's layout.
-            int shelfTop = Glorious ? 540 : GridTop - 20;
+            int shelfTop = Glorious ? 120 : GridTop - 20;
             int gridTop = Glorious ? 600 : GridTop;
             if (s.Shelves && s.Loader != null)
             {
-                // Full-width so cards scroll left under the translucent nav; the first (recommendations) row is
-                // the large featured one, the rest are normal.
-                var list = Glorious
-                    ? new ShelfList(1920, 1080 - shelfTop, Theme.GloriousInset, bigFirst: true) { Position = new Position(0, shelfTop) }
-                    : new ShelfList(1920 - ContentX, 1080 - shelfTop) { Position = new Position(ContentX, shelfTop) };
+                // Full-width so cards scroll left under the translucent nav. Hero mode: row 0 is the large
+                // featured row shown over the hero backdrop; moving to a later row scrolls the list up to fill
+                // the screen and the hero is hidden (handled in UpdateHero via RowChanged).
+                ShelfList list;
+                if (Glorious)
+                {
+                    list = new ShelfList(1920, 1080 - shelfTop, Theme.GloriousInset, bigFirst: true, heroMode: true)
+                           { Position = new Position(0, shelfTop) };
+                    list.RowChanged = UpdateHero;
+                }
+                else
+                {
+                    list = new ShelfList(1920 - ContentX, 1080 - shelfTop) { Position = new Position(ContentX, shelfTop) };
+                }
                 list.Show(s.Loader, s.CacheKey);
                 v = list;
             }
@@ -516,7 +525,11 @@ namespace OmegaTube.Ui
             {
                 return;
             }
-            if (!Glorious || sections.Count == 0 || current >= sections.Count || sections[current].Embed != null)
+            // The hero backdrop is for the first row only; on later rows (or Omega, or a hosted screen) it is
+            // hidden and the rows scroll over the plain background like a normal list.
+            bool heroSection = Glorious && sections.Count > 0 && current < sections.Count && sections[current].Embed == null;
+            bool onFirstRow = heroSection && (Feed?.FocusedRow ?? 0) == 0;
+            if (!onFirstRow)
             {
                 hero.Hide();
                 rowFadeLeft?.Hide();

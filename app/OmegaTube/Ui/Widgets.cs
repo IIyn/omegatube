@@ -162,13 +162,13 @@ namespace OmegaTube.Ui
             return view;
         }
 
-        // Frosted "liquid glass" panel: a translucent rounded fill with a hairline rim. The TV cannot blur the
-        // backdrop, so the tint + rim stand in for it. Used by the Glorious nav and hero.
-        public static View Glass(Color fill, int width, int height, float radius)
+        // "Liquid glass" panel: a translucent, rounded fill. The Tizen 5.5 firmware has no backdrop-blur API, so
+        // this is translucent + rounded (you see through it) rather than a true frosted blur. Built from the white
+        // rounded nine-patch tinted by `fill` (keeps fixed corners at any size and rounds on 5.5, unlike
+        // CornerRadius). `fill` carries the translucency in its alpha.
+        public static ImageView Glass(Color fill, int width, int height, float radius = 0f)
         {
-            var v = Rounded(fill, width, height, radius);
-            Border(v, Theme.GlassEdge, 1.2f);
-            return v;
+            return new ImageView { ResourceUrl = Theme.Image("round9.9"), Size = new Size(width, height), Color = fill };
         }
 
         public static void SetVisible(View view, bool visible)
