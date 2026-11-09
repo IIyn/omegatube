@@ -13,7 +13,6 @@
 #include <string>
 #include <thread>
 
-#include "media/webp_anim.h"
 #include "net/http.h"
 #include "player/player.h"
 #include "yt/auth.h"
@@ -351,7 +350,6 @@ nlohmann::json items_json(const std::vector<omega::yt::FeedItem>& list) {
                          {"views", it.views},
                          {"published", it.published},
                          {"thumbnail", it.thumbnail},
-                         {"preview", it.preview},
                          {"live", it.is_live},
                          {"watched", it.watched_percent},
                          {"playlistId", it.playlist_id},
@@ -518,39 +516,6 @@ char* omega_yt_comments(const char* video_id, const char* continuation) {
                       {"sortNewest", page.sort_newest},
                       {"createParams", page.create_params},
                       {"disabled", page.disabled}});
-}
-
-char* omega_preview_sheet(const char* video_id, const char* url, const char* out_path) {
-    std::string id = video_id ? video_id : "", preview = url ? url : "";
-    if (preview.empty()) {
-        // Feeds whose items carry no preview URL (the TV client's home tiles): the WEB search for the video's id
-        // lists it with its richThumbnail. The URL is signed, so it cannot be built from the id.
-        omega::yt::Feed feed;
-        std::string error;
-        if (id.size() != 11 || !omega::yt::shared_client().search(id, "", feed, error))
-            return to_c_json({{"error", "preview: " + (error.empty() ? std::string("bad id") : error)}});
-        for (const auto& it : feed.items)
-            if (it.video_id == id && !it.preview.empty()) {
-                preview = it.preview;
-                break;
-            }
-        if (preview.empty()) return to_c_json({{"error", "preview: none"}, {"none", true}});
-    }
-    omega::net::Request req;
-    req.url = preview;
-    omega::net::Response res = omega::net::fetch(req);
-    if (!res.ok())
-        return to_c_json({{"error", "preview: " + (res.error.empty() ? "http " + std::to_string(res.status) : res.error)}});
-    omega::media::SpriteSheet sheet;
-    std::string error;
-    if (!omega::media::webp_to_sheet(res.body, out_path ? out_path : "", 36, sheet, error))
-        return to_c_json({{"error", error}});
-    return to_c_json({{"cols", sheet.cols},
-                      {"rows", sheet.rows},
-                      {"frames", sheet.frames},
-                      {"w", sheet.frame_w},
-                      {"h", sheet.frame_h},
-                      {"delay", sheet.delay_ms}});
 }
 
 char* omega_yt_post_comment(const char* create_params, const char* text) {

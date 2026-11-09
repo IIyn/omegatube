@@ -99,27 +99,6 @@ int watched_percent(const json& j) {
     return 0;
 }
 
-// The animated-preview WebP of an item, if YouTube offers one: richThumbnail.movingThumbnailRenderer in the WEB
-// layouts; other layouts (TV tiles) name the field differently, so fall back to the first animated-WebP
-// (/an_webp/) URL anywhere in the item. "" when there is none.
-std::string moving_thumbnail(const json& v) {
-    if (const json* m = find_key(v, "movingThumbnailRenderer"); m && m->is_object()) {
-        const json& thumbs = m->value("movingThumbnailDetails", json::object()).value("thumbnails", json::array());
-        if (!thumbs.empty() && thumbs[0].is_object()) {
-            std::string url = thumbs[0].value("url", "");
-            if (!url.empty()) return url;
-        }
-    }
-    const std::string s = v.dump();
-    const size_t at = s.find("/an_webp/");
-    if (at == std::string::npos) return "";
-    const size_t start = s.rfind('"', at), end = s.find('"', at);
-    if (start == std::string::npos || end == std::string::npos) return "";
-    std::string url = s.substr(start + 1, end - start - 1);
-    if (url.compare(0, 2, "//") == 0) url = "https:" + url;
-    return url.compare(0, 4, "http") == 0 ? url : "";
-}
-
 void parse_video_renderer(const json& v, Feed& out) {
     FeedItem item;
     item.video_id = v.value("videoId", "");
@@ -130,7 +109,6 @@ void parse_video_renderer(const json& v, Feed& out) {
     item.views = text_of(v.value("shortViewCountText", v.value("viewCountText", json::object())));
     item.published = text_of(v.value("publishedTimeText", json::object()));
     item.thumbnail = "https://i.ytimg.com/vi/" + item.video_id + "/mqdefault.jpg";
-    item.preview = moving_thumbnail(v);
     for (const json& badge : v.value("badges", json::array()))
         if (badge.dump().find("LIVE") != std::string::npos) item.is_live = true;
     // Broadcasts have no length and count viewers ("18 k spectateurs" / "1.2K watching") instead of views.
@@ -187,7 +165,6 @@ void parse_tile(const json& t, Feed& out) {
     if (parts.size() > 1) item.views = parts[1];
     if (parts.size() > 2) item.published = parts[2];
     item.thumbnail = "https://i.ytimg.com/vi/" + item.video_id + "/mqdefault.jpg";
-    item.preview = moving_thumbnail(t);
     for (const json& o : header.value("thumbnailOverlays", json::array())) {
         const json& ts = o.value("thumbnailOverlayTimeStatusRenderer", json::object());
         if (ts.empty()) continue;
@@ -233,7 +210,6 @@ void parse_lockup(const json& l, Feed& out) {
     if (parts.size() > 1) item.views = parts[1];
     if (parts.size() > 2) item.published = parts[2];
     item.thumbnail = "https://i.ytimg.com/vi/" + item.video_id + "/mqdefault.jpg";
-    item.preview = moving_thumbnail(l);
     std::string image = l.value("contentImage", json::object()).dump();
     for (const char* key : {"\"text\":\""}) {
         // The duration / LIVE badge: first thumbnailBadgeViewModel text.

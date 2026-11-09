@@ -38,33 +38,6 @@ file(READ ${OMEGA_DEPS}/cacert.pem OMEGA_CACERT)
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/cacert.cpp
      "extern const char omega_cacert_pem[];\nconst char omega_cacert_pem[] = R\"PEM(${OMEGA_CACERT})PEM\";\n")
 
-# libwebp, decoder + demux only (static, PIC): turns YouTube's animated WebP previews into frames, since the
-# Tizen 5.5 image loader shows animated WebP as a still. File set = libwebp's makefile.unix DEC/DEMUX/DSP_DEC/
-# UTILS_DEC objects (the SIMD variants compile to nothing on targets without that SIMD).
-set(OMEGA_WEBP ${OMEGA_DEPS}/libwebp-1.5.0)
-set(OMEGA_WEBP_SRCS
-    src/dec/alpha_dec.c src/dec/buffer_dec.c src/dec/frame_dec.c src/dec/idec_dec.c src/dec/io_dec.c
-    src/dec/quant_dec.c src/dec/tree_dec.c src/dec/vp8_dec.c src/dec/vp8l_dec.c src/dec/webp_dec.c
-    src/demux/anim_decode.c src/demux/demux.c
-    src/dsp/alpha_processing.c src/dsp/alpha_processing_mips_dsp_r2.c src/dsp/alpha_processing_neon.c
-    src/dsp/alpha_processing_sse2.c src/dsp/alpha_processing_sse41.c src/dsp/cpu.c src/dsp/dec.c
-    src/dsp/dec_clip_tables.c src/dsp/dec_mips32.c src/dsp/dec_mips_dsp_r2.c src/dsp/dec_msa.c src/dsp/dec_neon.c
-    src/dsp/dec_sse2.c src/dsp/dec_sse41.c src/dsp/filters.c src/dsp/filters_mips_dsp_r2.c src/dsp/filters_msa.c
-    src/dsp/filters_neon.c src/dsp/filters_sse2.c src/dsp/lossless.c src/dsp/lossless_mips_dsp_r2.c
-    src/dsp/lossless_msa.c src/dsp/lossless_neon.c src/dsp/lossless_sse2.c src/dsp/lossless_sse41.c
-    src/dsp/rescaler.c src/dsp/rescaler_mips32.c src/dsp/rescaler_mips_dsp_r2.c src/dsp/rescaler_msa.c
-    src/dsp/rescaler_neon.c src/dsp/rescaler_sse2.c src/dsp/upsampling.c src/dsp/upsampling_mips_dsp_r2.c
-    src/dsp/upsampling_msa.c src/dsp/upsampling_neon.c src/dsp/upsampling_sse2.c src/dsp/upsampling_sse41.c
-    src/dsp/yuv.c src/dsp/yuv_mips32.c src/dsp/yuv_mips_dsp_r2.c src/dsp/yuv_neon.c src/dsp/yuv_sse2.c
-    src/dsp/yuv_sse41.c
-    src/utils/bit_reader_utils.c src/utils/color_cache_utils.c src/utils/filters_utils.c src/utils/huffman_utils.c
-    src/utils/palette.c src/utils/quant_levels_dec_utils.c src/utils/random_utils.c src/utils/rescaler_utils.c
-    src/utils/thread_utils.c src/utils/utils.c)
-list(TRANSFORM OMEGA_WEBP_SRCS PREPEND ${OMEGA_WEBP}/)
-add_library(omega_webp STATIC ${OMEGA_WEBP_SRCS})
-target_include_directories(omega_webp PUBLIC ${OMEGA_WEBP}/src PRIVATE ${OMEGA_WEBP})
-target_compile_options(omega_webp PRIVATE -O2 -w -fvisibility=hidden)
-
 # Single version source (repo VERSION file) and the default remote config, both embedded.
 file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/../VERSION OMEGA_VERSION LIMIT_COUNT 1)
 file(READ ${CMAKE_CURRENT_SOURCE_DIR}/../remote-config.json OMEGA_REMOTE_CONFIG)
@@ -92,7 +65,6 @@ add_library(omegacore SHARED
     src/media/demuxer.cpp
     src/media/mp4.cpp
     src/media/webm.cpp
-    src/media/webp_anim.cpp
     src/player/esplayer_api.cpp
     src/player/player.cpp
 )
@@ -102,7 +74,7 @@ target_compile_options(omegacore PRIVATE -Wall -Wextra -O2)
 set_target_properties(omegacore PROPERTIES CXX_VISIBILITY_PRESET hidden)
 
 find_package(Threads REQUIRED)
-target_link_libraries(omegacore PRIVATE mbedtls mbedx509 mbedcrypto omega_quickjs omega_webp Threads::Threads ${CMAKE_DL_LIBS})
+target_link_libraries(omegacore PRIVATE mbedtls mbedx509 mbedcrypto omega_quickjs Threads::Threads ${CMAKE_DL_LIBS})
 
 # The TV ships its own libstdc++; link ours statically so we never depend on its version.
 target_link_libraries(omegacore PRIVATE -static-libstdc++ -static-libgcc -Wl,--no-undefined)
