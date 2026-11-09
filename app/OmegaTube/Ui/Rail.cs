@@ -59,12 +59,13 @@ namespace OmegaTube.Ui
                 glassPill.Hide();
                 Add(glassPill);
 
-                avatarRing = Widgets.Rounded(Theme.Accent, 78, 78, 39);
-                avatarRing.Position = new Position(IconX - 11, 42);
+                avatarRing = new ImageView { ResourceUrl = Theme.Image("circle_mask"), Color = Theme.Accent,
+                                             Size = new Size(78, 78), Position = new Position(IconX - 11, 42) };
                 avatarRing.Hide();
                 Add(avatarRing);
-                avatar = Widgets.Round(new ImageView { ResourceUrl = Theme.Icon("person"), Size = new Size(60, 60), Position = new Position(IconX - 2, 51) }, 30);
+                avatar = new ImageView { Size = new Size(60, 60), Position = new Position(IconX - 2, 51) };
                 Add(avatar);
+                Widgets.MaskedImage(avatar, Theme.Icon("person"), Theme.Image("circle_mask"));
             }
             else
             {
@@ -72,12 +73,13 @@ namespace OmegaTube.Ui
                 Add(panel);
                 // Omega: the top-left profile avatar (falls back to a person icon when signed out / no photo).
                 // Focusable: the home screen moves focus here from the top rail entry, and OK cycles accounts.
-                avatarRing = Widgets.Rounded(Theme.Accent, 76, 76, 38);
-                avatarRing.Position = new Position(17, 38);
+                avatarRing = new ImageView { ResourceUrl = Theme.Image("circle_mask"), Color = Theme.Accent,
+                                             Size = new Size(76, 76), Position = new Position(17, 38) };
                 avatarRing.Hide();
                 Add(avatarRing);
-                avatar = Widgets.Round(new ImageView { ResourceUrl = Theme.Icon("person"), Size = new Size(64, 64), Position = new Position(23, 44) }, 32);
+                avatar = new ImageView { Size = new Size(64, 64), Position = new Position(23, 44) };
                 Add(avatar);
+                Widgets.MaskedImage(avatar, Theme.Icon("person"), Theme.Image("circle_mask"));
             }
 
             var clip = new View { Position = new Position(0, Top), Size = new Size(Theme.RailExpandedWidth, 1080 - Top),
@@ -133,7 +135,8 @@ namespace OmegaTube.Ui
         {
             if (avatar != null)
             {
-                avatar.ResourceUrl = string.IsNullOrEmpty(photo) ? Theme.Icon("person") : photo;
+                string url = string.IsNullOrEmpty(photo) ? Theme.Icon("person") : photo;
+                Widgets.MaskedImage(avatar, url, Theme.Image("circle_mask"));   // clip to a circle (no CornerRadius on 5.5)
             }
         }
 

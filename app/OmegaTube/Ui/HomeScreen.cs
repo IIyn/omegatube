@@ -67,11 +67,12 @@ namespace OmegaTube.Ui
             feedHost = new View { Size = new Size(1920, 1080) };   // under the rail, which is added last
             Root.Add(feedHost);
             // Glorious: fades over the rows band (above the feed, under the nav) so the left cards tuck under the
-            // nav and both ends of a row fade out instead of clipping hard at the screen edges.
-            rowFadeLeft = Widgets.Gradient(new Vector2(-0.5f, 0f), new Vector2(0.5f, 0f),
-                new[] { 0f, 1f }, new[] { new Vector4(0, 0, 0, 1f), new Vector4(0, 0, 0, 0f) }, 340, 600, 0, 480);
-            rowFadeRight = Widgets.Gradient(new Vector2(-0.5f, 0f), new Vector2(0.5f, 0f),
-                new[] { 0f, 1f }, new[] { new Vector4(0, 0, 0, 0f), new Vector4(0, 0, 0, 1f) }, 240, 600, 1680, 480);
+            // nav and both ends of a row fade out instead of clipping hard at the screen edges. Pre-rendered PNG
+            // scrims (feathered at the top, flush to the screen edges) — no visible rectangle and no TV banding.
+            rowFadeLeft = new ImageView { ResourceUrl = Theme.Image("scrim_left"), Size = new Size(340, 620),
+                                          Position = new Position(0, 460), FittingMode = FittingModeType.ScaleToFill };
+            rowFadeRight = new ImageView { ResourceUrl = Theme.Image("scrim_right"), Size = new Size(260, 620),
+                                          Position = new Position(1660, 460), FittingMode = FittingModeType.ScaleToFill };
             rowFadeLeft.Hide();
             rowFadeRight.Hide();
             Root.Add(rowFadeLeft);
@@ -249,6 +250,7 @@ namespace OmegaTube.Ui
         {
             List<Section> next = BuildSections();
             var sig = new System.Text.StringBuilder();
+            sig.Append(App.Config.UiStyle).Append('\n');   // switching Omega/Glorious must rebuild the rail + feeds
             foreach (Section s in next)
             {
                 sig.Append(s.Key).Append('|').Append(s.Title).Append('|').Append(s.Icon).Append('|').Append(s.Loader != null).Append('\n');
