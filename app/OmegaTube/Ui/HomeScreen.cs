@@ -188,6 +188,12 @@ namespace OmegaTube.Ui
             shown?.OnHide();
         }
 
+        public override void OnResume()
+        {
+            visible = true;   // back from the Home button / another HDMI source: previews and the ring start again
+            UpdateFocus();
+        }
+
         public override void OnPause()
         {
             visible = false;
@@ -720,6 +726,7 @@ namespace OmegaTube.Ui
 
         public override bool OnKey(string key)
         {
+            visible = true;   // a key can only come to the screen on display (belt and braces for a missed resume)
             bool back = key == "XF86Back" || key == "Escape";
             if (inRail)
             {

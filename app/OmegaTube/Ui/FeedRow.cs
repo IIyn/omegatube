@@ -285,11 +285,18 @@ namespace OmegaTube.Ui
             cards[FocusIndex].SetFocused(true);
             slide = Widgets.Slide(strip, SlideX, stripY, slide);
             UpdateVisible();
-            if (fresh && FocusIndex >= items.Count - VisibleAhead && !string.IsNullOrEmpty(continuation))
+            MaybeLoadMore();
+            return true;
+        }
+
+        // The next page of this row when the focus is near its end. A shelf that arrives with only a few cards (so
+        // fewer than a screenful) asks for more at once instead of waiting for the first key press.
+        public void MaybeLoadMore()
+        {
+            if (fresh && !loading && FocusIndex >= items.Count - VisibleAhead && !string.IsNullOrEmpty(continuation))
             {
                 UiGuard.Fire("FeedRow.Load", Load);
             }
-            return true;
         }
 
         public void SetShown(bool shown)

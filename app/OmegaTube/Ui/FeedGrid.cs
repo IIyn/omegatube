@@ -288,7 +288,7 @@ namespace OmegaTube.Ui
             while (cards.Count <= last)
             {
                 var card = new Card(items[cards.Count], cardW) { Position = CardPosition(cards.Count) };
-                card.Hide();
+                card.SetShown(false);   // (not Hide(): the card's managed flag must match)
                 cards.Add(card);
                 content.Add(card);
             }

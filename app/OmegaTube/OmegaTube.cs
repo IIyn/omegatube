@@ -299,6 +299,15 @@ namespace OmegaTube
             }
         }
 
+        protected override void OnResume()
+        {
+            if (stack.Count > 0)
+            {
+                stack[stack.Count - 1].OnResume();
+            }
+            base.OnResume();
+        }
+
         protected override void OnPause()
         {
             if (stack.Count > 0)

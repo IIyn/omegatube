@@ -352,6 +352,10 @@ namespace OmegaTube.Ui
             {
                 rows[i].SetShown(i >= focus - RowsAround && i <= focus + RowsAround + 1);
             }
+            if (rows.Count > 0)
+            {
+                rows[focus].MaybeLoadMore();   // a short first row (a few cards) fills up without a key press
+            }
             UiWork.Request(pump);
         }
 
