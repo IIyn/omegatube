@@ -141,7 +141,7 @@ namespace OmegaTube
         {
             return string.Join("\n", new[]
             {
-                "omegatube-modern: " + AppVersion,
+                "omegatube: " + AppVersion,
                 "Model: " + Model,
                 "Tizen: " + TizenVersion,
                 "Firmware: " + Info("http://tizen.org/system/build.string"),
