@@ -39,6 +39,8 @@ namespace OmegaTube.Data
     {
         public int Width, Height, Fps;
         public string Codec;   // avc1 | vp9 | av01
+        public bool Hdr;
+        public string HdrMode; // HDR10 | HLG | None
     }
 
     public class AudioTrack
@@ -487,7 +489,15 @@ namespace OmegaTube.Data
 
         private static VideoQuality ToQuality(object o)
         {
-            return new VideoQuality { Width = (int)Json.Num(o, "width"), Height = (int)Json.Num(o, "height"), Fps = (int)Json.Num(o, "fps"), Codec = Json.Str(o, "codec") };
+            return new VideoQuality
+            {
+                Width = (int)Json.Num(o, "width"),
+                Height = (int)Json.Num(o, "height"),
+                Fps = (int)Json.Num(o, "fps"),
+                Codec = Json.Str(o, "codec"),
+                Hdr = Json.Bool(o, "hdr"),
+                HdrMode = Json.Str(o, "hdr_mode")
+            };
         }
 
         public static object Call(IntPtr json)

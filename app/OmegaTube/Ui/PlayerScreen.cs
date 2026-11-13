@@ -2103,7 +2103,7 @@ namespace OmegaTube.Ui
 
         private static string SpeedLabel(double s) => s == 1.0 ? T("Normal") : Decimal(s.ToString("0.##", CultureInfo.InvariantCulture)) + "x";
 
-        // "2160p (4K) · 60 fps · VP9"; fps and codec only once the core has listed the formats.
+        // "2160p (4K) · 60 fps · VP9 (HDR10)"; fps, codec, and HDR badge once the core has listed the formats.
         private static string QualityLabel(VideoQuality q)
         {
             string text = q.Height == 2160 ? "2160p (4K)" : q.Height == 1440 ? "1440p (2K)" : $"{q.Height}p";
@@ -2112,7 +2112,16 @@ namespace OmegaTube.Ui
                 text += $" · {q.Fps} fps";
             }
             string codec = q.Codec == "avc1" ? "H.264" : q.Codec == "vp9" ? "VP9" : q.Codec == "av01" ? "AV1" : "";
-            return codec.Length > 0 ? text + " · " + codec : text;
+            if (codec.Length > 0)
+            {
+                text += " · " + codec;
+            }
+            if (q.Hdr)
+            {
+                string hdr = !string.IsNullOrEmpty(q.HdrMode) && q.HdrMode != "None" ? q.HdrMode : "HDR";
+                text += $" ({hdr})";
+            }
+            return text;
         }
 
         // Raw view count -> "1.2M views" / "845 views".
