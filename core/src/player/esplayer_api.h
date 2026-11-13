@@ -25,6 +25,36 @@ enum SubmitStatus : int {
     SUBMIT_SUCCESS = 4,
 };
 
+struct ESMatroskaMasteringMetadata {
+    double primary_r_chromaticity_x;
+    double primary_r_chromaticity_y;
+    double primary_g_chromaticity_x;
+    double primary_g_chromaticity_y;
+    double primary_b_chromaticity_x;
+    double primary_b_chromaticity_y;
+    double white_point_chromaticity_x;
+    double white_point_chromaticity_y;
+    double luminance_max;
+    double luminance_min;
+};
+
+struct ESMatroskaColor {
+    uint32_t matrix_coefficients;
+    uint32_t bits_per_channel;
+    uint32_t primaries;
+    uint32_t transfer_characteristics;
+    uint32_t range;
+    uint32_t chroma_subsampling_horizontal;
+    uint32_t chroma_subsampling_vertical;
+    uint32_t cb_subsampling_horizontal;
+    uint32_t cb_subsampling_vertical;
+    uint32_t chroma_siting_horizontal;
+    uint32_t chroma_siting_vertical;
+    uint32_t max_cll;
+    uint32_t max_fall;
+    ESMatroskaMasteringMetadata mastering_metadata;
+};
+
 struct EsPacket {
     StreamType type;
     char* buffer;

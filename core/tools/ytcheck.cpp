@@ -538,20 +538,22 @@ int main(int argc, char** argv) {
     printf("'%s' by %s (%llds), %zu direct formats\n", info.title.c_str(), info.author.c_str(),
            static_cast<long long>(info.length_s), info.formats.size());
     for (const auto& f : info.formats)
-        if (f.is_video())
-            printf("  itag %3d %-10s %-34s %4dx%-4d @%d %6lld kb/s %s\n", f.itag, f.mime.c_str(), f.codecs.c_str(), f.width,
-                   f.height, f.fps, static_cast<long long>(f.bitrate / 1000),
+        if (f.is_video()) {
+            const char* hdr_str = (f.hdr_mode == omega::yt::HdrMode::HDR10) ? "HDR10" : ((f.hdr_mode == omega::yt::HdrMode::HLG) ? "HLG" : "SDR");
+            printf("  itag %3d %-10s %-34s %4dx%-4d @%d %6lld kb/s %-6s %s\n", f.itag, f.mime.c_str(), f.codecs.c_str(), f.width,
+                   f.height, f.fps, static_cast<long long>(f.bitrate / 1000), hdr_str,
                    f.video_codec().empty() ? "(skipped)" : f.video_codec().c_str());
+        }
     for (const auto& f : info.formats)
         if (f.is_audio() && !f.audio_track_id.empty())
             printf("  itag %3d %-10s %-10s track %-8s %s%s\n", f.itag, f.mime.c_str(), f.codecs.c_str(),
                    f.audio_track_id.c_str(), f.audio_track_name.c_str(), f.audio_default ? " (default)" : "");
     printf("%zu caption tracks\n", info.captions.size());
-    // Same choice as the TV with "Qualité max" / "Codecs" from the environment (default 2160, avc1,vp9).
+    // Same choice as the TV with "Qualité max" / "Codecs" from the environment (default 2160, av01,vp9,avc1).
     const char* max_env = getenv("MAX_HEIGHT");
     const char* codecs_env = getenv("CODECS");
     auto videos = omega::yt::rank_videos(info, max_env ? atoi(max_env) : 2160,
-                                         omega::yt::parse_codec_list(codecs_env ? codecs_env : "avc1,vp9"));
+                                         omega::yt::parse_codec_list(codecs_env ? codecs_env : "av01,vp9,avc1"));
     const omega::yt::Format* video = videos.empty() ? nullptr : videos.front();
     const char* audio_env = getenv("AUDIO");
     const omega::yt::Format* audio = omega::yt::pick_audio(info, audio_env ? audio_env : "");

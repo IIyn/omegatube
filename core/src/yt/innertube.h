@@ -12,6 +12,9 @@
 
 namespace omega::yt {
 
+enum class VideoCodec { Unknown, H264, VP9, AV1 };
+enum class HdrMode { None, HDR10, HLG };
+
 struct Format {
     int itag = 0;
     std::string url;
@@ -25,9 +28,12 @@ struct Format {
     std::string audio_track_id;    // e.g. "fr.3", "en.4" (empty: single-track video)
     std::string audio_track_name;  // e.g. "Français (doublage)", "English (United States) original"
     bool audio_default = false;
+    VideoCodec codec = VideoCodec::Unknown;
+    HdrMode hdr_mode = HdrMode::None;
+    bool is_10bit = false;
     bool is_video() const { return mime.compare(0, 6, "video/") == 0; }
     bool is_audio() const { return mime.compare(0, 6, "audio/") == 0; }
-    // "avc1", "vp9" or "av01" for the video codecs we can play (8-bit SDR only), else "".
+    // "avc1", "vp9" or "av01" for the video codecs we can play, else "".
     std::string video_codec() const;
 };
 

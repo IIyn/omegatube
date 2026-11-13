@@ -20,6 +20,25 @@ constexpr uint32_t kDefaultDuration = 0x23E383;
 constexpr uint32_t kVideo = 0xE0;
 constexpr uint32_t kPixelWidth = 0xB0;
 constexpr uint32_t kPixelHeight = 0xBA;
+constexpr uint32_t kColour = 0x55B0;
+constexpr uint32_t kMatrixCoefficients = 0x55B1;
+constexpr uint32_t kBitsPerChannel = 0x55B2;
+constexpr uint32_t kRange = 0x55B9;
+constexpr uint32_t kTransferCharacteristics = 0x55BA;
+constexpr uint32_t kPrimaries = 0x55BB;
+constexpr uint32_t kMaxCLL = 0x55BC;
+constexpr uint32_t kMaxFALL = 0x55BD;
+constexpr uint32_t kMasteringMetadata = 0x55D0;
+constexpr uint32_t kPrimaryRChromaticityX = 0x55D1;
+constexpr uint32_t kPrimaryRChromaticityY = 0x55D2;
+constexpr uint32_t kPrimaryGChromaticityX = 0x55D3;
+constexpr uint32_t kPrimaryGChromaticityY = 0x55D4;
+constexpr uint32_t kPrimaryBChromaticityX = 0x55D5;
+constexpr uint32_t kPrimaryBChromaticityY = 0x55D6;
+constexpr uint32_t kWhitePointChromaticityX = 0x55D7;
+constexpr uint32_t kWhitePointChromaticityY = 0x55D8;
+constexpr uint32_t kLuminanceMax = 0x55D9;
+constexpr uint32_t kLuminanceMin = 0x55DA;
 constexpr uint32_t kAudio = 0xE1;
 constexpr uint32_t kSamplingFrequency = 0xB5;
 constexpr uint32_t kChannels = 0x9F;
@@ -224,6 +243,33 @@ bool WebmReader::parse_tracks(const std::vector<uint8_t>& tracks) {
                 for_each_element(c, [&](uint32_t vid, Cursor v) {
                     if (vid == kPixelWidth) t.width = static_cast<uint32_t>(to_uint(v));
                     else if (vid == kPixelHeight) t.height = static_cast<uint32_t>(to_uint(v));
+                    else if (vid == kColour) {
+                        t.has_hdr = true;
+                        for_each_element(v, [&](uint32_t cid, Cursor col) {
+                            if (cid == kMatrixCoefficients) t.matrix_coefficients = static_cast<uint16_t>(to_uint(col));
+                            else if (cid == kBitsPerChannel) t.bits_per_channel = static_cast<uint32_t>(to_uint(col));
+                            else if (cid == kRange) t.full_range = static_cast<uint8_t>(to_uint(col));
+                            else if (cid == kTransferCharacteristics) t.transfer_characteristics = static_cast<uint16_t>(to_uint(col));
+                            else if (cid == kPrimaries) t.color_primaries = static_cast<uint16_t>(to_uint(col));
+                            else if (cid == kMaxCLL) { t.has_clli = true; t.max_cll = static_cast<uint16_t>(to_uint(col)); }
+                            else if (cid == kMaxFALL) { t.has_clli = true; t.max_fall = static_cast<uint16_t>(to_uint(col)); }
+                            else if (cid == kMasteringMetadata) {
+                                t.has_mdcv = true;
+                                for_each_element(col, [&](uint32_t mid, Cursor m) {
+                                    if (mid == kPrimaryRChromaticityX) t.display_primaries_x[2] = static_cast<uint16_t>(to_float(m) * 50000.0 + 0.5);
+                                    else if (mid == kPrimaryRChromaticityY) t.display_primaries_y[2] = static_cast<uint16_t>(to_float(m) * 50000.0 + 0.5);
+                                    else if (mid == kPrimaryGChromaticityX) t.display_primaries_x[0] = static_cast<uint16_t>(to_float(m) * 50000.0 + 0.5);
+                                    else if (mid == kPrimaryGChromaticityY) t.display_primaries_y[0] = static_cast<uint16_t>(to_float(m) * 50000.0 + 0.5);
+                                    else if (mid == kPrimaryBChromaticityX) t.display_primaries_x[1] = static_cast<uint16_t>(to_float(m) * 50000.0 + 0.5);
+                                    else if (mid == kPrimaryBChromaticityY) t.display_primaries_y[1] = static_cast<uint16_t>(to_float(m) * 50000.0 + 0.5);
+                                    else if (mid == kWhitePointChromaticityX) t.white_point_x = static_cast<uint16_t>(to_float(m) * 50000.0 + 0.5);
+                                    else if (mid == kWhitePointChromaticityY) t.white_point_y = static_cast<uint16_t>(to_float(m) * 50000.0 + 0.5);
+                                    else if (mid == kLuminanceMax) t.max_luminance = static_cast<uint32_t>(to_float(m) * 10000.0 + 0.5);
+                                    else if (mid == kLuminanceMin) t.min_luminance = static_cast<uint32_t>(to_float(m) * 10000.0 + 0.5);
+                                });
+                            }
+                        });
+                    }
                 });
             } else if (eid == kAudio) {
                 for_each_element(c, [&](uint32_t aid, Cursor a) {

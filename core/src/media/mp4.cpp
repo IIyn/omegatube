@@ -238,7 +238,50 @@ bool Fmp4Reader::parse_moov(const std::vector<uint8_t>& moov) {
                                             track_.height = se.u16();
                                             se.skip(50);
                                             for_each_box(se, [&](uint32_t ct, Cursor cc) {
-                                                if (ct == config) track_.codec_data.assign(cc.p, cc.end);
+                                                if (ct == config) {
+                                                    if (config == fourcc("av1C")) {
+                                                        if (cc.left() > 4) {
+                                                            uint8_t flags = cc.p[2];
+                                                            if (flags & 0x40) track_.bits_per_channel = 10;
+                                                            if (flags & 0x20) track_.bits_per_channel = 12;
+                                                            cc.skip(4);
+                                                        }
+                                                        track_.codec_data.assign(cc.p, cc.end);
+                                                    } else {
+                                                        track_.codec_data.assign(cc.p, cc.end);
+                                                    }
+                                                } else if (ct == fourcc("colr")) {
+                                                    if (cc.left() >= 11) {
+                                                        uint32_t type = cc.u32();
+                                                        if (type == fourcc("nclx")) {
+                                                            track_.has_hdr = true;
+                                                            track_.color_primaries = cc.u16();
+                                                            track_.transfer_characteristics = cc.u16();
+                                                            track_.matrix_coefficients = cc.u16();
+                                                            track_.full_range = cc.u8() >> 7;
+                                                        }
+                                                    }
+                                                } else if (ct == fourcc("mdcv")) {
+                                                    if (cc.left() >= 24) {
+                                                        track_.has_mdcv = true;
+                                                        track_.has_hdr = true;
+                                                        for (int i = 0; i < 3; ++i) {
+                                                            track_.display_primaries_x[i] = cc.u16();
+                                                            track_.display_primaries_y[i] = cc.u16();
+                                                        }
+                                                        track_.white_point_x = cc.u16();
+                                                        track_.white_point_y = cc.u16();
+                                                        track_.max_luminance = cc.u32();
+                                                        track_.min_luminance = cc.u32();
+                                                    }
+                                                } else if (ct == fourcc("clli")) {
+                                                    if (cc.left() >= 4) {
+                                                        track_.has_clli = true;
+                                                        track_.has_hdr = true;
+                                                        track_.max_cll = cc.u16();
+                                                        track_.max_fall = cc.u16();
+                                                    }
+                                                }
                                             });
                                         } else if (entry == fourcc("mp4a")) {
                                             track_.codec = Codec::AAC;

@@ -21,6 +21,11 @@ int main(int argc, char** argv) {
     printf("%s codec=%s timescale=%u %ux%u ch=%u rate=%u codec_data=%zu media_time=%lld\n", t.container == omega::media::Container::WebM ? "webm" : "mp4", omega::media::codec_name(t.codec),
            t.timescale, t.width, t.height, t.channels, t.sample_rate, t.codec_data.size(),
            static_cast<long long>(t.media_time));
+    if (t.has_hdr) {
+        printf("HDR: primaries=%u tc=%u matrix=%u bits=%u%s%s\n",
+               t.color_primaries, t.transfer_characteristics, t.matrix_coefficients, t.bits_per_channel,
+               t.has_mdcv ? " [mdcv]" : "", t.has_clli ? " [clli]" : "");
+    }
     printf("index: %zu segments", segs.size());
     for (size_t i = 0; i < segs.size() && i < 3; ++i)
         printf("  [%zu] @%llu %lldms", i, static_cast<unsigned long long>(segs[i].offset),

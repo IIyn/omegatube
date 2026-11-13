@@ -24,6 +24,23 @@ struct TrackInfo {
     uint32_t width = 0, height = 0;
     uint32_t channels = 0, sample_rate = 0;
     uint32_t default_duration = 0, default_size = 0, default_flags = 0;  // from trex (WebM: DefaultDuration in ms)
+
+    // HDR colorimetry & static metadata (parsed from 'colr', 'mdcv', 'clli' in MP4 or Colour in WebM)
+    bool has_hdr = false;
+    uint16_t color_primaries = 0;           // 9 = BT.2020
+    uint16_t transfer_characteristics = 0; // 16 = SMPTE ST 2084 (PQ), 18 = ARIB STD-B67 (HLG)
+    uint16_t matrix_coefficients = 0;      // 9 = BT.2020 NCL
+    uint8_t full_range = 0;
+    uint32_t bits_per_channel = 8;
+
+    bool has_mdcv = false;
+    uint16_t display_primaries_x[3]{};     // G, B, R in 0.00002 units
+    uint16_t display_primaries_y[3]{};
+    uint16_t white_point_x = 0, white_point_y = 0;
+    uint32_t max_luminance = 0, min_luminance = 0; // in 0.0001 cd/m² units
+
+    bool has_clli = false;
+    uint16_t max_cll = 0, max_fall = 0;    // in cd/m² (nits)
 };
 
 // One entry of the stream index (sidx / Cues): a self-contained fragment starting with a keyframe.

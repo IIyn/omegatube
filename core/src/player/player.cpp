@@ -194,6 +194,41 @@ bool Player::start() {
                      std::to_string(vi.width) + "x" + std::to_string(vi.height) + " (" + std::to_string(rc) + ")";
             return false;
         }
+
+        if (video_.info.has_hdr || cfg_.is_hdr) {
+            has_color_info_ = true;
+            color_info_ = esp::ESMatroskaColor{};
+            color_info_.matrix_coefficients = video_.info.matrix_coefficients ? video_.info.matrix_coefficients : 9;
+            color_info_.primaries = video_.info.color_primaries ? video_.info.color_primaries : 9;
+            if (video_.info.transfer_characteristics) {
+                color_info_.transfer_characteristics = video_.info.transfer_characteristics;
+            } else {
+                color_info_.transfer_characteristics = (cfg_.hdr_mode == 2) ? 18 : 16;
+            }
+            color_info_.range = video_.info.full_range;
+            color_info_.bits_per_channel = video_.info.bits_per_channel ? video_.info.bits_per_channel : 10;
+            color_info_.chroma_subsampling_horizontal = 1;
+            color_info_.chroma_subsampling_vertical = 1;
+            if (video_.info.has_clli) {
+                color_info_.max_cll = video_.info.max_cll;
+                color_info_.max_fall = video_.info.max_fall;
+            }
+            if (video_.info.has_mdcv) {
+                color_info_.mastering_metadata.primary_r_chromaticity_x = video_.info.display_primaries_x[2] * 0.00002;
+                color_info_.mastering_metadata.primary_r_chromaticity_y = video_.info.display_primaries_y[2] * 0.00002;
+                color_info_.mastering_metadata.primary_g_chromaticity_x = video_.info.display_primaries_x[0] * 0.00002;
+                color_info_.mastering_metadata.primary_g_chromaticity_y = video_.info.display_primaries_y[0] * 0.00002;
+                color_info_.mastering_metadata.primary_b_chromaticity_x = video_.info.display_primaries_x[1] * 0.00002;
+                color_info_.mastering_metadata.primary_b_chromaticity_y = video_.info.display_primaries_y[1] * 0.00002;
+                color_info_.mastering_metadata.white_point_chromaticity_x = video_.info.white_point_x * 0.00002;
+                color_info_.mastering_metadata.white_point_chromaticity_y = video_.info.white_point_y * 0.00002;
+                color_info_.mastering_metadata.luminance_max = video_.info.max_luminance * 0.0001;
+                color_info_.mastering_metadata.luminance_min = video_.info.min_luminance * 0.0001;
+            }
+            OLOG("esp HDR colorimetry: matrix=%u prim=%u tc=%u bits=%u max_cll=%u max_fall=%u",
+                 color_info_.matrix_coefficients, color_info_.primaries, color_info_.transfer_characteristics,
+                 color_info_.bits_per_channel, color_info_.max_cll, color_info_.max_fall);
+        }
     }
 
     if (cfg_.live) {
@@ -422,6 +457,9 @@ void Player::feed_loop(Track& t) {
         pkt.buffer_size = static_cast<uint32_t>(s.data.size());
         pkt.pts = static_cast<uint64_t>(s.pts_ms);
         pkt.duration = static_cast<uint64_t>(s.duration_ms);
+        if (t.type == esp::STREAM_VIDEO && has_color_info_) {
+            pkt.matroska_color_info = &color_info_;
+        }
         for (;;) {
             int st = api_->submit_packet(handle_, &pkt);
             if (st == esp::SUBMIT_SUCCESS) break;

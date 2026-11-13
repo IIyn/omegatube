@@ -560,16 +560,32 @@ bool Client::player_with(const json& c, const std::string& video_id, VideoInfo& 
                          const std::string& access_token) {
     bool decipher = c.value("decipher", false);
     ClientDef def = client_def_from(c, visitor_data_);
+    if (def.client.value("clientName", "") == "TVHTML5") {
+        std::string v = def.client.value("clientVersion", "");
+        if (v.empty() || v.rfind("5.", 0) == 0) {
+            def.client["clientVersion"] = "7.20260707.07.00";
+            def.version = "7.20260707.07.00";
+        }
+    }
     json body = {
         {"context", {{"client", def.client}}},
         {"videoId", video_id},
         {"contentCheckOk", true},
         {"racyCheckOk", true},
     };
-    if (decipher)
-        body["playbackContext"] = {{"contentPlaybackContext",
-                                    {{"html5Preference", "HTML5_PREF_WANTS"},
-                                     {"signatureTimestamp", shared_decipher().signature_timestamp()}}}};
+    json playback_context = json::object();
+    if (decipher) {
+        playback_context["contentPlaybackContext"] = {
+            {"html5Preference", "HTML5_PREF_WANTS"},
+            {"signatureTimestamp", shared_decipher().signature_timestamp()}
+        };
+    }
+    playback_context["devicePlaybackCapabilities"] = {
+        {"supportsAv1", true},
+        {"supportsVp9", true},
+        {"hdrCapable", true}
+    };
+    body["playbackContext"] = std::move(playback_context);
     net::Request req;
     req.method = "POST";
     req.url = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false";
@@ -635,6 +651,33 @@ bool Client::player_with(const json& c, const std::string& video_id, VideoInfo& 
         fmt.audio_track_id = track.value("id", "");
         fmt.audio_track_name = track.value("displayName", "");
         fmt.audio_default = track.value("audioIsDefault", false);
+
+        if (fmt.is_video()) {
+            if (fmt.mime == "video/mp4" && fmt.codecs.compare(0, 4, "avc1") == 0) {
+                fmt.codec = VideoCodec::H264;
+            } else if (fmt.mime == "video/webm" && (fmt.codecs == "vp9" || fmt.codecs.compare(0, 5, "vp09.") == 0)) {
+                fmt.codec = VideoCodec::VP9;
+                if (fmt.codecs.compare(0, 8, "vp09.02.") == 0) fmt.is_10bit = true;
+            } else if (fmt.mime == "video/mp4" && fmt.codecs.compare(0, 5, "av01.") == 0) {
+                fmt.codec = VideoCodec::AV1;
+                size_t dot = fmt.codecs.find('.', 7);
+                if (dot != std::string::npos &&
+                    (fmt.codecs.compare(dot + 1, 2, "10") == 0 || fmt.codecs.compare(dot + 1, 2, "12") == 0)) {
+                    fmt.is_10bit = true;
+                }
+            }
+
+            const json& ci = f.value("colorInfo", json::object());
+            std::string tc = ci.value("transferCharacteristics", "");
+            if (tc.find("SMPTEST2084") != std::string::npos) {
+                fmt.hdr_mode = HdrMode::HDR10;
+                fmt.is_10bit = true;
+            } else if (tc.find("ARIB_STD_B67") != std::string::npos) {
+                fmt.hdr_mode = HdrMode::HLG;
+                fmt.is_10bit = true;
+            }
+        }
+
         out.formats.push_back(std::move(fmt));
     }
     OLOG("yt: '%s' by %s, %llds, %zu formats (%s client%s)", out.title.c_str(), out.author.c_str(),
@@ -1303,28 +1346,36 @@ Client& shared_client() {
 
 std::string Format::video_codec() const {
     if (!is_video()) return "";
-    if (mime == "video/mp4" && codecs.compare(0, 4, "avc1") == 0) return "avc1";
-    // VP9 profile 0 only: YouTube labels it "vp9"; "vp09.02..." is 10-bit HDR.
-    if (mime == "video/webm" && (codecs == "vp9" || codecs.compare(0, 8, "vp09.00.") == 0)) return "vp9";
-    // av01.<profile>.<level><tier>.<bitdepth>[...]: main profile, 8-bit (the 10-bit ones are HDR).
-    if (mime == "video/mp4" && codecs.compare(0, 7, "av01.0.") == 0) {
-        size_t dot = codecs.find('.', 7);
-        if (dot != std::string::npos && codecs.compare(dot + 1, 2, "08") == 0) return "av01";
+    switch (codec) {
+        case VideoCodec::H264: return "avc1";
+        case VideoCodec::VP9: return "vp9";
+        case VideoCodec::AV1: return "av01";
+        default: break;
     }
+    if (mime == "video/mp4" && codecs.compare(0, 4, "avc1") == 0) return "avc1";
+    if (mime == "video/webm" && (codecs == "vp9" || codecs.compare(0, 5, "vp09.") == 0)) return "vp9";
+    if (mime == "video/mp4" && codecs.compare(0, 5, "av01.") == 0) return "av01";
     return "";
 }
 
 std::vector<const Format*> rank_videos(const VideoInfo& info, int max_height, const std::vector<std::string>& codecs) {
     auto pref = [&codecs](const Format* f) {
-        return std::find(codecs.begin(), codecs.end(), f->video_codec()) - codecs.begin();
+        std::string c = f->video_codec();
+        auto it = std::find(codecs.begin(), codecs.end(), c);
+        return it != codecs.end() ? (it - codecs.begin()) : static_cast<long>(codecs.size());
     };
     std::vector<const Format*> out;
     for (const Format& f : info.formats)
         if (f.height <= max_height && pref(&f) < static_cast<long>(codecs.size())) out.push_back(&f);
     std::stable_sort(out.begin(), out.end(), [&](const Format* a, const Format* b) {
         if (a->height != b->height) return a->height > b->height;
+        bool a_hdr = (a->hdr_mode != HdrMode::None);
+        bool b_hdr = (b->hdr_mode != HdrMode::None);
+        if (a_hdr != b_hdr) return a_hdr > b_hdr;
+        long pa = pref(a), pb = pref(b);
+        if (pa != pb) return pa < pb;
         if (a->fps != b->fps) return a->fps > b->fps;
-        return pref(a) < pref(b);
+        return a->bitrate > b->bitrate;
     });
     return out;
 }

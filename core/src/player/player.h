@@ -33,6 +33,8 @@ struct PlayerConfig {
     std::string app_id, app_version;  // reported to the TV resource manager
     std::string app_type = "MSE";     // empty: skip esplusplayer_set_app_info
     bool use_video = true, use_audio = true, use_display = true;
+    bool is_hdr = false;
+    int hdr_mode = 0;               // 0 None, 1 HDR10, 2 HLG
     int64_t max_queue_ms = 30000;   // demuxed read-ahead per stream (network side)
     size_t max_queue_bytes = 48u << 20;  // ...and its memory cap (4K VP9 runs at 20-40 Mb/s)
     int64_t feed_ahead_ms = 15000;  // how far ahead of the playback clock we submit to ESPlayer
@@ -116,6 +118,9 @@ private:
     esp::Handle handle_ = nullptr;
     std::string error_;
     bool stream_refused_ = false;
+
+    bool has_color_info_ = false;
+    esp::ESMatroskaColor color_info_{};
 
     Track video_, audio_;
     std::atomic<bool> running_{false};

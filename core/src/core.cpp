@@ -127,6 +127,8 @@ omega_player* start_youtube(void* window, int width, int height, omega::yt::Clie
     cfg.duration_ms = info.length_s * 1000;
     cfg.live = info.is_live;
     cfg.start_ms = info.is_live ? 0 : start_ms;
+    cfg.is_hdr = (video->hdr_mode != omega::yt::HdrMode::None);
+    cfg.hdr_mode = (video->hdr_mode == omega::yt::HdrMode::HLG) ? 2 : (cfg.is_hdr ? 1 : 0);
     // Expired URLs (403/410): ask InnerTube again and keep the same formats (and audio language).
     std::string id = info.id, audio_track = audio->audio_track_id;
     int video_itag = video->itag, audio_itag = audio->itag;
@@ -223,7 +225,17 @@ omega_player* omega_player_create_youtube(void* window, int width, int height, c
         set_play_error(refusal_kind(r.status), r.status, r.reason, error);
         return nullptr;
     }
-    std::vector<std::string> prefs = omega::yt::parse_codec_list(codecs && *codecs ? codecs : "avc1,vp9");
+    std::vector<std::string> prefs = omega::yt::parse_codec_list(codecs && *codecs ? codecs : "av01,vp9,avc1");
+    if (std::find(prefs.begin(), prefs.end(), "av01") == prefs.end()) {
+        prefs.insert(prefs.begin(), "av01");
+    } else {
+        auto it = std::find(prefs.begin(), prefs.end(), "av01");
+        if (it != prefs.begin()) {
+            std::string c = *it;
+            prefs.erase(it);
+            prefs.insert(prefs.begin(), std::move(c));
+        }
+    }
     // Clients whose streams googlevideo refused (403 even with fresh URLs: our IP flagged as a bot).
     std::vector<std::string> skipped_clients;
     for (;;) {
@@ -247,7 +259,12 @@ omega_player* omega_player_create_youtube(void* window, int width, int height, c
                 // What the quality panel offers: the format each height cap would pick (codecs the TV refused aside).
                 auto entry = [](const omega::yt::Format* f) {
                     return nlohmann::json{
-                        {"width", f->width}, {"height", f->height}, {"fps", f->fps}, {"codec", f->video_codec()}};
+                        {"width", f->width},
+                        {"height", f->height},
+                        {"fps", f->fps},
+                        {"codec", f->video_codec()},
+                        {"hdr", f->hdr_mode != omega::yt::HdrMode::None},
+                        {"hdr_mode", f->hdr_mode == omega::yt::HdrMode::HDR10 ? "HDR10" : (f->hdr_mode == omega::yt::HdrMode::HLG ? "HLG" : "None")}};
                 };
                 nlohmann::json available = nlohmann::json::array();
                 int last_height = -1;
@@ -428,6 +445,10 @@ omega_player* omega_player_create_preview(void* window, int width, int height, c
         std::vector<std::string> prefs = omega::yt::parse_codec_list(codecs && *codecs ? codecs : "avc1,vp9");
         std::vector<const omega::yt::Format*> videos =
             omega::yt::rank_videos(info, max_height > 0 ? max_height : 720, prefs);
+        // Explicitly exclude HDR formats to keep previews in SDR without triggering TV panel HDR mode switch
+        videos.erase(std::remove_if(videos.begin(), videos.end(), [](const omega::yt::Format* f) {
+            return f->hdr_mode != omega::yt::HdrMode::None;
+        }), videos.end());
         // 60 fps doubles the data (and the time to the first frames) for no visible gain in a muted backdrop: try the
         // <= 30 fps formats first (the best resolution, then codec preference, among them), the 60 fps ones after.
         std::stable_partition(videos.begin(), videos.end(), [](const omega::yt::Format* f) { return f->fps <= 30; });
