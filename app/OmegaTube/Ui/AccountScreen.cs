@@ -39,7 +39,7 @@ namespace OmegaTube.Ui
 
         public AccountScreen(App app) : base(app)
         {
-            Root.BackgroundColor = Theme.Background;
+            Root.BackgroundColor = Theme.Glorious ? Color.Transparent : Theme.Background;   // Glorious: glass cards over the page
             var title = Widgets.Label(T("Account"), Theme.TitleSize + 12, Theme.Text, 1200, 70);
             title.Position = new Position(CardX, 64);
             Root.Add(title);
@@ -54,7 +54,7 @@ namespace OmegaTube.Ui
             // ---- signed out: steps card + QR card
             signInView = new View { Size = new Size(1920, 1080) };
             Root.Add(signInView);
-            var card = Widgets.Rounded(Theme.Panel, CardW, CardH, Theme.PanelRadius + 4);
+            var card = Widgets.Panel(Theme.Panel, CardW, CardH, Theme.PanelRadius + 4);
             card.Position = new Position(CardX, CardY);
             signInView.Add(card);
 
@@ -70,7 +70,7 @@ namespace OmegaTube.Ui
             var step2 = Widgets.Label(T("Enter this code"), Theme.BodySize + 2, Theme.TextDim, 860);
             step2.Position = new Position(124, 202);
             card.Add(step2);
-            var codeBox = Widgets.Rounded(Theme.Surface, 860, 150, 18);
+            var codeBox = Widgets.Panel(Theme.Surface, 860, 150, 18);
             codeBox.Position = new Position(124, 252);
             card.Add(codeBox);
             codeLabel = Widgets.Label("", 84, Theme.Text, 860, 150);
@@ -95,7 +95,7 @@ namespace OmegaTube.Ui
             retryButton.Hide();
             card.Add(retryButton);
 
-            var qrCard = Widgets.Rounded(Theme.Panel, SideW, CardH, Theme.PanelRadius + 4);
+            var qrCard = Widgets.Panel(Theme.Panel, SideW, CardH, Theme.PanelRadius + 4);
             qrCard.Position = new Position(SideX, CardY);
             signInView.Add(qrCard);
             qrHost = Widgets.Rounded(Color.White, QrSize, QrSize, 18);
@@ -112,7 +112,7 @@ namespace OmegaTube.Ui
             profileView = new View { Size = new Size(1920, 1080) };
             profileView.Hide();
             Root.Add(profileView);
-            var profile = Widgets.Rounded(Theme.Panel, CardW, 290, Theme.PanelRadius + 4);
+            var profile = Widgets.Panel(Theme.Panel, CardW, 290, Theme.PanelRadius + 4);
             profile.Position = new Position(CardX, CardY);
             profileView.Add(profile);
             var avatarBack = Widgets.Rounded(Theme.Accent, 190, 190, 95);
@@ -135,7 +135,7 @@ namespace OmegaTube.Ui
             badge.Position = new Position(280, 190);
             profile.Add(badge);
 
-            var features = Widgets.Rounded(Theme.Panel, CardW, 330, Theme.PanelRadius + 4);
+            var features = Widgets.Panel(Theme.Panel, CardW, 330, Theme.PanelRadius + 4);
             features.Position = new Position(CardX, CardY + 310);
             profileView.Add(features);
             Feature(features, 0, "home", T("Personalised home"), T("The recommendations of your YouTube account"));

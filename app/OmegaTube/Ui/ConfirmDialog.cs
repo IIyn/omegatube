@@ -23,7 +23,7 @@ namespace OmegaTube.Ui
             Size = new Size(1920, 1080);
             BackgroundColor = Theme.Scrim;
 
-            var card = Widgets.Rounded(Theme.Panel, CardW, CardH, Theme.PanelRadius);
+            var card = Widgets.Panel(Theme.Panel, CardW, CardH, Theme.PanelRadius);
             card.Position = new Position((1920 - CardW) / 2, (1080 - CardH) / 2);
             Add(card);
             var label = Widgets.Label(question, Theme.TitleSize - 2, Theme.Text, CardW - 100, 120);

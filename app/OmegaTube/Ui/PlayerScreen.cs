@@ -531,7 +531,7 @@ namespace OmegaTube.Ui
 
         // Where to start: the furthest of our own saved position and the account's progress as YouTube reports
         // it on the card (watched on another device); nearly finished or barely started videos start over.
-        private static long ResumePoint(VideoItem v)
+        internal static long ResumePoint(VideoItem v)
         {
             long local = LocalStore.ResumePosition(v.Id);
             if (LocalStore.Progress(v.Id) >= 0.99)
@@ -862,17 +862,39 @@ namespace OmegaTube.Ui
             }
         }
 
-        private static void Release(IntPtr p)
+        internal static void Release(IntPtr p)
         {
             if (p != IntPtr.Zero)
             {
-                Task previous = lastTeardown;
-                lastTeardown = Task.Run(async () =>
+                Decoder(() => NativeCore.PlayerDestroy(p));
+            }
+        }
+
+        // The TV has one video decoder: player creation (home previews) and teardown run one after the other on
+        // this chain, and Start() waits for it, so a new player never starts while another still holds the decoder.
+        // UI thread only (lastTeardown is not locked). A failing step does not break the chain.
+        internal static void Decoder(System.Action work)
+        {
+            Task previous = lastTeardown;
+            lastTeardown = Task.Run(async () =>
+            {
+                try
                 {
                     await previous;
-                    NativeCore.PlayerDestroy(p);
-                });
-            }
+                }
+                catch (Exception)
+                {
+                    // logged by the step that failed
+                }
+                try
+                {
+                    work();
+                }
+                catch (Exception e)
+                {
+                    Tizen.Log.Error("OmegaTube", "decoder step: " + e.Message);
+                }
+            });
         }
 
         // Quality / audio track change: same video, new player at the current position.

@@ -430,7 +430,7 @@ std::string Connection::header(const std::string& name) const {
     return "";
 }
 
-Response fetch(const Request& req) {
+Response fetch(const Request& req, size_t max_body) {
     Response res;
     Connection conn;
     Request current = req;
@@ -440,7 +440,12 @@ Response fetch(const Request& req) {
             return res;
         }
         res.status = conn.status();
-        res.body = conn.read_all();
+        res.body = conn.read_all(max_body);
+        if (res.body.size() >= max_body && !conn.body_done()) {
+            res.body.clear();
+            res.error = "response too large";
+            return res;
+        }
         std::string location = conn.header("Location");
         if (!is_redirect(res.status) || location.empty() || redirects == 5) break;
         current.url = location;

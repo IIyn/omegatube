@@ -34,6 +34,9 @@ struct Format {
 // One entry of a feed (search results, channel videos...).
 struct FeedItem {
     std::string video_id, title, channel, duration, views, published, thumbnail;
+    // Animated preview (richThumbnail.movingThumbnailRenderer): an animated WebP shown on hover where YouTube
+    // offers one; empty otherwise.
+    std::string preview;
     // Playlists and mixes: playlist_id + the first video to play (video_id). Videos inside a playlist
     // (Client::playlist) keep kind "video" with the playlist_id they belong to.
     std::string playlist_id;
@@ -165,6 +168,10 @@ public:
         std::string status, reason;
     };
     const Refusal& refusal() const { return refusal_; }
+
+    // Takes over the visitor id and web client version another client already fetched. A fresh client would GET the
+    // YouTube home page (hundreds of KB) before its first request; short-lived clients (previews) borrow instead.
+    void adopt_session(Client& from);
 
     // Raw JSON of the last player/browse response (dev tooling: ytcheck --dump).
     const std::string& last_response() const { return last_response_; }

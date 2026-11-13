@@ -72,6 +72,16 @@ OMEGA_API omega_player* omega_player_create(void* ecore_wl2_window, int width, i
 OMEGA_API omega_player* omega_player_create_youtube(void* ecore_wl2_window, int width, int height, const char* video_id,
                                                     int max_height, const char* codecs, int64_t start_ms,
                                                     const char* audio_track);
+// Muted preview of a YouTube video (the home's "rest on it to see it" playback): video track only (no audio),
+// at most max_height (0 = 720), short read-ahead, and no watch-history reporting. Blocking (network): call it
+// off the UI thread. Release with omega_player_destroy. Returns NULL on failure (the reason is in the log).
+OMEGA_API omega_player* omega_player_create_preview(void* ecore_wl2_window, int width, int height,
+                                                    const char* video_id, int max_height, const char* codecs,
+                                                    int64_t start_ms);
+// Resolves a video's streams ahead of its preview (InnerTube "player" only: no decoder, no watch history) and
+// keeps them (a few videos, 90 min), so omega_player_create_preview starts with the media fetch. Blocking
+// (network): call it off the UI thread. Returns 1 when resolved (or already cached), 0 on failure.
+OMEGA_API int omega_preview_prefetch(const char* video_id);
 // Why the last omega_player_create_youtube returned NULL: {"kind","status","reason","detail","signedIn"}.
 // kind: login | age | upcoming | unplayable | unavailable | rate_limited | http | network | formats | player | other;
 // status: YouTube's playabilityStatus ("LOGIN_REQUIRED"...) or "HTTP_<code>"; reason: YouTube's own message
@@ -127,6 +137,11 @@ OMEGA_API char* omega_yt_channel(const char* channel_id, const char* continuatio
 //  "continuation","count" (display text, first page),"sortTop","sortNewest" (continuations reloading the list
 //  in that order),"createParams" (for omega_yt_post_comment),"disabled":bool} or {"error"}.
 OMEGA_API char* omega_yt_comments(const char* video_id, const char* continuation);
+// Downloads a video's animated preview (YouTube's moving-thumbnail WebP) and decodes it into a 24-bit BMP sprite
+// sheet at out_path (the Tizen 5.5 image loader cannot animate WebP itself). url: the item's preview URL; empty =
+// look it up by video_id (WEB search). Returns JSON {"cols","rows","frames","w","h","delay"} (frame grid,
+// row-major; delay in ms per frame) or {"error"} (plus "none": true when the video has no preview).
+OMEGA_API char* omega_preview_sheet(const char* video_id, const char* url, const char* out_path);
 // As the signed-in account: {"ok":true,"comment":{...} or null} or {"error"}.
 OMEGA_API char* omega_yt_post_comment(const char* create_params, const char* text);
 // A reply in the thread of comment_id (a top-level comment): as omega_yt_post_comment.

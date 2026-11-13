@@ -267,6 +267,7 @@ namespace OmegaTube
         // --- Delegate types for the core's C API (cdecl; ANSI for the few char* taken as string) --------------
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate IntPtr Ip_v();
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int I_v();
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int I_b(byte[] a);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate void V_v();
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate IntPtr Ip_b(byte[] a);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate IntPtr Ip_bb(byte[] a, byte[] b);
@@ -284,6 +285,7 @@ namespace OmegaTube
         [UnmanagedFunctionPointer(CallingConvention.Cdecl, CharSet = CharSet.Ansi)] private delegate void LogLineFn(string text);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl, CharSet = CharSet.Ansi)] private delegate IntPtr CreateFn(IntPtr win, int w, int h, string videoUrl, string audioUrl);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl, CharSet = CharSet.Ansi)] private delegate IntPtr CreateYtFn(IntPtr win, int w, int h, string videoId, int maxHeight, string codecs, long startMs, string audioTrack);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl, CharSet = CharSet.Ansi)] private delegate IntPtr CreatePreviewFn(IntPtr win, int w, int h, string videoId, int maxHeight, string codecs, long startMs);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl, CharSet = CharSet.Ansi)] private delegate void DiagnoseFn(IntPtr win, int w, int h, string videoUrl, string audioUrl);
 
         // --- Bound function pointers -------------------------------------------------------------------------
@@ -295,6 +297,8 @@ namespace OmegaTube
         private static LogLineFn _logLine;
         private static CreateFn _playerCreate;
         private static CreateYtFn _playerCreateYouTube;
+        private static CreatePreviewFn _playerCreatePreview;
+        private static I_b _previewPrefetch;
         private static DiagnoseFn _playerDiagnose;
         private static V_ip _playerTogglePause, _playerDestroy, _free;
         private static Ip_ip _playerFormats;
@@ -303,6 +307,7 @@ namespace OmegaTube
         private static V_ipStats _playerGetStats;
         private static Ip_b _ytSuggest, _reportUpload, _authPoll, _qrEncode, _ytRelated, _ytDetails, _sbSegments, _authSwitch;
         private static Ip_bb _ytSearch, _ytBrowse, _ytPlaylist, _ytPlaylistPage, _ytCaptions, _ytRate, _ytChannel, _ytComments, _ytPostComment;
+        private static Ip_bbb _previewSheet;
         private static Ip_bbb _ytPostReply, _ytCommentAction;
         private static Ip_bi _ytSubscribe;
         private static V_b _init;
@@ -317,6 +322,8 @@ namespace OmegaTube
             _logTail = Fn<I_buf>("omega_log_tail");
             _playerCreate = Fn<CreateFn>("omega_player_create");
             _playerCreateYouTube = Fn<CreateYtFn>("omega_player_create_youtube");
+            _playerCreatePreview = Fn<CreatePreviewFn>("omega_player_create_preview");
+            _previewPrefetch = Fn<I_b>("omega_preview_prefetch");
             _playerLastError = Fn<Ip_v>("omega_player_last_error");
             _playerTogglePause = Fn<V_ip>("omega_player_toggle_pause");
             _playerSeek = Fn<I_ipl>("omega_player_seek");
@@ -348,6 +355,7 @@ namespace OmegaTube
             _ytSubscribe = Fn<Ip_bi>("omega_yt_subscribe");
             _ytChannel = Fn<Ip_bb>("omega_yt_channel");
             _ytComments = Fn<Ip_bb>("omega_yt_comments");
+            _previewSheet = Fn<Ip_bbb>("omega_preview_sheet");
             _ytPostComment = Fn<Ip_bb>("omega_yt_post_comment");
             _ytPostReply = Fn<Ip_bbb>("omega_yt_post_reply");
             _ytCommentAction = Fn<Ip_bbb>("omega_yt_comment_action");
@@ -367,6 +375,10 @@ namespace OmegaTube
         public static IntPtr PlayerLastError() => _playerLastError();
         public static void PlayerTogglePause(IntPtr player) => _playerTogglePause(player);
         public static int PlayerSeek(IntPtr player, long positionMs) => _playerSeek(player, positionMs);
+        // Muted, video-only preview with no watch-history reporting (omega_player_create_preview). Blocking.
+        public static IntPtr PlayerCreatePreview(IntPtr ecoreWindow, int width, int height, string videoId, int maxHeight, string codecs, long startMs) => _playerCreatePreview(ecoreWindow, width, height, videoId, maxHeight, codecs, startMs);
+        // Resolves a video's streams ahead of its preview (no decoder, no history). Blocking. True when cached.
+        public static bool PreviewPrefetch(string videoId) => _previewPrefetch(Utf8z(videoId)) != 0;
         public static void PlayerGetStats(IntPtr player, out PlayerStats stats) => _playerGetStats(player, out stats);
         public static void PlayerDestroy(IntPtr player) => _playerDestroy(player);
         public static void PlayerDiagnose(IntPtr ecoreWindow, int width, int height, string videoUrl, string audioUrl) => _playerDiagnose(ecoreWindow, width, height, videoUrl, audioUrl);
@@ -395,6 +407,9 @@ namespace OmegaTube
         public static IntPtr YtRate(string videoId, string rating) => _ytRate(Utf8z(videoId), Utf8z(rating));
         public static IntPtr YtSubscribe(string channelId, bool subscribe) => _ytSubscribe(Utf8z(channelId), subscribe ? 1 : 0);
         public static IntPtr YtComments(string videoId, string continuation) => _ytComments(Utf8z(videoId), Utf8z(continuation));
+        // Animated WebP preview -> BMP sprite sheet at outPath; url "" = look it up by id (see omega_preview_sheet).
+        public static IntPtr PreviewSheet(string videoId, string url, string outPath) =>
+            _previewSheet(Utf8z(videoId), Utf8z(url), Utf8z(outPath));
         public static IntPtr YtPostComment(string createParams, string text) => _ytPostComment(Utf8z(createParams), Utf8z(text));
         public static IntPtr YtPostReply(string videoId, string commentId, string text) => _ytPostReply(Utf8z(videoId), Utf8z(commentId), Utf8z(text));
         public static IntPtr YtCommentAction(string videoId, string commentId, string action) => _ytCommentAction(Utf8z(videoId), Utf8z(commentId), Utf8z(action));

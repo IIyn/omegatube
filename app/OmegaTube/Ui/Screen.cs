@@ -24,8 +24,13 @@ namespace OmegaTube.Ui
         {
         }
 
-        // Called when the app goes to background (Home button, other app): release scarce resources.
+        // Called when the app goes to background (Home button, other app, another HDMI source): release scarce resources.
         public virtual void OnPause()
+        {
+        }
+
+        // The app is back in the foreground and this screen is the one on display again.
+        public virtual void OnResume()
         {
         }
 

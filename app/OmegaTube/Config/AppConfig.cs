@@ -109,6 +109,9 @@ namespace OmegaTube.Config
         public List<HomeRow> HomeRows = new List<HomeRow>();
         public PlayerOptions Player = new PlayerOptions();
         public string UiLanguage = "en"; // app texts (I18n): en | fr | es
+        public string UiStyle = "omega"; // interface: omega (default) | glorious (immersive home)
+        public bool HeroPreview = true;  // Glorious: video preview behind the first home row after a short rest
+        public bool CardPreview = true;  // Glorious: animated preview inside the other cards after a short rest
         public string Language = "en";   // InnerTube hl
         public string Region = "US";     // InnerTube gl
         public bool CheckUpdates = true;
@@ -236,6 +239,9 @@ namespace OmegaTube.Config
                 UiLanguage = "en";
             }
             I18n.Lang = UiLanguage;
+            UiStyle = Json.Str(root, "uiStyle", UiStyle) == "glorious" ? "glorious" : "omega";
+            HeroPreview = Json.Bool(root, "heroPreview", HeroPreview);
+            CardPreview = Json.Bool(root, "cardPreview", CardPreview);
             Language = Json.Str(root, "language", Language);
             Region = Json.Str(root, "region", Region);
             CheckUpdates = Json.Bool(root, "checkUpdates", CheckUpdates);
@@ -290,6 +296,9 @@ namespace OmegaTube.Config
             return new Dictionary<string, object>
             {
                 ["uiLanguage"] = UiLanguage,
+                ["uiStyle"] = UiStyle,
+                ["heroPreview"] = HeroPreview,
+                ["cardPreview"] = CardPreview,
                 ["language"] = Language,
                 ["region"] = Region,
                 ["checkUpdates"] = CheckUpdates,

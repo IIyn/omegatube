@@ -9,6 +9,7 @@ OmegaTube reuses the following work. Thanks to their authors.
 | [Material Icons](https://github.com/google/material-design-icons) (C) Google: player and settings icons added for 1.0 (subtitles, audio_track, repeat, info, info_outline, check, logout, person, shield, view_list, language, thumb_up, thumb_down) | `app/OmegaTube/res/icons/` | Apache-2.0 |
 | [Mbed TLS](https://github.com/Mbed-TLS/mbedtls) 3.6 | fetched by `scripts/fetch-deps.sh`, linked into the core | Apache-2.0 |
 | [nlohmann/json](https://github.com/nlohmann/json) 3.12 | fetched by `scripts/fetch-deps.sh` | MIT |
+| [libwebp](https://github.com/webmproject/libwebp) 1.5 (C) Google Inc. (decoder and demuxer only) | fetched by `scripts/fetch-deps.sh`, linked into the core (turns YouTube's animated WebP previews into frames) | BSD-3-Clause |
 | [QR Code generator](https://github.com/nayuki/QR-Code-generator) by Project Nayuki | fetched by `scripts/fetch-deps.sh` | MIT |
 | [QuickJS-ng](https://github.com/quickjs-ng/quickjs) 0.17 (C) Fabrice Bellard, Charlie Gordon and the quickjs-ng contributors | fetched by `scripts/fetch-deps.sh`, linked into the core (fallback client deciphering) | MIT |
 | [yt-dlp EJS](https://github.com/yt-dlp/ejs) 0.8 solver, bundling [meriyah](https://github.com/meriyah/meriyah) (ISC) and [astring](https://github.com/davidbonnet/astring) (MIT) | fetched by `scripts/fetch-deps.sh`, embedded in the core | Unlicense, ISC, MIT |
