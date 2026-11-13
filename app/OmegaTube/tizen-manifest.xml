@@ -2,7 +2,7 @@
 <manifest package="org.omegatube.app" version="1.6.0" api-version="5.5" xmlns="http://tizen.org/ns/packages">
   <profile name="tv" />
   <ui-application appid="org.omegatube.app" exec="OmegaTube.dll" type="dotnet" multiple="false" nodisplay="false" taskmanage="true" launch_mode="single">
-    <label>omegatube</label>
+    <label>OmegaTube</label>
     <icon>omegatube.png</icon>
     <splash-screens>
       <splash-screen src="splash.png" type="img" dpi="hdpi" orientation="landscape" indicator-display="false" />

@@ -89,7 +89,7 @@ namespace OmegaTube.Ui
             var title = Widgets.Label(T("Settings"), Theme.TitleSize + 12, Theme.Text, 480, 70);
             title.Position = new Position(80, 64);
             Root.Add(title);
-            var version = Widgets.Label("omegatube " + NativeCore.Version, Theme.SmallSize, Theme.TextMuted, 480);
+            var version = Widgets.Label("OmegaTube " + NativeCore.Version, Theme.SmallSize, Theme.TextMuted, 480);
             version.Position = new Position(82, 134);
             Root.Add(version);
 
