@@ -261,7 +261,7 @@ namespace OmegaTube
             public double AudioKbps;
             public long DurationMs;
             public int Reconnecting;
-            public int Reserved;
+            public int Buffering;   // the core holds playback until video and audio both have data again
         }
 
         // --- Delegate types for the core's C API (cdecl; ANSI for the few char* taken as string) --------------
