@@ -29,7 +29,7 @@ Please say in the pull request that you used an LLM, and for what. It's not held
 - Follow the style of the surrounding code. Comments explain *why*, not *what*.
 - Reuse what exists (e.g. `T("…")` for texts, static methods etc...) rather than adding a second way to do the same thing.
 - Texts shown in the app are written in English through `T("…")`; add the French and Spanish translations in `app/OmegaTube/I18n.cs` if you can (otherwise say so and they'll be added).
-- The app targets **Tizen 6.0 (API 8)** and must keep working there, even if you test on a newer TV.
+- The app targets **Tizen 5.5 (API 6, 2020 TVs)** and must keep working there, even if you test on a newer TV. Compile against the oldest TizenFX: APIs missing on 5.5 (no `CornerRadius`, no blur) fail the build or go through reflection.
 - `remote-config.json` is downloaded by every installed copy of the app: changes to it must stay compatible with released versions.
 - Never commit certificates, account tokens, `res/dev.json` or logs with personal data.
 
