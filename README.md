@@ -77,7 +77,7 @@ OmegaTube is a ground-up rewrite. It does not use YouTube's web app or the brows
 
 | Part | Language | Role |
 | --- | --- | --- |
-| `app/OmegaTube` | C# (.NET, TizenFX API 8, NUI) | The interface: screens, focus and remote control handling, settings, translations, local data (history, settings). It packages everything into a `.tpk`. |
+| `app/OmegaTube` | C# (.NET, TizenFX API 6, NUI) | The interface: screens, focus and remote control handling, settings, translations, local data (history, settings). It packages everything into a `.tpk`. |
 | `core` | C++17 | Everything else: HTTPS, YouTube's API, sign-in, the MP4/WebM demuxers, the player that drives the hardware decoders, SponsorBlock. It is built as `libomegacore.so` and exposes a small C API (`core/include/omega/core.h`). |
 
 ### Why this split?
@@ -100,14 +100,14 @@ OmegaTube is a ground-up rewrite. It does not use YouTube's web app or the brows
 
 - **Remote configuration (`remote-config.json`).** YouTube changes its private API often. The client names, versions and keys the app sends live in this file, not in the code. The app downloads the latest copy from this repository at startup (falling back to the copy built into it), so a YouTube change can often be fixed by editing one JSON file, without a new release.
 - **Direct stream URLs.** The main client returns stream URLs that play directly, so nothing has to run YouTube's JavaScript. If it fails, a fallback TV client is used and its URLs are deciphered with the embedded JavaScript engine.
-- **Pinned to Tizen 6.0 (API 8).** It is the oldest target the app supports. Newer TVs run older apps fine; the reverse is not true.
-- **Reproducible cross-compiling.** The C++ core is built in a Docker image (`toolchain/Dockerfile`, Debian buster, `arm-linux-gnueabi`). Its C library (glibc 2.28) is older than the TV's (2.30), so the binary runs on the TV whatever your own Linux distribution is.
+- **Pinned to Tizen 5.5 (API 6).** It is the oldest target the app supports (2020 TVs). Newer TVs run older apps fine; the reverse is not true.
+- **Reproducible cross-compiling.** The C++ core is built in a Docker image (`toolchain/Dockerfile`, Debian buster, `arm-linux-gnueabi`). Its C library (glibc 2.28) is older than the TV's (2.30 on Tizen 6.0), and `scripts/build-core.sh` refuses a library that needs anything newer than glibc 2.24 (Tizen 5.5), so the binary runs on the TV whatever your own Linux distribution is.
 
 ## Install it on your TV (step by step)
 
 You don't need any technical knowledge: you copy one line, then the installer tells you what to do. It takes about 10 minutes the first time.
 
-> **Which TVs?** Samsung smart TVs running **Tizen 6.0 or newer** (most models from **2021 onwards**). OmegaTube is developed on a 2021 AU series TV. Other models should work but are less tested. Feedback is welcome in the [issues](https://github.com/IIyn/omegatube/issues).
+> **Which TVs?** Samsung smart TVs running **Tizen 5.5 or newer** (**2020 models and later**). OmegaTube is developed on a 2021 AU series TV and also tested on a 2020 (Tizen 5.5) one. Older TVs are not supported: Samsung's .NET framework only exists from Tizen 4.0 (2018 TVs; Tizen 3.0, the 2017 TVs, [has none](https://developer.samsung.com/smarttv/develop/specifications/general-specifications.html)). Other models should work but are less tested. Feedback is welcome in the [issues](https://github.com/IIyn/omegatube/issues).
 
 > **Why can't I just download it from the Samsung store?** Samsung's store does not accept apps like this one. Apps from outside the store must be **signed with a certificate made for your specific TV**, which needs a free Samsung account. The installer does all of this for you.
 
@@ -280,7 +280,7 @@ The full list of commands is at the top of `core/tools/ytcheck.cpp`. `tools/yt-p
 app/OmegaTube/        C# shell: OmegaTube.cs (app + navigation), Ui/ (screens), Data/ (YouTube bindings,
                       local store), Config/, I18n.cs (translations), NativeCore.cs (P/Invoke), res/
 core/                 C++ core: include/omega/core.h (C API), src/{net,media,player,yt,util}, tools/
-toolchain/            Docker cross toolchain for Tizen 6.0 (armv7, softfp)
+toolchain/            Docker cross toolchain (Tizen 6.0 rootstrap, armv7, softfp; the core is held to glibc 2.24 so 5.5 TVs load it)
 scripts/              fetch-deps, build-core, build-app, deploy, gen-cert, install-tv, serve-test-media
 tools/                samsung-cert (headless certificate generator), yt-probe, flaky-server, and the generators of the
                       Glorious images (glass-panel, nav-fade, hero-scrims, preview-ring, outline-icons)
