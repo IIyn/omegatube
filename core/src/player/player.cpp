@@ -316,6 +316,17 @@ bool Player::seek(int64_t ms) {
     position_ms_ = target;
     stall_grace_until_ms_ = ms_since(started_at_) + 3000;
     int rc = api_->seek(handle_, static_cast<uint64_t>(target));
+    // A seek starts with an empty buffer. Hold playback (the same hold as a stall) until both tracks have data, so it
+    // starts smoothly instead of stuttering a moment later. What was fed before the seek says nothing about now.
+    video_.submitted_ms = target;
+    audio_.submitted_ms = target;
+    if (!paused_) {
+        const bool already_held = rebuffering_.exchange(true);
+        rebuffer_since_ = Clock::now();
+        if (!already_held) api_->pause(handle_);
+    } else {
+        rebuffering_ = false;   // the user's own pause stands
+    }
 
     for (int i = 0; i < 2; ++i) {
         if (!use[i]) continue;
@@ -456,7 +467,8 @@ void Player::control_loop() {
         // Until seek_done the player still reports the old position: keep the target so feeding
         // (paced on position_ms_) is not throttled against a stale clock.
         if (!seek_pending_) position_ms_ = static_cast<int64_t>(pos);
-        if (paused_ || eos_ || ms_since(started_at_) < stall_grace_until_ms_) {
+        update_rebuffering();
+        if (paused_ || rebuffering_ || eos_ || ms_since(started_at_) < stall_grace_until_ms_) {
             last_advance = Clock::now();
             continue;
         }
@@ -479,9 +491,54 @@ void Player::control_loop() {
     }
 }
 
+// Video and audio are downloaded separately, and one can run dry while the other plays on: the picture freezes (or
+// the sound stops) while the clock, which follows the audio, keeps counting. Like any player, treat them as one
+// unit: when either track has less than kStarveMs fed ahead of the playhead, hold playback (the clock stops, so
+// does the progress bar) and carry on once both have kResumeMs again. The hold gives up after kMaxHoldMs and tries
+// anyway, so a stuck connection never leaves the player held for ever.
+void Player::update_rebuffering() {
+    constexpr int64_t kStarveMs = 200, kResumeMs = 2000, kMaxHoldMs = 10000, kStartGraceMs = 1500;
+    if (paused_ || eos_ || seek_pending_ || !prepared_) return;
+    const auto now = Clock::now();
+    Track* tracks[] = {cfg_.use_video ? &video_ : nullptr, cfg_.use_audio ? &audio_ : nullptr};
+    if (!rebuffering_) {
+        if (ms_since(started_at_) < kStartGraceMs || ms_since(started_at_) < stall_grace_until_ms_ || now < rebuffer_grace_until_)
+            return;
+        for (Track* t : tracks) {
+            if (!t || track_finished(*t) || lead_ms(*t) >= kStarveMs) continue;
+            rebuffering_ = true;
+            rebuffer_since_ = now;
+            ++stalls_;
+            api_->pause(handle_);
+            OLOG("rebuffering: %s has %lld ms ahead of the playhead (position %lld), playback held", stream_name(t->type),
+                 static_cast<long long>(lead_ms(*t)), static_cast<long long>(position_ms_.load()));
+            return;
+        }
+        return;
+    }
+    bool ready = true;
+    for (Track* t : tracks)
+        if (t && !track_finished(*t) && lead_ms(*t) < kResumeMs) ready = false;
+    const int64_t held = std::chrono::duration_cast<std::chrono::milliseconds>(now - rebuffer_since_).count();
+    if (!ready && held < kMaxHoldMs) return;
+    rebuffering_ = false;
+    rebuffer_grace_until_ = now + std::chrono::milliseconds(1000);   // let the feed settle before judging again
+    if (held > longest_stall_ms_) longest_stall_ms_ = held;
+    api_->resume(handle_);
+    OLOG("rebuffering: playback resumed after %lld ms%s", static_cast<long long>(held), ready ? "" : " (gave up waiting)");
+}
+
+int64_t Player::lead_ms(Track& t) { return t.submitted_ms - position_ms_; }
+
+bool Player::track_finished(Track& t) {
+    std::lock_guard<std::mutex> lock(t.mutex);
+    return t.demux_done && t.queue.empty();
+}
+
 void Player::toggle_pause() {
     if (!handle_ || !prepared_) return;
     paused_ = !paused_;
+    if (!paused_) rebuffering_ = false;   // the user plays on: whatever we were holding for is theirs to judge now
     int rc = paused_ ? api_->pause(handle_) : api_->resume(handle_);
     OLOG("esp %s -> %d", paused_ ? "pause" : "resume", rc);
 }
@@ -518,6 +575,7 @@ PlayerStats Player::stats() {
     s.eos = eos_ ? 1 : 0;
     s.duration_ms = duration_ms_;
     s.reconnecting = (video_.reconnecting || audio_.reconnecting) ? 1 : 0;
+    s.buffering = rebuffering_ ? 1 : 0;
     return s;
 }
 

@@ -51,6 +51,7 @@ struct PlayerStats {
     int eos;
     int64_t duration_ms;
     int reconnecting;  // a stream is retrying after a network error
+    int buffering;     // playback is held until video and audio have enough data again (see update_rebuffering)
 };
 
 // Plays one DASH video track + one audio track (fragmented MP4 or WebM over HTTP) with ESPlayer.
@@ -101,6 +102,9 @@ private:
     std::string fresh_url(Track& t);
     void feed_loop(Track& t);
     void control_loop();
+    void update_rebuffering();
+    int64_t lead_ms(Track& t);        // how far ahead of the playhead the TV's player was fed with this track
+    bool track_finished(Track& t);    // nothing more will come from this track (end of the stream)
 
     static void on_error(int err, void* self);
     static void on_buffer_status(esp::StreamType type, esp::BufferStatus status, void* self);
@@ -120,6 +124,8 @@ private:
     Track video_, audio_;
     std::atomic<bool> running_{false};
     std::atomic<bool> prepared_{false}, prepare_failed_{false}, paused_{false}, eos_{false};
+    std::atomic<bool> rebuffering_{false};   // held by us (not the user) because a track ran out of data
+    Clock::time_point rebuffer_since_{}, rebuffer_grace_until_{};
     std::atomic<uint32_t> errors_{0}, stalls_{0};
     std::atomic<int64_t> longest_stall_ms_{0}, position_ms_{0};
     std::thread control_thread_;

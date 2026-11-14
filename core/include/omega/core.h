@@ -56,7 +56,7 @@ typedef struct {
     double audio_kbps;
     int64_t duration_ms;
     int32_t reconnecting;  // a stream is retrying after a network error
-    int32_t reserved;
+    int32_t buffering;     // playback is held until video and audio both have enough data (a rebuffer)
 } omega_player_stats;
 
 // Starts playing a DASH H.264 video track + AAC audio track (fragmented MP4 over http://) on the

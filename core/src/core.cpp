@@ -493,6 +493,7 @@ void omega_player_get_stats(omega_player* p, omega_player_stats* out) {
     out->audio_kbps = s.audio_kbps;
     out->duration_ms = s.duration_ms;
     out->reconnecting = s.reconnecting;
+    out->buffering = s.buffering;
 }
 
 void omega_player_destroy(omega_player* p) { delete p; }

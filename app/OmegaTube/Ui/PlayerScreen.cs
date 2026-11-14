@@ -82,6 +82,12 @@ namespace OmegaTube.Ui
         private readonly View spinner;
         private readonly Animation spin;
         private readonly View track, progressFill, playhead;
+        private readonly StallRing headRing, stripRing;   // buffering mark: round the playhead, or on the thin strip
+        private readonly View strip, stripFill;           // slides up from below the screen while stalled and the controls are hidden
+        private readonly View stripDot;
+        private Animation stripSlide;
+        private bool stalled;
+        private int stallMode;   // what UpdateStall last showed: 0 nothing, 1 ring on the bar, 2 ring on the strip
         private readonly List<Button> buttons = new List<Button>();
         private readonly List<Button> rightButtons = new List<Button>();  // laid out from the right edge
         private readonly Button skipButton, playButton;
@@ -119,6 +125,17 @@ namespace OmegaTube.Ui
         private List<SkipSegment> segments = new List<SkipSegment>();
         private SkipSegment offered;       // manual segment currently offered with the skip button
         private bool marksDrawn;
+        private const double WaitingBeforeStripS = 1.5;     // with the controls hidden, the strip comes up only for a real wait
+        private const double StripStaysS = 0.8;             // and once up it stays at least this long (no flash)
+        private const double ControlsLingerS = 2.0;         // shown controls stay this long after the wait ends
+        private bool stripWanted;
+        private DateTime stripUpAt;
+        private const double WaitingBeforeRingS = 0.75;     // data must be missing this long before the buffering ring shows
+        private const int PlayheadSize = 18;                // the round head of the progress bar (on the strip too)
+        private const int StallRingSize = 40, StripBarHeight = 4;
+        private const int StripRise = StallRingSize + 10;   // how far the strip comes up: the whole ring plus 10 px
+        private long lastPositionMs = -1;          // playhead at the last tick
+        private DateTime waitingSince = DateTime.MaxValue;   // since when the player has been waiting for data (MaxValue: not)
         private bool playbackStarted;      // the OSD timeout counts from the first frame, not from the loading screen
         private DateTime noSkipUntil;      // let a just-issued seek settle before checking segments
         private long resumeMs;             // position to start at
@@ -236,9 +253,12 @@ namespace OmegaTube.Ui
             chrome.Add(track);
             progressFill = Widgets.Rounded(Theme.Accent, 0, 6, 3);
             track.Add(progressFill);
-            playhead = Widgets.Rounded(Theme.Accent, 18, 18, 9);
-            playhead.Position = new Position(ProgressX - 9, TrackY - 6);
+            // An image, not a rounded View: Tizen 5.5 has no CornerRadius, so a rounded View is a square.
+            playhead = new ImageView { ResourceUrl = Theme.Image("playhead_dot"), Size = new Size(PlayheadSize, PlayheadSize), Color = Theme.Accent };
+            playhead.Position = new Position(ProgressX - PlayheadSize / 2, TrackY - 6);
             chrome.Add(playhead);
+            headRing = new StallRing(StallRingSize);
+            chrome.Add(headRing);
             timeLabel = Widgets.Label("", Theme.SmallSize + 2, Theme.Text, 400);
             timeLabel.Position = new Position(ProgressX, TrackY + 22);
             chrome.Add(timeLabel);
@@ -262,6 +282,23 @@ namespace OmegaTube.Ui
             AddRightButton(Action.Captions, "subtitles").Available = false;     // until the video has some
             skipButton = AddSkipButton();
             LayoutRightButtons();
+
+            // Controls hidden and the picture frozen: a progress strip rises from below the screen far enough to show
+            // the whole ring (its height + 10 px) and slides away again when playback resumes.
+            strip = new View { Size = new Size(1920, StripRise), Position = new Position(0, 1080) };   // parked below the screen
+            View stripTrack = Widgets.Box(new Color(1, 1, 1, 0.3f), 1920, StripBarHeight);
+            stripTrack.PositionY = StripRise / 2 - StripBarHeight / 2;
+            strip.Add(stripTrack);
+            stripFill = Widgets.Box(Theme.Accent, 0, StripBarHeight);
+            stripTrack.Add(stripFill);
+            stripDot = new ImageView { ResourceUrl = Theme.Image("playhead_dot"), Size = new Size(PlayheadSize, PlayheadSize), Color = Theme.Accent,
+                                       ParentOrigin = Tizen.NUI.ParentOrigin.TopLeft, PivotPoint = Tizen.NUI.PivotPoint.Center,
+                                       PositionUsesPivotPoint = true };
+            strip.Add(stripDot);
+            stripRing = new StallRing(StallRingSize);
+            strip.Add(stripRing);
+            strip.Hide();
+            Root.Add(strip);
 
             tooltip = Widgets.Label("", Theme.SmallSize + 1, Theme.CardTextFocused);
             tooltip.BackgroundColor = Theme.CardInfoFocused;
@@ -849,6 +886,9 @@ namespace OmegaTube.Ui
             tick?.Stop();
             captionTick?.Stop();
             spin.Stop();
+            headRing.Spin(false);
+            stripRing.Spin(false);
+            stripSlide?.Stop();
             SavePosition();
             Release(player);
             player = IntPtr.Zero;
@@ -917,14 +957,37 @@ namespace OmegaTube.Ui
             if (player != IntPtr.Zero)
             {
                 NativeCore.PlayerGetStats(player, out stats);
-                if (stats.Reconnecting != 0)
+                if (stats.State == 3 || stats.State == 4)
                 {
-                    ShowLoading(T("Reconnecting…"), opaque: false);   // over the last frame
+                    HideLoading();   // the first-load screen is over
                 }
-                else if (stats.State == 3 || stats.State == 4)
+                // The core retries a lost request in the background while the buffered seconds keep playing, and most
+                // retries finish well inside them, so nothing shows for those. When video or audio runs out of data the
+                // core holds playback until both have some again (Buffering), and a ring turns round the head of the bar.
+                // A playhead that stands still for no known reason counts too.
+                bool waiting = stats.Eos == 0 && !ended
+                    && (stats.Buffering != 0 || (stats.State == 3 && stats.PositionMs == lastPositionMs));
+                lastPositionMs = stats.PositionMs;
+                if (!waiting)
                 {
-                    HideLoading();
+                    waitingSince = DateTime.MaxValue;
                 }
+                else if (waitingSince == DateTime.MaxValue)
+                {
+                    waitingSince = now;
+                }
+                double waited = waiting ? (now - waitingSince).TotalSeconds : 0;
+                stalled = waited >= WaitingBeforeRingS;
+                stripWanted = waited >= WaitingBeforeStripS;
+                if (stalled && chrome.Visibility)
+                {
+                    DateTime linger = now.AddSeconds(ControlsLingerS);   // the controls stay while it loads, and a moment after
+                    if (linger > chromeUntil)
+                    {
+                        chromeUntil = linger;
+                    }
+                }
+                UpdateStall();
                 if (stats.State == 3 && !playbackStarted)
                 {
                     playbackStarted = true;
@@ -951,9 +1014,11 @@ namespace OmegaTube.Ui
             if (statsLabel.Visibility && player != IntPtr.Zero)
             {
                 statsLabel.Text =
-                    $"  buffer  video {stats.VideoQueuedMs / 1000.0:F1}s  audio {stats.AudioQueuedMs / 1000.0:F1}s\n" +
+                    $"  buffer  video {stats.VideoQueuedMs / 1000.0:F1}s  audio {stats.AudioQueuedMs / 1000.0:F1}s" +
+                    $"   fed ahead  video {(stats.VideoSubmittedMs - stats.PositionMs) / 1000.0:F1}s  audio {(stats.AudioSubmittedMs - stats.PositionMs) / 1000.0:F1}s\n" +
                     $"  bitrate  video {stats.VideoKbps:F0} kb/s  audio {stats.AudioKbps:F0} kb/s\n" +
-                    $"  stalls {stats.Stalls} (max {stats.LongestStallMs} ms)  underruns v{stats.VideoUnderruns}/a{stats.AudioUnderruns}\n" +
+                    $"  stalls {stats.Stalls} (max {stats.LongestStallMs} ms)  underruns v{stats.VideoUnderruns}/a{stats.AudioUnderruns}" +
+                    (stats.Buffering != 0 ? "   BUFFERING" : "") + "\n" +
                     $"  errors {stats.Errors}   speed {sessionSpeed:0.##}x   max {maxHeight}p" +
                     (info.Current != null ? "   playing " + QualityLabel(info.Current) : "") +
                     (info.AudioTrack.Length > 0 ? "   audio " + info.AudioTrack : "") + "\n" + NativeCore.RecentLog(3);
@@ -1005,6 +1070,73 @@ namespace OmegaTube.Ui
             }
         }
 
+        // Where the playhead is along the timeline, 0..1 (the end for a live stream).
+        private double PlayedFraction()
+        {
+            if (live)
+            {
+                return 1.0;
+            }
+            long pos = pendingSeekMs >= 0 ? pendingSeekMs : stats.PositionMs;
+            return Math.Min(1.0, pos / (double)Math.Max(stats.DurationMs, 1));
+        }
+
+        // The buffering ring: round the head of the progress bar while the controls show, on a thin strip at the foot
+        // of the screen while they are hidden, nowhere when the picture is moving.
+        private void UpdateStall()
+        {
+            int mode = !stalled ? 0 : chrome.Visibility ? 1 : stripWanted || stallMode == 2 ? 2 : 0;   // 1: round the playhead, 2: the strip
+            if (stallMode == 2 && mode != 2 && (DateTime.Now - stripUpAt).TotalSeconds < StripStaysS)
+            {
+                mode = 2;   // up for a blink only: let it stay a moment
+            }
+            if (mode != stallMode)
+            {
+                bool wasStrip = stallMode == 2;
+                stallMode = mode;
+                headRing.Spin(mode == 1);
+                if (mode == 2)
+                {
+                    stripUpAt = DateTime.Now;
+                    stripRing.Spin(true);
+                    strip.Show();
+                    SlideStrip(up: true);
+                }
+                else if (wasStrip)
+                {
+                    SlideStrip(up: false);   // the ring stops once the strip is gone (see SlideStrip)
+                }
+            }
+            if (mode == 1)
+            {
+                headRing.Position = new Position(ProgressX + (float)(ProgressWidth * PlayedFraction()), TrackY + track.SizeHeight / 2f);
+            }
+            else if (mode == 2)
+            {
+                float x = (float)(1920 * PlayedFraction());
+                stripFill.SizeWidth = x;
+                stripDot.Position = new Position(x, StripRise / 2f);
+                stripRing.Position = new Position(x, StripRise / 2f);
+            }
+        }
+
+        // The strip comes up from below the screen (to its ring's height + 10 px) and goes back down and away, smoothly.
+        private void SlideStrip(bool up)
+        {
+            stripSlide = Widgets.Slide(strip, 0, up ? 1080 - StripRise : 1080, stripSlide, 280);
+            if (!up)
+            {
+                stripSlide.Finished += (s, e) => UiGuard.Run("PlayerScreen.strip", () =>
+                {
+                    if (stallMode != 2)   // not stalled again meanwhile
+                    {
+                        strip.Hide();
+                        stripRing.Spin(false);
+                    }
+                });
+            }
+        }
+
         private void UpdateChrome(DateTime now)
         {
             if (!chrome.Visibility)
@@ -1013,7 +1145,7 @@ namespace OmegaTube.Ui
             }
             Widgets.SetVisible(clockLabel, App.Config.Player.ShowClock);
             clockLabel.Text = now.ToString("HH:mm");
-            string icon = stats.State == 4 || ended ? "play" : "pause";
+            string icon = (stats.State == 4 && stats.Buffering == 0) || ended ? "play" : "pause";   // a hold for data is not a pause
             if (icon != lastPlayIcon)
             {
                 lastPlayIcon = icon;
@@ -1022,7 +1154,7 @@ namespace OmegaTube.Ui
             if (live)
             {
                 progressFill.SizeWidth = ProgressWidth;
-                playhead.PositionX = ProgressX + ProgressWidth - 9;
+                playhead.PositionX = ProgressX + ProgressWidth - PlayheadSize / 2;
                 timeLabel.Text = "● EN DIRECT";
                 durationLabel.Text = "";
                 return;
@@ -1031,7 +1163,7 @@ namespace OmegaTube.Ui
             long dur = Math.Max(stats.DurationMs, 1);
             float fill = (float)(ProgressWidth * Math.Min(1.0, pos / (double)dur));
             progressFill.SizeWidth = fill;
-            playhead.PositionX = ProgressX + fill - 9;
+            playhead.PositionX = ProgressX + fill - PlayheadSize / 2;
             timeLabel.Text = pendingSeekMs >= 0 ? $"{Format(pos)}   ({SignedSeconds(pendingSeekMs - stats.PositionMs)})" : Format(pos);
             durationLabel.Text = Format(stats.DurationMs);
             if (focus == Focus.Buttons)
@@ -1346,6 +1478,7 @@ namespace OmegaTube.Ui
             suggestions?.SetFocused(focus == Focus.Suggestions);
             // Focused seek bar: bigger playhead and a thicker track.
             RefreshChips();
+            UpdateStall();
             bool onTimeline = focus == Focus.Timeline;
             playhead.Scale = onTimeline ? new Vector3(1.6f, 1.6f, 1f) : Vector3.One;
             track.SizeHeight = onTimeline ? 10 : 6;
@@ -1358,6 +1491,7 @@ namespace OmegaTube.Ui
             focus = Focus.Hidden;
             chrome.Hide();
             chrome.PositionY = 0;
+            UpdateStall();
             tooltip.Hide();
             suggestions?.SetFocused(false);
             section.SetFocused(false);
