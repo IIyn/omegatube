@@ -36,6 +36,8 @@ namespace OmegaTube
                 // Managed first: the UI language for the report screen if the core does not load.
                 Config = AppConfig.Load(DirectoryInfo.Data);
                 Ui.Theme.Glorious = Config.UiStyle == "glorious";
+                Ui.Theme.Tube = Config.UiStyle == "tube";
+                Data.Thumbs.Sharp = Config.SharpThumbnails;
                 EnableDevLog();
                 NativeCore.RegisterResolver();  // load the core under UEP on Tizen 5.5 (#15)
                 NativeCore.Init(DirectoryInfo.Data);
@@ -122,6 +124,7 @@ namespace OmegaTube
                 top.Root.Hide();
             }
             stack.Add(screen);
+            screen.FitToWindow();
             Window.Instance.Add(screen.Root);
             try
             {
@@ -247,6 +250,7 @@ namespace OmegaTube
             Window.Instance.Remove(top.Root);
             top.Root.Dispose();
             stack.Add(screen);
+            screen.FitToWindow();
             Window.Instance.Add(screen.Root);
             screen.OnShow();
         }

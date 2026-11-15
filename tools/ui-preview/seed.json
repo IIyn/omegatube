@@ -1,0 +1,103 @@
+{
+  "_comment": "Seeded feed for tools/ui-preview/preview.py: deterministic, no network. Long titles are deliberate (they are what the two-line title has to survive).",
+  "sections": ["Home", "Subscriptions"],
+  "items": [
+    {
+      "title": "Building a Tizen app from scratch — toolchain, signing and the first install",
+      "channel": "Open Screen Lab",
+      "views": "412K views",
+      "published": "3 days ago",
+      "duration": "18:24",
+      "watched": 0.42
+    },
+    {
+      "title": "Why your TV remote feels laggy (and what the input stack actually does)",
+      "channel": "Input Lag Diaries",
+      "views": "1.2M views",
+      "published": "2 weeks ago",
+      "duration": "9:07",
+      "watched": 0
+    },
+    {
+      "title": "SPONSORED — this video is 90 minutes long",
+      "channel": "Long Form",
+      "views": "88 views",
+      "published": "1 hour ago",
+      "duration": "1:31:12",
+      "watched": 0
+    },
+    {
+      "title": "Native vs web playback on smart TVs: a measured comparison",
+      "channel": "Frame Budget",
+      "views": "77K views",
+      "published": "5 days ago",
+      "duration": "12:41",
+      "watched": 1
+    },
+    {
+      "title": "C++ on a TV: cross-compiling for armv7 softfp with a glibc ceiling",
+      "channel": "Build Systems Anonymous",
+      "views": "23K views",
+      "published": "1 month ago",
+      "duration": "27:03",
+      "watched": 0.15
+    },
+    {
+      "title": "LIVE: Samsung firmware update Q&A",
+      "channel": "Tizen Weekly",
+      "views": "3.4K watching",
+      "published": "",
+      "duration": "",
+      "live": true,
+      "watched": 0
+    },
+    {
+      "title": "A very long title that keeps going and going, because real YouTube titles are written for the search algorithm rather than for a human being on a couch",
+      "channel": "SEO Theatre",
+      "views": "9.9M views",
+      "published": "1 year ago",
+      "duration": "4:33",
+      "watched": 0
+    },
+    {
+      "title": "SponsorBlock in practice",
+      "channel": "Community Tools",
+      "views": "156K views",
+      "published": "6 days ago",
+      "duration": "7:58",
+      "watched": 0.93
+    },
+    {
+      "title": "Drafting a 1920x1080 layout grid that survives focus scaling",
+      "channel": "Pixel Discipline",
+      "views": "41K views",
+      "published": "3 weeks ago",
+      "duration": "15:20",
+      "watched": 0
+    },
+    {
+      "title": "Shipping a fork: CI, artifacts and re-signing for your own TV",
+      "channel": "Fork & Release",
+      "views": "12K views",
+      "published": "2 days ago",
+      "duration": "21:05",
+      "watched": 0
+    },
+    {
+      "title": "Short",
+      "channel": "Brevity",
+      "views": "2 views",
+      "published": "just now",
+      "duration": "0:31",
+      "watched": 0
+    },
+    {
+      "title": "Audio dropouts explained: buffer underruns on embedded decoders",
+      "channel": "Signals & Noise",
+      "views": "304K views",
+      "published": "4 months ago",
+      "duration": "33:47",
+      "watched": 0
+    }
+  ]
+}

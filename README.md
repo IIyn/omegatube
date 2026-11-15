@@ -272,7 +272,8 @@ build/host/ytcheck --search "query"        # also --captions, --details, --chann
 build/host/mp4dump <file.mp4|webm> [ms]    # run the demuxers on a local file (optionally from a seek)
 ```
 
-The full list of commands is at the top of `core/tools/ytcheck.cpp`. `tools/yt-probe/probe.py` checks which YouTube clients currently return playable streams. `tools/flaky-server/flaky.py` serves a file over a deliberately unreliable connection, to test recovery.
+The full list of commands is at the top of `core/tools/ytcheck.cpp`. The **interface** cannot run off a TV, but its layout can: `python3 tools/ui-preview/preview.py` rebuilds each style's home, grid and player from the constants in `Ui/Theme.cs`, `Ui/Card.cs`, `Ui/FeedGrid.cs`, `Ui/FeedRow.cs` and `Ui/PlayerScreen.cs`, renders them at 1920x1080 with seeded data and checks the geometry (see
+[tools/ui-preview](tools/ui-preview/README.md)). `tools/yt-probe/probe.py` checks which YouTube clients currently return playable streams. `tools/flaky-server/flaky.py` serves a file over a deliberately unreliable connection, to test recovery.
 
 ### Project layout
 

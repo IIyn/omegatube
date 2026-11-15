@@ -7,8 +7,10 @@ using static OmegaTube.I18n;
 
 namespace OmegaTube.Ui
 {
-    // A video card in one of three looks:
+    // A video card in one of four looks:
     //  - classic (Omega): rounded 16:9 thumbnail with an info box under it that lights up when focused;
+    //  - tube (Tube): the bare rounded thumbnail, the title on two lines and the channel line under it on the page
+    //    colour (no box), always visible; the focus adds the white outline and the scale;
     //  - glass (Glorious rows 2+): a bare rounded thumbnail with a soft shadow. Focused, a dark panel with the title
     //    (one line, scrolling when it is longer) appears on the thumbnail, the channel / views / age line under it,
     //    and a hairline outline runs round the card. A short animated preview can play over the thumbnail;
@@ -25,12 +27,13 @@ namespace OmegaTube.Ui
         public bool Shown { get; private set; } = true;   // managed mirror of Visibility (rows show / hide far cards)
 
         private const int ShadowMargin = 36, ShadowDrop = 10;   // card_shadow9.9: the blur margin is baked into the image
-        private const int InfoInset = 8, InfoHeight = 54, MetaRowH = 44, TitlePad = 14;
+        private const int InfoInset = 8, InfoHeight = 54, MetaRowH = 44, TitlePad = 14, TubePad = 14;
         private const int MarqueePauseMs = 1100, MarqueePxPerSec = 70;
 
         private readonly int width, thumbH;
         private readonly bool thumbOnly;   // featured: no text at all
         private readonly bool glass;       // glass or featured: shadow and outline
+        private readonly bool tube;        // Tube: bare thumbnail, title + channel line under it on the page colour
         private readonly ImageView thumb;
         private readonly ImageView info;   // classic: the box under the thumbnail; glass: the title panel on it
         private readonly View infoTopPatch;
@@ -39,20 +42,25 @@ namespace OmegaTube.Ui
         private ImageView anim, corners;   // animated preview over the thumbnail, and the frame that rounds its corners
         private View titleClip;
         private TextLabel title, meta, marquee;   // marquee: the title at its full width, scrolled while focused
+        private TextLabel channel;         // tube only: the channel on its own line, as YouTube has it
         private float marqueeOverflow;
         private bool noMarquee;            // the title fits: nothing to scroll
         private Animation fadeInfo, fadeAnim, marqueeAnim, zoom;
         private bool focused;
         private bool Rich => glass && !thumbOnly;   // glass look with texts
 
-        public Card(VideoItem item, int width = Theme.CardWidth, bool thumbOnly = false, bool glass = false)
+        public Card(VideoItem item, int width = Theme.CardWidth, bool thumbOnly = false, bool glass = false, bool tube = false)
         {
             Item = item;
             this.width = width;
             this.thumbOnly = thumbOnly;
             this.glass = glass;
+            this.tube = tube;
             thumbH = Theme.ThumbHeight(width);
-            Size = new Size(width, thumbOnly ? thumbH : glass ? thumbH + MetaRowH : Theme.CardHeight(width));
+            Size = new Size(width, thumbOnly ? thumbH
+                                    : glass ? thumbH + MetaRowH
+                                    : tube ? Theme.TubeCardHeight(width)
+                                    : Theme.CardHeight(width));
             // Scale around the centre so neighbours are overlapped evenly.
             PivotPoint = Tizen.NUI.PivotPoint.Center;
             PositionUsesPivotPoint = false;  // positions stay top-left based
@@ -72,7 +80,7 @@ namespace OmegaTube.Ui
                     Position = new Position(-ShadowMargin, -ShadowMargin + ShadowDrop),
                 });
             }
-            thumb = new ImageView { Size = new Size(width, thumbOnly || glass ? thumbH : thumbH + Theme.CardRadius) };
+            thumb = new ImageView { Size = new Size(width, thumbOnly || glass || tube ? thumbH : thumbH + Theme.CardRadius) };
             Add(thumb);
 
             if (Rich)
@@ -87,7 +95,7 @@ namespace OmegaTube.Ui
                 info.Hide();
                 Add(info);
             }
-            else if (!thumbOnly)
+            else if (!thumbOnly && !tube)
             {
                 info = new ImageView
                 {
@@ -159,6 +167,29 @@ namespace OmegaTube.Ui
                     FadeInfo(true);   // focused before it was filled (the first card of a row): show what it has now
                 }
             }
+            else if (tube)
+            {
+                // Tube: YouTube's three lines under the thumbnail — the title on two, then the channel, then the
+                // views and age — all on the page colour and always visible; the focus adds the outline and the scale.
+                // The type scales with the card: the wall draws 660 wide and takes 36/24px, the player's row 400 and
+                // takes 26/19px so three lines still read in the 152px the small card reserves. The title's height
+                // must clear two real line boxes or NUI ellipsises on the first line (its line height is ~1.45x).
+                bool big = width >= 600;
+                float titleSize = big ? Theme.BodySize + 12 : Theme.BodySize + 2;
+                float metaSize = big ? Theme.SmallSize + 5 : Theme.SmallSize;
+                title = Widgets.Label(Item.Title, titleSize, Theme.Text, width - 2 * TubePad, big ? 112 : 76);
+                title.MultiLine = true;
+                title.Position = new Position(TubePad, thumbH + 12);
+                Add(title);
+
+                channel = Widgets.Label(Item.Channel, metaSize, Theme.TubeSub, width - 2 * TubePad);
+                channel.Position = new Position(TubePad, thumbH + (big ? 130 : 92));
+                Add(channel);
+
+                meta = Widgets.Label(ViewsLine(Item), metaSize, Theme.TextDim, width - 2 * TubePad);
+                meta.Position = new Position(TubePad, thumbH + (big ? 172 : 124));
+                Add(meta);
+            }
             else if (!thumbOnly)
             {
                 title = Widgets.Label(Item.Title, Theme.BodySize, Theme.Text, width - 24, 62);
@@ -174,7 +205,12 @@ namespace OmegaTube.Ui
 
             if (!string.IsNullOrEmpty(Item.Thumbnail))
             {
-                Widgets.MaskedImage(thumb, Item.Thumbnail, Theme.Image("round_mask"));
+                // The mask must not be smaller than the picture: Widgets.MaskedImage sets CropToMask, which crops to
+                // the mask's pixel rectangle. Sharp draws 1280x720 stills through the 1280x720 mask; Data saver draws
+                // the 320x180 file through the original 400x225 one, which cannot crop it (as upstream has always done).
+                Widgets.MaskedImage(thumb, Thumbs.Url(Item.Thumbnail),
+                                    Theme.Image(Thumbs.Sharp ? "round_mask_hd" : "round_mask"),
+                                    smooth: true);
             }
         }
 
@@ -185,7 +221,15 @@ namespace OmegaTube.Ui
             if (Filled && !thumbOnly)
             {
                 title.Text = item.Title;
-                meta.Text = MetaLine(item);
+                if (tube)
+                {
+                    channel.Text = item.Channel;
+                    meta.Text = ViewsLine(item);
+                }
+                else
+                {
+                    meta.Text = MetaLine(item);
+                }
                 DropMarquee();   // measured for the old title
             }
             UpdateProgress();
@@ -193,8 +237,7 @@ namespace OmegaTube.Ui
 
         private static string MetaLine(VideoItem item)
         {
-            string line = item.Channel;
-            if (!string.IsNullOrEmpty(item.Views))
+            string line = item.Channel;            if (!string.IsNullOrEmpty(item.Views))
             {
                 line += " • " + item.Views;
             }
@@ -211,6 +254,17 @@ namespace OmegaTube.Ui
             double p = Math.Max(LocalStore.Progress(Item.Id), Item.WatchedPercent / 100.0);
             progress.SizeWidth = (float)(width * p);
             Widgets.SetVisible(progress, p > 0.01);
+        }
+
+        // Tube: the views and the age alone (the channel has its own line there, as on YouTube's TV layout).
+        private static string ViewsLine(VideoItem item)
+        {
+            string line = item.Views ?? "";
+            if (string.IsNullOrEmpty(item.Published))
+            {
+                return line;
+            }
+            return line.Length == 0 ? item.Published : line + " • " + item.Published;
         }
 
         // ------------------------------------------------------------------ animated preview (glass cards)
@@ -356,7 +410,7 @@ namespace OmegaTube.Ui
                 return;   // grids refresh every card's state after a page: no animation for unchanged ones
             }
             this.focused = focused;
-            if (glass)
+            if (glass || tube)
             {
                 ShowRing(focused);
                 if (Rich && Filled)
@@ -424,6 +478,14 @@ namespace OmegaTube.Ui
 
         private void ApplyFocusColors()
         {
+            if (tube)
+            {
+                if (Filled)
+                {
+                    title.TextColor = focused ? Color.White : Theme.Text;
+                }
+                return;   // no info box to tint: the focus is the outline and the scale
+            }
             if (thumbOnly || glass)
             {
                 return;   // featured: no info box. Glass: dark panel with fixed colours

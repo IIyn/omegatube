@@ -16,8 +16,11 @@ namespace OmegaTube.Ui
     // as a horizontally scrolling row; Up from the first grid row enters it, Down leaves it.
     public class FeedGrid : View, IFeedView
     {
-        private const int Columns = 4;
-        private const int GapX = 34, GapY = 40;
+        // Tube (YouTube TV): three big cards a row instead of four. The rest of the grid is geometry in pixels, so
+        // the cards grow with the column count and nothing else here has to know which style is on.
+        private static int Columns => Theme.Tube ? Theme.TubeColumns : 4;
+        private static int GapX => Theme.Tube ? Theme.TubeCardGap : 34;
+        private static int GapY => Theme.Tube ? 48 : 40;
         private const int Pad = Theme.FocusMargin;   // room for the focused card's scale-up
         private const int HeadingH = 56;              // section title above the highlights row and the grid
         private const int RowsBefore = 2, RowsAfter = 4;   // rows kept shown around the focused one
@@ -62,7 +65,7 @@ namespace OmegaTube.Ui
             Size = new Size(width, height);
             ClippingMode = ClippingModeType.ClipChildren;
             cardW = (width - 2 * Pad - (Columns - 1) * GapX) / Columns;
-            rowStep = Theme.CardHeight(cardW) + GapY;
+            rowStep = (Theme.Tube ? Theme.TubeCardHeight(cardW) : Theme.CardHeight(cardW)) + GapY;
             content = new View { Position = new Position(0, Pad), Size = new Size(width, 100000) };
             Add(content);
             hlHeading = Widgets.Label(T("Most relevant"), Theme.TitleSize - 6, Theme.Text, width - 2 * Pad, HeadingH);
@@ -203,7 +206,7 @@ namespace OmegaTube.Ui
             highlights.Clear();
             foreach (VideoItem item in newItems)
             {
-                Card card = Take(old, item) ?? new Card(item, cardW);
+                Card card = Take(old, item) ?? new Card(item, cardW, tube: Theme.Tube);
                 card.Position = new Position(Pad + highlights.Count * (cardW + GapX), 0);
                 if (card.GetParent() == null)
                 {
@@ -232,7 +235,7 @@ namespace OmegaTube.Ui
             items.AddRange(newItems);
             for (int i = 0; i < Math.Min(built, items.Count); i++)
             {
-                Card card = Take(old, items[i]) ?? new Card(items[i], cardW);
+                Card card = Take(old, items[i]) ?? new Card(items[i], cardW, tube: Theme.Tube);
                 card.Position = CardPosition(i);
                 if (card.GetParent() == null)
                 {
@@ -287,7 +290,7 @@ namespace OmegaTube.Ui
             int last = Math.Min(items.Count - 1, (focusRow + RowsAfter + 1) * Columns - 1);
             while (cards.Count <= last)
             {
-                var card = new Card(items[cards.Count], cardW) { Position = CardPosition(cards.Count) };
+                var card = new Card(items[cards.Count], cardW, tube: Theme.Tube) { Position = CardPosition(cards.Count) };
                 card.SetShown(false);   // (not Hide(): the card's managed flag must match)
                 cards.Add(card);
                 content.Add(card);

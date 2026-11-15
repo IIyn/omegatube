@@ -28,6 +28,12 @@ namespace OmegaTube
 
         private static readonly Dictionary<string, string> Fr = new Dictionary<string, string>
         {
+            ["Tube"] = "Tube",
+            ["Home screen style: Omega (classic), Glorious (immersive) or Tube (YouTube TV)"] = "Style de l'écran d'accueil : Omega (classique), Glorious (immersif) ou Tube (TV YouTube)",
+            ["Thumbnails"] = "Miniatures",
+            ["Sharp"] = "Nettes",
+            ["Data saver"] = "Économie de données",
+            ["Sharp draws YouTube's 1280x720 stills on the cards; Data saver keeps the 320x180 file the app has always used"] = "Nettes affiche les images 1280x720 de YouTube sur les cartes ; l'économie de données garde le fichier 320x180 utilisé jusqu'ici",
             ["Comments"] = "Commentaires",
             ["Add a comment…"] = "Ajoutez un commentaire…",
             ["Loading comments…"] = "Chargement des commentaires…",
@@ -357,6 +363,12 @@ namespace OmegaTube
 
         private static readonly Dictionary<string, string> Es = new Dictionary<string, string>
         {
+            ["Tube"] = "Tube",
+            ["Home screen style: Omega (classic), Glorious (immersive) or Tube (YouTube TV)"] = "Estilo de la pantalla de inicio: Omega (clásico), Glorious (inmersivo) o Tube (TV de YouTube)",
+            ["Thumbnails"] = "Miniaturas",
+            ["Sharp"] = "Nítidas",
+            ["Data saver"] = "Ahorro de datos",
+            ["Sharp draws YouTube's 1280x720 stills on the cards; Data saver keeps the 320x180 file the app has always used"] = "Nítidas usa las imágenes 1280x720 de YouTube en las tarjetas; el ahorro de datos mantiene el archivo 320x180 de siempre",
             ["Comments"] = "Comentarios",
             ["Add a comment…"] = "Añade un comentario…",
             ["Loading comments…"] = "Cargando comentarios…",
@@ -686,6 +698,12 @@ namespace OmegaTube
 		
 		    private static readonly Dictionary<string, string> Cs = new Dictionary<string, string>
         {
+            ["Tube"] = "Tube",
+            ["Home screen style: Omega (classic), Glorious (immersive) or Tube (YouTube TV)"] = "Styl domovské obrazovky: Omega (klasický), Glorious (imerzivní) nebo Tube (YouTube TV)",
+            ["Thumbnails"] = "Náhledy",
+            ["Sharp"] = "Ostré",
+            ["Data saver"] = "Úspora dat",
+            ["Sharp draws YouTube's 1280x720 stills on the cards; Data saver keeps the 320x180 file the app has always used"] = "Ostré kreslí na karty snímky 1280x720 z YouTube; úspora dat ponechá soubor 320x180, který aplikace používala dřív",
             ["Comments"] = "Komentáře",
             ["Add a comment…"] = "Přidejte komentář…",
             ["Loading comments…"] = "Načítání komentářů…",
@@ -1015,6 +1033,12 @@ namespace OmegaTube
         
 		    private static readonly Dictionary<string, string> Ru = new Dictionary<string, string>
         {
+            ["Tube"] = "Tube",
+            ["Home screen style: Omega (classic), Glorious (immersive) or Tube (YouTube TV)"] = "Стиль главного экрана: Omega (классический), Glorious (иммерсивный) или Tube (YouTube TV)",
+            ["Thumbnails"] = "Миниатюры",
+            ["Sharp"] = "Чёткие",
+            ["Data saver"] = "Экономия трафика",
+            ["Sharp draws YouTube's 1280x720 stills on the cards; Data saver keeps the 320x180 file the app has always used"] = "Чёткие рисуют на карточках кадры 1280x720 из YouTube; экономия трафика оставляет файл 320x180, как раньше",
             ["Cannot reach YouTube"] = "Не удается подключиться к YouTube",
             ["Check the TV's internet connection."] = "Проверьте подключение телевизора к интернету.",
             ["Do you want to quit OmegaTube?"] = "Выйти из OmegaTube?",

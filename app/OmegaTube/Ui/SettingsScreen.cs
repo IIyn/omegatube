@@ -301,6 +301,17 @@ namespace OmegaTube.Ui
         {
             l.Add(Choice(T("Maximum quality"), T("The best available quality up to this limit"),
                          () => HeightLabel(P.MaxHeight), d => P.MaxHeight = Cycle(Heights, P.MaxHeight, d)));
+            // Our own addition (the Tube look): card artwork at YouTube's 1280x720 instead of the published 320x180.
+            // Data saver puts the app back on exactly what upstream draws.
+            l.Add(Choice(T("Thumbnails"),
+                         T("Sharp draws YouTube's 1280x720 stills on the cards; Data saver keeps the 320x180 file the app has always used"),
+                         () => App.Config.SharpThumbnails ? T("Sharp") : T("Data saver"),
+                         d =>
+                         {
+                             App.Config.SharpThumbnails = !App.Config.SharpThumbnails;
+                             Thumbs.Sharp = App.Config.SharpThumbnails;
+                             App.Home.InvalidateRows();   // the cards rebuild with the other still and mask
+                         }));
             l.Add(Choice(T("Video codecs"), T("Above 1080p, YouTube only offers VP9 or AV1"),
                          () => T(CodecSetLabels[Math.Max(0, Array.IndexOf(CodecSets, P.Codecs))]),
                          d =>
@@ -366,12 +377,17 @@ namespace OmegaTube.Ui
 
         private void BuildGeneral(List<Row> l)
         {
-            Row style = Choice(T("Interface"), T("Home screen style: Omega (classic) or Glorious (immersive)"),
-                         () => App.Config.UiStyle == "glorious" ? T("Glorious") : T("Omega"),
+            Row style = Choice(T("Interface"), T("Home screen style: Omega (classic), Glorious (immersive) or Tube (YouTube TV)"),
+                         () => App.Config.UiStyle == "glorious" ? T("Glorious")
+                             : App.Config.UiStyle == "tube" ? T("Tube") : T("Omega"),
                          d =>
                          {
-                             App.Config.UiStyle = App.Config.UiStyle == "glorious" ? "omega" : "glorious";
-                             Theme.Glorious = App.Config.UiStyle == "glorious";
+                             // Three looks on one key: step through them rather than listing them.
+                             string next = App.Config.UiStyle == "omega" ? "glorious"
+                                         : App.Config.UiStyle == "glorious" ? "tube" : "omega";
+                             App.Config.UiStyle = next;
+                             Theme.Glorious = next == "glorious";
+                             Theme.Tube = next == "tube";
                              App.Home.InvalidateRows();
                              relabel = true;   // rebuild this screen in the new style
                          });
