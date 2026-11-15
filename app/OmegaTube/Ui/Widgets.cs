@@ -97,7 +97,9 @@ namespace OmegaTube.Ui
         // A rounded image: the URL and the rounded-rect alpha mask are set together in one Image visual (setting
         // AlphaMaskURL separately from ResourceUrl does not always combine into the same visual). Alpha masking
         // is an old, widely supported NUI feature, so it rounds on Tizen 5.5 where CornerRadius is absent.
-        public static void MaskedImage(ImageView iv, string url, string maskUrl)
+        // smooth: LANCZOS sampling. YouTube's stills are 1280x720 and the cards draw them at ~660 wide; the default
+        // filter aliases that downscale (crunchy edges), which reads worse than a blurry small file did.
+        public static void MaskedImage(ImageView iv, string url, string maskUrl, bool smooth = false)
         {
             try
             {
@@ -106,6 +108,10 @@ namespace OmegaTube.Ui
                 map.Add((int)ImageVisualProperty.URL, new PropertyValue(url));
                 map.Add((int)ImageVisualProperty.AlphaMaskURL, new PropertyValue(maskUrl));
                 map.Add((int)ImageVisualProperty.CropToMask, new PropertyValue(true));
+                if (smooth)
+                {
+                    map.Add((int)ImageVisualProperty.SamplingMode, new PropertyValue(2));   // 2 = LANCZOS
+                }
                 iv.Image = map;
             }
             catch (System.Exception e)

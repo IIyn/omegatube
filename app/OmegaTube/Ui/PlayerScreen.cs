@@ -67,8 +67,14 @@ namespace OmegaTube.Ui
         private const int TitleY = 590, MetaY = 654, ActionsY = 706, ChipH = 64;
         private const int TrackY = 812, ButtonsY = 890, ButtonSize = 72;
         private const int SuggestionsY = 1080 + 30;   // the suggestions row, below the screen until revealed
-        private const int ChromeLift = 30 + Theme.RowHeight + 40;   // how far the block slides up to show it whole
-        private const int SectionY = SuggestionsY + Theme.RowHeight;  // description + comments, below the suggestions
+        // The row is sized for the player, not for the home wall: a row starts its cards at StripY (64) and the whole
+        // thing has to end above the screen bottom (570 + row <= 1080), which a 660-wide wall card cannot. The Tube
+        // look therefore draws its own smaller card here (400 wide, type scaled down), and the lift is anchored to a
+        // screen position so the video's title and controls stay where they have always been.
+        private const int SuggestionsScreenY = 570;    // where the row's top lands when the chrome lifts
+        private static int SuggestRowHeight => Theme.Tube ? Theme.TubePlayerRowHeight : Theme.RowHeight;
+        private static int ChromeLift => SuggestionsY - SuggestionsScreenY;   // 540 in every style
+        private static int SectionY => SuggestionsY + SuggestRowHeight;       // description + comments, below the row
         private const int SectionScreenY = 90;                       // where its top shows when it has the focus
         private const int CaptionBottomFree = 1010, CaptionBottomChrome = 570;
         private const int UpNextSeconds = 10;
@@ -426,7 +432,8 @@ namespace OmegaTube.Ui
         private async Task Start()
         {
             IntPtr window = App.EcoreWindow;
-            int w = (int)Window.Instance.WindowSize.Width, h = (int)Window.Instance.WindowSize.Height;
+            // the design size, not the window: Screen.FitToWindow scales this subtree to the window
+            int w = Theme.DesignWidth, h = Theme.DesignHeight;
             if (App.Config.SponsorBlockEnabled && segments.Count == 0)
             {
                 UiGuard.Fire("PlayerScreen.LoadSegments", LoadSegments);
@@ -845,10 +852,14 @@ namespace OmegaTube.Ui
         private async Task LoadSuggestions()
         {
             // In a playlist / mix the row is what comes next in it (and Next / the end of the video plays its first).
+            int cardW = Theme.Tube ? Theme.TubePlayerCardWidth : Theme.CardWidth;
+            int gap = Theme.Tube ? Theme.TubeCardGap : Theme.CardGap;
             suggestions = InList
                 ? new FeedRow(item.Kind == "mix" || item.PlaylistId.StartsWith("RD") ? T("Up next in the mix") : T("Up next in the playlist"),
-                              c => YouTube.Playlist(item.Id, item.PlaylistId), 1920 - 40)
-                : new FeedRow(T("Suggested videos"), c => YouTube.Related(item.Id), 1920 - 40)
+                              c => YouTube.Playlist(item.Id, item.PlaylistId), 1920 - 40,
+                              cardWidth: cardW, rowHeight: SuggestRowHeight, cardGap: gap)
+                : new FeedRow(T("Suggested videos"), c => YouTube.Related(item.Id), 1920 - 40,
+                              cardWidth: cardW, rowHeight: SuggestRowHeight, cardGap: gap)
             {
                 Position = new Position(40, SuggestionsY),
             };

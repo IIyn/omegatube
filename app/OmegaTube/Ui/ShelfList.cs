@@ -62,7 +62,8 @@ namespace OmegaTube.Ui
             Add(status);
         }
 
-        private int RowHeightAt(int i) => bigFirst ? (i == 0 ? Theme.BigRowHeight : Theme.GloriousRowHeight) : Theme.RowHeight;
+        private int RowHeightAt(int i) => bigFirst ? (i == 0 ? Theme.BigRowHeight : Theme.GloriousRowHeight)
+                                                   : Theme.Tube ? Theme.TubeRowHeight : Theme.RowHeight;
 
         // Rows differ in height (featured, regular, grid rows with or without a heading): a row starts under the ones
         // before it. Managed heights only; a long feed has hundreds of rows.
@@ -183,9 +184,11 @@ namespace OmegaTube.Ui
                     // Items beyond the shelf's first ones: the same browse call with the row's continuation.
                     bool big = bigFirst && i == 0;
                     row = new FeedRow(title, s.Loader ?? (c => YouTube.Browse("", c)), width,
-                                      big ? Theme.BigCardWidth : grid ? Theme.GridCardWidth : Theme.CardWidth, leftInset,
+                                      big ? Theme.BigCardWidth : grid ? Theme.GridCardWidth
+                                          : Theme.Tube ? Theme.TubeCardWidth : Theme.CardWidth, leftInset,
                                       grid ? (title.Length > 0 ? Theme.GridTitledRowHeight : Theme.GridRowHeight) : RowHeightAt(i),
-                                      thumbOnly: big, cardGap: big ? Theme.BigCardGap : grid ? Theme.GridGap : Theme.CardGap, grid: grid,
+                                      thumbOnly: big, cardGap: big ? Theme.BigCardGap : grid ? Theme.GridGap
+                                          : Theme.Tube ? Theme.TubeCardGap : Theme.CardGap, grid: grid,
                                       glass: heroMode)
                     {
                         Position = new Position(0, RowTop(i)),

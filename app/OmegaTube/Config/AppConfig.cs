@@ -109,9 +109,10 @@ namespace OmegaTube.Config
         public List<HomeRow> HomeRows = new List<HomeRow>();
         public PlayerOptions Player = new PlayerOptions();
         public string UiLanguage = "en"; // app texts (I18n): en | fr | es
-        public string UiStyle = "omega"; // interface: omega (default) | glorious (immersive home)
+        public string UiStyle = "omega"; // interface: omega (default) | glorious (immersive home) | tube (YouTube TV)
         public bool HeroPreview = true;  // Glorious: video preview behind the first home row after a short rest
         public bool CardPreview = true;  // Glorious: animated preview inside the other cards after a short rest
+        public bool SharpThumbnails = true;  // cards: YouTube's 1280x720 stills (false: the published 320x180, as upstream)
         public string Language = "en";   // InnerTube hl
         public string Region = "US";     // InnerTube gl
         public bool CheckUpdates = true;
@@ -239,9 +240,11 @@ namespace OmegaTube.Config
                 UiLanguage = "en";
             }
             I18n.Lang = UiLanguage;
-            UiStyle = Json.Str(root, "uiStyle", UiStyle) == "glorious" ? "glorious" : "omega";
+            string savedStyle = Json.Str(root, "uiStyle", UiStyle);
+            UiStyle = savedStyle == "glorious" || savedStyle == "tube" ? savedStyle : "omega";
             HeroPreview = Json.Bool(root, "heroPreview", HeroPreview);
             CardPreview = Json.Bool(root, "cardPreview", CardPreview);
+            SharpThumbnails = Json.Bool(root, "sharpThumbnails", SharpThumbnails);
             Language = Json.Str(root, "language", Language);
             Region = Json.Str(root, "region", Region);
             CheckUpdates = Json.Bool(root, "checkUpdates", CheckUpdates);
@@ -299,6 +302,7 @@ namespace OmegaTube.Config
                 ["uiStyle"] = UiStyle,
                 ["heroPreview"] = HeroPreview,
                 ["cardPreview"] = CardPreview,
+                ["sharpThumbnails"] = SharpThumbnails,
                 ["language"] = Language,
                 ["region"] = Region,
                 ["checkUpdates"] = CheckUpdates,
