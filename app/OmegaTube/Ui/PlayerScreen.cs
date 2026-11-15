@@ -43,7 +43,7 @@ namespace OmegaTube.Ui
             public TextLabel Label;
             public bool Active;      // subscribed / liked / disliked
         }
-        private enum Action { Restart, Rewind, PlayPause, Forward, Next, Skip, Captions, Audio, Speed, Quality, Loop, Stats }
+        private enum Action { Restart, Rewind, PlayPause, Forward, Next, Skip, Captions, Audio, Speed, Quality, Loop, Buffer, Stats }
 
         private class Button
         {
@@ -87,9 +87,9 @@ namespace OmegaTube.Ui
         private readonly View barA, barB;      // black bars where the video does not cover the screen (4:3, 21:9)
         private readonly View spinner;
         private readonly Animation spin;
-        private readonly View track, progressFill, playhead;
+        private readonly View track, bufferedFill, progressFill, playhead;
         private readonly StallRing headRing, stripRing;   // buffering mark: round the playhead, or on the thin strip
-        private readonly View strip, stripFill;           // slides up from below the screen while stalled and the controls are hidden
+        private readonly View strip, stripFill, stripBuffered;   // slides up from below the screen while stalled and the controls are hidden
         private readonly View stripDot;
         private Animation stripSlide;
         private bool stalled;
@@ -257,6 +257,10 @@ namespace OmegaTube.Ui
             track = Widgets.Rounded(new Color(1, 1, 1, 0.3f), ProgressWidth, 6, 3);
             track.Position = new Position(ProgressX, TrackY);
             chrome.Add(track);
+            // YouTube's second, dimmer bar: how far ahead of the playhead the video is already held (the buffer setting
+            // is what decides that), so a seek forward visibly costs more or less. Under the accent fill.
+            bufferedFill = Widgets.Rounded(new Color(1, 1, 1, 0.42f), 0, 6, 3);
+            track.Add(bufferedFill);
             progressFill = Widgets.Rounded(Theme.Accent, 0, 6, 3);
             track.Add(progressFill);
             // An image, not a rounded View: Tizen 5.5 has no CornerRadius, so a rounded View is a square.
@@ -283,6 +287,7 @@ namespace OmegaTube.Ui
             AddRightButton(Action.Stats, "stats");
             AddRightButton(Action.Loop, "repeat");
             AddRightButton(Action.Quality, "quality");
+            AddRightButton(Action.Buffer, "buffer");
             AddRightButton(Action.Speed, "speed");
             AddRightButton(Action.Audio, "audio_track").Available = false;      // until the video has several
             AddRightButton(Action.Captions, "subtitles").Available = false;     // until the video has some
@@ -295,6 +300,9 @@ namespace OmegaTube.Ui
             View stripTrack = Widgets.Box(new Color(1, 1, 1, 0.3f), 1920, StripBarHeight);
             stripTrack.PositionY = StripRise / 2 - StripBarHeight / 2;
             strip.Add(stripTrack);
+            // The same second bar as the seek bar: what is held ahead of the playhead, under the accent fill.
+            stripBuffered = Widgets.Box(new Color(1, 1, 1, 0.42f), 0, StripBarHeight);
+            stripTrack.Add(stripBuffered);
             stripFill = Widgets.Box(Theme.Accent, 0, StripBarHeight);
             stripTrack.Add(stripFill);
             stripDot = new ImageView { ResourceUrl = Theme.Image("playhead_dot"), Size = new Size(PlayheadSize, PlayheadSize), Color = Theme.Accent,
@@ -464,6 +472,7 @@ namespace OmegaTube.Ui
             }
             info = YouTube.Playback(player);
             live = info.Live;
+            ApplyBuffer();
             if (item.IsList && info.Title.Length > 0)
             {
                 titleLabel.Text = info.Title;   // the card showed the list's name
@@ -586,6 +595,69 @@ namespace OmegaTube.Ui
             long remote = v.WatchedPercent > 0 && v.WatchedPercent < 95 && duration > 0 ? duration * v.WatchedPercent / 100 : 0;
             long start = Math.Max(local, remote);
             return start > 30000 && (duration <= 0 || start < duration - 30000) ? start : 0;
+        }
+
+        // The buffer setting is a share of the video's length (AppConfig.PlayerOptions.BufferSecondsFor), clamped so
+        // that a three-minute clip is not asked for 30 s and a two-hour film not for two minutes. The memory ceiling
+        // rides along as the core's queue byte cap.
+        private double LengthSeconds()
+        {
+            long ms = stats.DurationMs;
+            if (ms <= 0)
+            {
+                ms = ParseDuration(item != null ? item.Duration : null);   // the card's text, before the core knows
+            }
+            return ms / 1000.0;
+        }
+
+        private int SecondsForPercent(int percent, double lengthSeconds)
+        {
+            if (lengthSeconds <= 1)
+            {
+                return 10;
+            }
+            double s = lengthSeconds * percent / 100.0;
+            return (int)Math.Min(PlayerOptions.MaxBufferSeconds, Math.Max(PlayerOptions.MinBufferSeconds, s));
+        }
+
+        private bool bufferKnowsLength;   // the first apply may not know the length yet (see the stats poll)
+
+        // Applies the buffer setting to the running player (and again whenever the user changes it).
+        private void ApplyBuffer()
+        {
+            if (player == IntPtr.Zero)
+            {
+                return;
+            }
+            PlayerOptions options = App.Config.Player;
+            double length = LengthSeconds();
+            bufferKnowsLength = length > 1;
+            long ahead = SecondsForPercent(options.BufferPercent, length) * 1000L;
+            long bytes = options.BufferLimitMB > 0 ? options.BufferLimitMB * 1024L * 1024L : 0;
+            NativeCore.PlayerSetBuffer(player, ahead, ahead + 10000, bytes);
+        }
+
+        // How much of the timeline is held: what has been played plus what the buffer holds ahead of it.
+        private double BufferedFraction()
+        {
+            long pos = pendingSeekMs >= 0 ? pendingSeekMs : stats.PositionMs;
+            long held = pendingSeekMs >= 0 ? 0 : HeldAheadMs(pos);
+            return Math.Min(1.0, (pos + held) / (double)Math.Max(stats.DurationMs, 1));
+        }
+
+        // How far ahead of the playhead playback already holds data. The two tracks are downloaded and fed separately
+        // (see the core's feed_loop), so the smaller lead is the honest one: that is where playback would stall. A track
+        // that has not been fed yet (audio off, freshly seeked) reports nothing ahead and is ignored.
+        private long HeldAheadMs(long pos)
+        {
+            long video = stats.VideoSubmittedMs + stats.VideoQueuedMs - pos;
+            long audio = stats.AudioSubmittedMs + stats.AudioQueuedMs - pos;
+            long lead = video > 0 ? video : 0;
+            if (audio > 0 && audio < lead)
+            {
+                lead = audio;   // the track that would stall first is the honest answer
+            }
+            return lead > 0 ? lead : 0;
         }
 
         // "1:02:03" / "12:34" -> ms; 0 when not a duration ("EN DIRECT", "MIX"...).
@@ -1004,6 +1076,10 @@ namespace OmegaTube.Ui
                     playbackStarted = true;
                     chromeUntil = now.AddSeconds(App.Config.Player.OsdTimeoutSeconds);
                 }
+                if (!bufferKnowsLength && stats.DurationMs > 0)
+                {
+                    ApplyBuffer();   // the length arrived: the share of it can be computed properly now
+                }
                 if (stats.State == 3 && (now - lastSave).TotalSeconds > 10)
                 {
                     lastSave = now;
@@ -1126,6 +1202,10 @@ namespace OmegaTube.Ui
             {
                 float x = (float)(1920 * PlayedFraction());
                 stripFill.SizeWidth = x;
+                if (pendingSeekMs < 0)
+                {
+                    stripBuffered.SizeWidth = (float)(1920 * BufferedFraction());
+                }
                 stripDot.Position = new Position(x, StripRise / 2f);
                 stripRing.Position = new Position(x, StripRise / 2f);
             }
@@ -1164,6 +1244,7 @@ namespace OmegaTube.Ui
             }
             if (live)
             {
+                bufferedFill.SizeWidth = ProgressWidth;
                 progressFill.SizeWidth = ProgressWidth;
                 playhead.PositionX = ProgressX + ProgressWidth - PlayheadSize / 2;
                 timeLabel.Text = "● EN DIRECT";
@@ -1174,6 +1255,17 @@ namespace OmegaTube.Ui
             long dur = Math.Max(stats.DurationMs, 1);
             float fill = (float)(ProgressWidth * Math.Min(1.0, pos / (double)dur));
             progressFill.SizeWidth = fill;
+            // A pending seek shows where we are going, not what we hold: the fed position still belongs to the old
+            // stream, so the bar would jump to the wrong place.
+            // While a seek is pending the fed position still belongs to the old stream, so the bar keeps what it last
+            // showed (YouTube leaves its buffered range up during a seek) and is recomputed the moment the core reports
+            // the new position.
+            if (pendingSeekMs < 0)
+            {
+                long held = HeldAheadMs(pos);
+                float buffered = (float)(ProgressWidth * Math.Min(1.0, (pos + held) / (double)dur));
+                bufferedFill.SizeWidth = buffered > fill ? buffered : fill;   // never shorter than what has been played
+            }
             playhead.PositionX = ProgressX + fill - PlayheadSize / 2;
             timeLabel.Text = pendingSeekMs >= 0 ? $"{Format(pos)}   ({SignedSeconds(pendingSeekMs - stats.PositionMs)})" : Format(pos);
             durationLabel.Text = Format(stats.DurationMs);
@@ -1494,6 +1586,7 @@ namespace OmegaTube.Ui
             playhead.Scale = onTimeline ? new Vector3(1.6f, 1.6f, 1f) : Vector3.One;
             track.SizeHeight = onTimeline ? 10 : 6;
             progressFill.SizeHeight = track.SizeHeight;
+            bufferedFill.SizeHeight = track.SizeHeight;
             UpdateChrome(DateTime.Now);
         }
 
@@ -1846,6 +1939,7 @@ namespace OmegaTube.Ui
                 case Action.Audio:
                 case Action.Speed:
                 case Action.Quality:
+                case Action.Buffer:
                     OpenPanel(action);
                     break;
                 case Action.Loop:
@@ -1911,6 +2005,19 @@ namespace OmegaTube.Ui
                     foreach (double s in Speeds)
                     {
                         items.Add(new ListPanel.Item { Text = SpeedLabel(s), Checked = s == sessionSpeed });
+                    }
+                    break;
+                case Action.Buffer:
+                    title = T("Buffer ahead");
+                    width = 720;
+                    foreach (int pct in PlayerOptions.BufferPercents)
+                    {
+                        items.Add(new ListPanel.Item
+                        {
+                            Text = T("{0}% of the video", pct),
+                            Detail = T("{0} s of lead on this video", SecondsForPercent(pct, LengthSeconds())),
+                            Checked = pct == App.Config.Player.BufferPercent,
+                        });
                     }
                     break;
                 case Action.Quality:
@@ -2016,6 +2123,16 @@ namespace OmegaTube.Ui
                         Toast(sessionSpeed == 1.0 ? T("Normal speed") : T("Speed {0}", SpeedLabel(sessionSpeed)));
                     }
                     break;
+                case Action.Buffer:
+                {
+                    // Live: the core reads its read-ahead target as it feeds, so no restart is needed.
+                    int pct = PlayerOptions.BufferPercents[i];
+                    App.Config.Player.BufferPercent = pct;
+                    App.Config.Save();
+                    ApplyBuffer();
+                    Toast(T("{0} s of lead", SecondsForPercent(pct, LengthSeconds())));
+                    break;
+                }
                 case Action.Quality:
                     VideoQuality q = PanelQualities()[i];
                     if (info.Current == null || q.Height != info.Current.Height)
@@ -2177,6 +2294,21 @@ namespace OmegaTube.Ui
             if (p != IntPtr.Zero)
             {
                 Task.Run(() => NativeCore.PlayerSeek(p, target));
+                if (App.Config.Player.ShowStats)
+                {
+                    // Stats for nerds: after a seek, say which way it went, in the core's own words — "from the buffer
+                    // at 12000 …" or "needs the network (no keyframe at or before the target)". A fallback is then
+                    // visible the moment it happens instead of being hunted for in the overlay.
+                    UiGuard.Fire("PlayerScreen.seekVerdict", async () =>
+                    {
+                        await Task.Delay(700);
+                        string line = NativeCore.RecentLog(1);
+                        if (!string.IsNullOrEmpty(line) && line.IndexOf("seek", StringComparison.Ordinal) >= 0)
+                        {
+                            Toast(line.Trim());
+                        }
+                    });
+                }
             }
         }
 

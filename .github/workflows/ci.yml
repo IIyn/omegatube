@@ -74,6 +74,9 @@ jobs:
           cmake -S core -B build/host -DOMEGA_HOST_TOOLS=ON -DCMAKE_BUILD_TYPE=Release -Wno-dev
           cmake --build build/host -j"$(nproc)"
 
+      - name: Seek planner cases
+        run: ./build/host/seekcheck
+
   tpk:
     name: TV package (.tpk)
     runs-on: ubuntu-24.04

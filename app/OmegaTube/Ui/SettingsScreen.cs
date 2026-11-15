@@ -312,6 +312,24 @@ namespace OmegaTube.Ui
                              Thumbs.Sharp = App.Config.SharpThumbnails;
                              App.Home.InvalidateRows();   // the cards rebuild with the other still and mask
                          }));
+            // Our own addition: how far ahead the core reads, as a share of the video, and the memory ceiling it may
+            // not exceed (a share of a very large file would otherwise ask an older TV to hold hundreds of MB).
+            l.Add(Choice(T("Buffer ahead"), T("A share of the video's length, kept between 5 and 120 seconds"),
+                         () => T("{0}% of the video", P.BufferPercent),
+                         d =>
+                         {
+                             int i = Array.IndexOf(PlayerOptions.BufferPercents, P.BufferPercent);
+                             P.BufferPercent = PlayerOptions.BufferPercents[
+                                 (Math.Max(0, i) + d + PlayerOptions.BufferPercents.Length) % PlayerOptions.BufferPercents.Length];
+                         }));
+            l.Add(Choice(T("Buffer memory"), T("The most the buffer may hold; lower it on an older TV or for very large files"),
+                         () => P.BufferLimitMB == 0 ? T("Default (48 MB)") : $"{P.BufferLimitMB} MB",
+                         d =>
+                         {
+                             int i = Array.IndexOf(PlayerOptions.BufferLimitsMB, P.BufferLimitMB);
+                             P.BufferLimitMB = PlayerOptions.BufferLimitsMB[
+                                 (Math.Max(0, i) + d + PlayerOptions.BufferLimitsMB.Length) % PlayerOptions.BufferLimitsMB.Length];
+                         }));
             l.Add(Choice(T("Video codecs"), T("Above 1080p, YouTube only offers VP9 or AV1"),
                          () => T(CodecSetLabels[Math.Max(0, Array.IndexOf(CodecSets, P.Codecs))]),
                          d =>

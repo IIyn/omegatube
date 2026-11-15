@@ -23,6 +23,7 @@ namespace OmegaTube
         {
             base.OnCreate();
             BugReport.Init(DirectoryInfo.Data);
+            LogServer.Start(DirectoryInfo.Data);   // http://<tv ip>:8078/log.txt (see LogServer.cs)
             UiGuard.Init(this);
 
             Window window = Window.Instance;

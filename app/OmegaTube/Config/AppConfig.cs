@@ -36,6 +36,16 @@ namespace OmegaTube.Config
         public bool ShowClock = true;       // wall clock in the control bar
         public bool ShowStats = false;      // technical overlay (buffer, bitrate, stalls)
         public int MaxHeight = 1080;
+        // Read-ahead as a share of the video's length, which is what makes it scale: a 3-minute clip does not need the
+        // same lead as a two-hour one. Clamped to [MinBufferSeconds, MaxBufferSeconds].
+        public int BufferPercent = 2;
+        // The ceiling it may not exceed, in MB: a share of a very large file (or a high bitrate) would otherwise ask
+        // an older TV to hold hundreds of megabytes. 0 keeps the core's own default (48 MB).
+        public int BufferLimitMB = 0;
+        // The ceiling is 120 s rather than 30: a share of a long video hits a low cap immediately (1% of a two-hour
+        // film is already 72 s), which would make the higher percentages meaningless. The memory limit is the real
+        // guard for what the TV may hold, and the core clamps anything beyond 120 s anyway.
+        public const int MinBufferSeconds = 5, MaxBufferSeconds = 120;
         // Video codec preference for the core ("avc1" H.264, "vp9", "av01" AV1). Above 1080p YouTube has no H.264.
         public string Codecs = "avc1,vp9";
         public bool Autoplay = true;        // at the end of a video, play the first suggestion (after a countdown)
@@ -46,6 +56,21 @@ namespace OmegaTube.Config
         public int CaptionBackground = 2;      // index in CaptionBackgrounds
         // Audio language for dubbed videos ("" = the original track).
         public string AudioLang = "";
+
+        public static readonly int[] BufferPercents = { 1, 2, 5, 10, 20, 30 };
+        public static readonly int[] BufferLimitsMB = { 0, 100, 200, 300, 500 };
+
+        // The read-ahead this asks for on a video of this length: the share, clamped both ways — below the floor a
+        // hiccup still stalls, above the ceiling the TV holds memory it does not need.
+        public int BufferSecondsFor(double lengthSeconds)
+        {
+            if (lengthSeconds <= 1)
+            {
+                return 10;   // live, or a length we do not know
+            }
+            double s = lengthSeconds * BufferPercent / 100.0;
+            return (int)System.Math.Min(MaxBufferSeconds, System.Math.Max(MinBufferSeconds, s));
+        }
 
         public static readonly float[] CaptionSizes = { 32f, 40f, 50f, 62f };
         public static readonly string[] CaptionSizeLabels = { "Small", "Medium", "Large", "Extra large" };
@@ -269,6 +294,8 @@ namespace OmegaTube.Config
                 Player.ShowClock = Json.Bool(p, "showClock", Player.ShowClock);
                 Player.ShowStats = Json.Bool(p, "showStats", Player.ShowStats);
                 Player.MaxHeight = (int)Json.Num(p, "maxHeight", Player.MaxHeight);
+                Player.BufferPercent = (int)Json.Num(p, "bufferPercent", Player.BufferPercent);
+                Player.BufferLimitMB = (int)Json.Num(p, "bufferLimitMB", Player.BufferLimitMB);
                 Player.Codecs = Json.Str(p, "codecs", Player.Codecs);
                 Player.Autoplay = Json.Bool(p, "autoplay", Player.Autoplay);
                 Player.CaptionLang = Json.Str(p, "captionLang", Player.CaptionLang);
@@ -315,6 +342,8 @@ namespace OmegaTube.Config
                     ["showClock"] = Player.ShowClock,
                     ["showStats"] = Player.ShowStats,
                     ["maxHeight"] = Player.MaxHeight,
+                    ["bufferPercent"] = Player.BufferPercent,
+                    ["bufferLimitMB"] = Player.BufferLimitMB,
                     ["codecs"] = Player.Codecs,
                     ["autoplay"] = Player.Autoplay,
                     ["captionLang"] = Player.CaptionLang,
