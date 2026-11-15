@@ -99,6 +99,11 @@ OMEGA_API void omega_player_toggle_pause(omega_player* player);
 OMEGA_API int omega_player_seek(omega_player* player, int64_t position_ms);
 // Playback speed (0.5 .. 2.0), audio kept (pitch handled by the TV player).
 OMEGA_API int omega_player_set_rate(omega_player* player, double rate);
+
+// Read-ahead: how far ahead of the playhead the core feeds the TV's player (ahead_ms), and the demuxer's queue caps
+// that have to hold at least that much (queue_ms, queue_bytes). Takes effect while playing: the app applies the
+// buffer setting again when the user changes it, and the core clamps anything silly (1..120 s ahead).
+OMEGA_API int omega_player_set_buffer_ms(omega_player* player, int64_t ahead_ms, int64_t queue_ms, int64_t queue_bytes);
 OMEGA_API void omega_player_get_stats(omega_player* player, omega_player_stats* out);
 OMEGA_API void omega_player_destroy(omega_player* player);
 

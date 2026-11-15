@@ -120,7 +120,7 @@ namespace OmegaTube.Ui
             }
             else
             {
-                art.Show(null, item.Thumbnail ?? "", null);
+                art.Show(null, Thumbs.Url(item.Thumbnail ?? ""), null);
             }
             Arm();
         }

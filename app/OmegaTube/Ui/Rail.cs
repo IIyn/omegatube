@@ -57,7 +57,7 @@ namespace OmegaTube.Ui
         public Rail(IList<Entry> entries, bool overlay = false)
         {
             this.overlay = overlay;
-            Size = new Size(overlay ? Theme.RailWidth : Theme.RailExpandedWidth, 1080);
+            Size = new Size(overlay ? Theme.RailWidth : Theme.RailFor(true), 1080);
 
             if (overlay)
             {
@@ -84,7 +84,7 @@ namespace OmegaTube.Ui
             }
             else
             {
-                panel = new View { Size = new Size(Theme.RailWidth, 1080), BackgroundColor = Theme.Background };
+                panel = new View { Size = new Size(Theme.RailFor(false), 1080), BackgroundColor = Theme.Background };
                 Add(panel);
                 // Omega: the top-left profile avatar (falls back to a person icon when signed out / no photo).
                 // Focusable: the home screen moves focus here from the top rail entry, and OK cycles accounts.
@@ -97,11 +97,11 @@ namespace OmegaTube.Ui
                 Widgets.MaskedImage(avatar, Theme.Icon("person"), Theme.Image("circle_mask"));
             }
 
-            var clip = new View { Position = new Position(0, Top), Size = new Size(Theme.RailExpandedWidth, 1080 - Top),
+            var clip = new View { Position = new Position(0, Top), Size = new Size(overlay ? Theme.RailExpandedWidth : Theme.RailFor(true), 1080 - Top),
                                   ClippingMode = ClippingModeType.ClipChildren };
             railClip = clip;
             Add(clip);
-            list = new View { Size = new Size(Theme.RailExpandedWidth, 2000) };
+            list = new View { Size = new Size(overlay ? Theme.RailExpandedWidth : Theme.RailFor(true), 2000) };
             clip.Add(list);
 
             for (int i = 0; i < entries.Count; i++)
@@ -109,7 +109,7 @@ namespace OmegaTube.Ui
                 var item = new View
                 {
                     Position = new Position(overlay ? 0 : 14, i * ItemHeight),
-                    Size = new Size(overlay ? Theme.RailExpandedWidth : Theme.RailWidth - 28, ItemHeight - 12),
+                    Size = new Size(overlay ? Theme.RailExpandedWidth : Theme.RailFor(false) - 28, ItemHeight - 12),
                 };
                 if (!overlay)
                 {
@@ -212,18 +212,19 @@ namespace OmegaTube.Ui
             }
             widen?.Stop();
             widen = new Animation(160);
-            float w = value ? Theme.RailExpandedWidth : Theme.RailWidth;
+            float w = value ? Theme.RailFor(true) : Theme.RailFor(false);
             widen.AnimateTo(panel, "SizeWidth", w, Widgets.EaseOut);
             widen.Play();
             foreach (View item in items)
             {
-                item.SizeWidth = (value ? Theme.RailExpandedWidth : Theme.RailWidth) - 28;
+                item.SizeWidth = (value ? Theme.RailFor(true) : Theme.RailFor(false)) - 28;
             }
             foreach (TextLabel l in labels)
             {
                 Widgets.SetVisible(l, value);
             }
-            panel.BackgroundColor = value ? Theme.Surface : Theme.Background;
+            panel.BackgroundColor = Theme.Tube ? Theme.Background   // YouTube's nav is the page's own black, not a grey drawer
+                                   : value ? Theme.Surface : Theme.Background;
             Refresh();
         }
 
@@ -329,8 +330,19 @@ namespace OmegaTube.Ui
                 }
                 else
                 {
-                    items[i].BackgroundColor = focused && current ? Theme.Accent
+                    // Tube lights the current entry with YouTube's light pill and darkens its label and icon to suit,
+                    // and leaves every other row bare (no grey fill, which is what made the nav look like a drawer);
+                    // the other looks fill the current row with the accent instead.
+                    bool lit = focused && current;
+                    items[i].BackgroundColor = lit ? (Theme.Tube ? Theme.TubePill : Theme.Accent)
+                                             : Theme.Tube ? Color.Transparent
                                              : current ? Theme.SurfaceHigh : Color.Transparent;
+                    if (Theme.Tube)
+                    {
+                        Color onPill = lit ? Theme.CardTextFocused : Theme.Text;
+                        labels[i].TextColor = onPill;
+                        icons[i].Color = lit ? Theme.CardTextFocused : Color.White;   // the icons are white glyphs
+                    }
                 }
             }
             UpdateChip();

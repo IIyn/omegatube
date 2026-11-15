@@ -32,9 +32,24 @@ namespace OmegaTube.Ui
         public static readonly Color GlassPanel = new Color(0.10f, 0.11f, 0.14f, 0.34f);
         public static readonly Color GlassHigh = new Color(1f, 1f, 1f, 0.16f);
 
+        // Tube: the light pill YouTube lights its current nav entry with (dark text and icon on it).
+        public static readonly Color TubePill = Rgb(0xe8e8e8);
+
+        // Tube: the channel line under a card. YouTube runs three lines there (title, channel, views/age) with the
+        // channel brighter than the views line, so the card needs a shade between Text and TextDim.
+        public static readonly Color TubeSub = Rgb(0xc9c9c9);
+
         // True while the Glorious interface is selected (set from the config at startup and when it changes):
         // shared widgets (panels, buttons) draw as glass instead of flat grey.
         public static bool Glorious;
+
+        // True while the Tube interface is selected (the YouTube TV look): three big cards a row, with the title and
+        // the channel line under the thumbnail on the page colour. Set from the config like Glorious.
+        public static bool Tube;
+
+        // The layout is designed at this size and everything below is in its pixels (Screen.FitToWindow scales the
+        // finished page when a window reports another logical size).
+        public const int DesignWidth = 1920, DesignHeight = 1080;
 
         public const float TitleSize = 34f;
         public const float BodySize = 24f;
@@ -67,6 +82,28 @@ namespace OmegaTube.Ui
         public const int GridRowHeight = 300;      // thumbnail + the line under it + room for the focus zoom
         public const int GridTitledRowHeight = 360;   // the same with a heading above
         public const int BigRowHeight = 340;       // tall so the next row's heading clears the featured thumbnails
+
+        // Tube (YouTube TV) geometry, matched to what the TV's own YouTube app shows on the same panel: two cards
+        // and the near half of a third, so the cards (and the type under them) are big. YouTube measures ~27.5% of
+        // the width per card while its nav is open, which is the 2.5-up look this reproduces.
+        public const int TubeColumns = 3;            // grid feeds (search, history) stay 3-up: no peek there
+        public const int TubeCardWidth = 660;
+        public const int TubeCardGap = 34;
+        public const int TubeCardInfoHeight = 212;   // title (2 lines, 112) + channel + views/age + padding
+        public const int TubeRowHeight = 700;        // heading + cards from StripY 64 + 583 + ~53 before the next
+        public const int TubeRailWidth = 144;        // icons only, YouTube's collapsed nav
+        public const int TubeRailExpandedWidth = 420;   // open: icon + label rows, YouTube's pill is ~420
+        public const int TubeCardInfoSmall = 152;     // the player's cards (400 wide): the same three lines, smaller type
+        public const int TubePlayerCardWidth = 400;    // the player's row has to fit 570..1080 with StripY 64
+        public const int TubePlayerRowHeight = 441;    // StripY 64 + the card's 377
+
+        public static int TubeInfoFor(int cardWidth) => cardWidth >= 600 ? TubeCardInfoHeight : TubeCardInfoSmall;
+        public static int TubeCardHeight(int cardWidth) => ThumbHeight(cardWidth) + TubeInfoFor(cardWidth);
+
+        // The rail's width in the current style (expanded: with the labels out).
+        public static int RailFor(bool expanded) => Tube
+            ? (expanded ? TubeRailExpandedWidth : TubeRailWidth)
+            : (expanded ? RailExpandedWidth : RailWidth);
 
         public static int ThumbHeight(int cardWidth) => cardWidth * 9 / 16;
         public static int CardHeight(int cardWidth) => ThumbHeight(cardWidth) + CardInfoHeight;

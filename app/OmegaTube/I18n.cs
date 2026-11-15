@@ -28,6 +28,20 @@ namespace OmegaTube
 
         private static readonly Dictionary<string, string> Fr = new Dictionary<string, string>
         {
+            ["Tube"] = "Tube",
+            ["Home screen style: Omega (classic), Glorious (immersive) or Tube (YouTube TV)"] = "Style de l'écran d'accueil : Omega (classique), Glorious (immersif) ou Tube (TV YouTube)",
+            ["Thumbnails"] = "Miniatures",
+            ["Buffer ahead"] = "Avance de la mémoire tampon",
+            ["{0}% of the video"] = "{0}% de la vidéo",
+            ["{0} s of lead on this video"] = "{0} s d'avance sur cette vidéo",
+            ["{0} s of lead"] = "{0} s d'avance",
+            ["A share of the video's length, kept between 5 and 30 seconds"] = "Une part de la durée de la vidéo, entre 5 et 120 secondes",
+            ["Buffer memory"] = "Mémoire tampon",
+            ["The most the buffer may hold; lower it on an older TV or for very large files"] = "Le maximum que la mémoire tampon peut contenir ; réduisez-le sur un téléviseur ancien ou pour de très gros fichiers",
+            ["Default (48 MB)"] = "Par défaut (48 Mo)",
+            ["Sharp"] = "Nettes",
+            ["Data saver"] = "Économie de données",
+            ["Sharp draws YouTube's 1280x720 stills on the cards; Data saver keeps the 320x180 file the app has always used"] = "Nettes affiche les images 1280x720 de YouTube sur les cartes ; l'économie de données garde le fichier 320x180 utilisé jusqu'ici",
             ["Comments"] = "Commentaires",
             ["Add a comment…"] = "Ajoutez un commentaire…",
             ["Loading comments…"] = "Chargement des commentaires…",
@@ -357,6 +371,20 @@ namespace OmegaTube
 
         private static readonly Dictionary<string, string> Es = new Dictionary<string, string>
         {
+            ["Tube"] = "Tube",
+            ["Home screen style: Omega (classic), Glorious (immersive) or Tube (YouTube TV)"] = "Estilo de la pantalla de inicio: Omega (clásico), Glorious (inmersivo) o Tube (TV de YouTube)",
+            ["Thumbnails"] = "Miniaturas",
+            ["Buffer ahead"] = "Antelación del búfer",
+            ["{0}% of the video"] = "{0}% del vídeo",
+            ["{0} s of lead on this video"] = "{0} s de ventaja en este vídeo",
+            ["{0} s of lead"] = "{0} s de ventaja",
+            ["A share of the video's length, kept between 5 and 30 seconds"] = "Una parte de la duración del vídeo, entre 5 y 120 segundos",
+            ["Buffer memory"] = "Memoria del búfer",
+            ["The most the buffer may hold; lower it on an older TV or for very large files"] = "Lo máximo que puede guardar el búfer; redúcelo en un televisor antiguo o con archivos muy grandes",
+            ["Default (48 MB)"] = "Predeterminado (48 MB)",
+            ["Sharp"] = "Nítidas",
+            ["Data saver"] = "Ahorro de datos",
+            ["Sharp draws YouTube's 1280x720 stills on the cards; Data saver keeps the 320x180 file the app has always used"] = "Nítidas usa las imágenes 1280x720 de YouTube en las tarjetas; el ahorro de datos mantiene el archivo 320x180 de siempre",
             ["Comments"] = "Comentarios",
             ["Add a comment…"] = "Añade un comentario…",
             ["Loading comments…"] = "Cargando comentarios…",
@@ -686,6 +714,20 @@ namespace OmegaTube
 		
 		    private static readonly Dictionary<string, string> Cs = new Dictionary<string, string>
         {
+            ["Tube"] = "Tube",
+            ["Home screen style: Omega (classic), Glorious (immersive) or Tube (YouTube TV)"] = "Styl domovské obrazovky: Omega (klasický), Glorious (imerzivní) nebo Tube (YouTube TV)",
+            ["Thumbnails"] = "Náhledy",
+            ["Buffer ahead"] = "Předstih vyrovnávací paměti",
+            ["{0}% of the video"] = "{0} % videa",
+            ["{0} s of lead on this video"] = "{0} s předstihu u tohoto videa",
+            ["{0} s of lead"] = "{0} s předstihu",
+            ["A share of the video's length, kept between 5 and 30 seconds"] = "Podíl délky videa, omezený na 5 až 120 sekund",
+            ["Buffer memory"] = "Paměť vyrovnávací paměti",
+            ["The most the buffer may hold; lower it on an older TV or for very large files"] = "Maximum, které paměť pojme; snižte ho u staršího televizoru nebo u velmi velkých souborů",
+            ["Default (48 MB)"] = "Výchozí (48 MB)",
+            ["Sharp"] = "Ostré",
+            ["Data saver"] = "Úspora dat",
+            ["Sharp draws YouTube's 1280x720 stills on the cards; Data saver keeps the 320x180 file the app has always used"] = "Ostré kreslí na karty snímky 1280x720 z YouTube; úspora dat ponechá soubor 320x180, který aplikace používala dřív",
             ["Comments"] = "Komentáře",
             ["Add a comment…"] = "Přidejte komentář…",
             ["Loading comments…"] = "Načítání komentářů…",
@@ -1015,6 +1057,20 @@ namespace OmegaTube
         
 		    private static readonly Dictionary<string, string> Ru = new Dictionary<string, string>
         {
+            ["Tube"] = "Tube",
+            ["Home screen style: Omega (classic), Glorious (immersive) or Tube (YouTube TV)"] = "Стиль главного экрана: Omega (классический), Glorious (иммерсивный) или Tube (YouTube TV)",
+            ["Thumbnails"] = "Миниатюры",
+            ["Buffer ahead"] = "Запас буфера",
+            ["{0}% of the video"] = "{0}% видео",
+            ["{0} s of lead on this video"] = "{0} с запаса для этого видео",
+            ["{0} s of lead"] = "{0} с запаса",
+            ["A share of the video's length, kept between 5 and 30 seconds"] = "Доля длительности видео, от 5 до 120 секунд",
+            ["Buffer memory"] = "Память буфера",
+            ["The most the buffer may hold; lower it on an older TV or for very large files"] = "Сколько буфер может хранить; уменьшите на старом телевизоре или для очень больших файлов",
+            ["Default (48 MB)"] = "По умолчанию (48 МБ)",
+            ["Sharp"] = "Чёткие",
+            ["Data saver"] = "Экономия трафика",
+            ["Sharp draws YouTube's 1280x720 stills on the cards; Data saver keeps the 320x180 file the app has always used"] = "Чёткие рисуют на карточках кадры 1280x720 из YouTube; экономия трафика оставляет файл 320x180, как раньше",
             ["Cannot reach YouTube"] = "Не удается подключиться к YouTube",
             ["Check the TV's internet connection."] = "Проверьте подключение телевизора к интернету.",
             ["Do you want to quit OmegaTube?"] = "Выйти из OmegaTube?",

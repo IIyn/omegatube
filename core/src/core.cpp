@@ -474,6 +474,12 @@ int omega_player_seek(omega_player* p, int64_t position_ms) { return p && p->imp
 
 int omega_player_set_rate(omega_player* p, double rate) { return p && p->impl.set_rate(rate) ? 0 : -1; }
 
+int omega_player_set_buffer_ms(omega_player* p, int64_t ahead_ms, int64_t queue_ms, int64_t queue_bytes) {
+    if (!p) return -1;
+    p->impl.set_buffer(ahead_ms, queue_ms, queue_bytes);
+    return 0;
+}
+
 void omega_player_get_stats(omega_player* p, omega_player_stats* out) {
     if (!p || !out) return;
     omega::PlayerStats s = p->impl.stats();

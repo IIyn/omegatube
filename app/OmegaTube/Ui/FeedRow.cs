@@ -53,29 +53,34 @@ namespace OmegaTube.Ui
         public bool IsGrid => grid;
         private int SlideX => grid ? leftInset : leftInset - FocusIndex * Step;
         private readonly bool thumbOnly;  // Glorious featured row: bare thumbnails (title/meta live on the hero)
+        private readonly bool tube;        // Tube cards in this row (the player opts out)
 
         private int Step => cardWidth + cardGap;
+
+        // The card height of this row's look (Tube reserves room for the text under the thumbnail).
+        private int CardStripHeight => Theme.Tube ? Theme.TubeCardHeight(cardWidth) : Theme.CardHeight(cardWidth);
 
         public FeedRow(string title, string query, int width) : this(title, c => YouTube.Search(query, c), width)
         {
             Query = query;
         }
 
-        // cardWidth / leftInset default to the Omega look; the Glorious home passes a larger featured width and
-        // an inset that clears the nav column.
+        // cardWidth / cardGap / rowHeight default to the current uiStyle's look (Omega: 352px cards, four a row; Tube:
+        // 500px, three a row); the Glorious home passes its own featured and grid widths.
         public FeedRow(string title, Func<string, Task<FeedPage>> loader, int width,
-                       int cardWidth = Theme.CardWidth, int leftInset = Theme.FocusMargin, int rowHeight = Theme.RowHeight,
-                       bool thumbOnly = false, int cardGap = Theme.CardGap, bool grid = false, bool glass = false)
+                       int cardWidth = 0, int leftInset = Theme.FocusMargin, int rowHeight = 0,
+                       bool thumbOnly = false, int cardGap = 0, bool grid = false, bool glass = false, bool? tube = null)
         {
             Title = title;
             this.loader = loader;
-            this.cardWidth = cardWidth;
-            this.cardGap = cardGap;
+            this.cardWidth = cardWidth > 0 ? cardWidth : Theme.Tube ? Theme.TubeCardWidth : Theme.CardWidth;
+            this.cardGap = cardGap > 0 ? cardGap : Theme.Tube ? Theme.TubeCardGap : Theme.CardGap;
             this.leftInset = leftInset;
             this.thumbOnly = thumbOnly;
             this.grid = grid;
             this.glass = glass;
-            RowHeight = rowHeight;
+            this.tube = tube ?? Theme.Tube;   // a caller can keep the classic card (the player does)
+            RowHeight = rowHeight > 0 ? rowHeight : Theme.Tube ? Theme.TubeRowHeight : Theme.RowHeight;
             stripY = grid && title.Length == 0 ? GridStripY : StripY;
             pump = BuildNext;
             RequestWork = () => UiWork.Request(pump);
@@ -89,7 +94,7 @@ namespace OmegaTube.Ui
             status.Position = new Position(leftInset, 140);
             Add(status);
 
-            strip = new View { Position = new Position(leftInset, stripY), Size = new Size(20000, Theme.CardHeight(cardWidth) + 40) };
+            strip = new View { Position = new Position(leftInset, stripY), Size = new Size(20000, CardStripHeight + 40) };
             Add(strip);
         }
 
@@ -156,7 +161,7 @@ namespace OmegaTube.Ui
                 }
                 else
                 {
-                    card = new Card(items[i], cardWidth, thumbOnly, glass) { Position = new Position(i * Step, 16) };
+                    card = new Card(items[i], cardWidth, thumbOnly, glass, tube) { Position = new Position(i * Step, 16) };
                     strip.Add(card);
                 }
                 cards.Add(card);
@@ -176,7 +181,7 @@ namespace OmegaTube.Ui
             last = Math.Min(last, items.Count - 1);
             while (cards.Count <= last)
             {
-                var card = new Card(items[cards.Count], cardWidth, thumbOnly, glass) { Position = new Position(cards.Count * Step, 16) };
+                var card = new Card(items[cards.Count], cardWidth, thumbOnly, glass, tube) { Position = new Position(cards.Count * Step, 16) };
                 cards.Add(card);
                 strip.Add(card);
             }

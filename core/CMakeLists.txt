@@ -111,6 +111,9 @@ target_link_libraries(omegacore PRIVATE -Wl,--wrap=explicit_bzero)
 
 # Host-side tool to check the demuxer against local files (not shipped).
 if(OMEGA_HOST_TOOLS)
+    # The seek planner's rules, on a table of cases: no TV and no media file needed (run by CI).
+    add_executable(seekcheck tools/seekcheck.cpp)
+    target_include_directories(seekcheck PRIVATE src)
     add_executable(mp4dump tools/mp4dump.cpp src/media/demuxer.cpp src/media/mp4.cpp src/media/webm.cpp)
     target_include_directories(mp4dump PRIVATE src)
     # Fetches a YouTube video's formats and downloads ranges with the same code the TV runs.

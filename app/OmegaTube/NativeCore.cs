@@ -277,6 +277,7 @@ namespace OmegaTube
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate void V_bb(byte[] a, byte[] b);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int I_buf(byte[] buf, int size, int maxLines);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate void V_ip(IntPtr p);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int SetBufferFn(IntPtr p, long aheadMs, long queueMs, long queueBytes);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate IntPtr Ip_ip(IntPtr p);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int I_ipl(IntPtr p, long a);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int I_ipd(IntPtr p, double a);
@@ -298,6 +299,7 @@ namespace OmegaTube
         private static CreateFn _playerCreate;
         private static CreateYtFn _playerCreateYouTube;
         private static CreatePreviewFn _playerCreatePreview;
+        private static SetBufferFn _playerSetBuffer;
         private static I_b _previewPrefetch;
         private static DiagnoseFn _playerDiagnose;
         private static V_ip _playerTogglePause, _playerDestroy, _free;
@@ -349,6 +351,7 @@ namespace OmegaTube
             _ytRelated = Fn<Ip_b>("omega_yt_related");
             _playerFormats = Fn<Ip_ip>("omega_player_formats");
             _playerSetRate = Fn<I_ipd>("omega_player_set_rate");
+            _playerSetBuffer = Fn<SetBufferFn>("omega_player_set_buffer_ms");
             _ytCaptions = Fn<Ip_bb>("omega_yt_captions");
             _ytDetails = Fn<Ip_b>("omega_yt_details");
             _ytRate = Fn<Ip_bb>("omega_yt_rate");
@@ -384,6 +387,10 @@ namespace OmegaTube
         public static void PlayerDiagnose(IntPtr ecoreWindow, int width, int height, string videoUrl, string audioUrl) => _playerDiagnose(ecoreWindow, width, height, videoUrl, audioUrl);
         public static IntPtr PlayerFormats(IntPtr player) => _playerFormats(player);
         public static int PlayerSetRate(IntPtr player, double rate) => _playerSetRate(player, rate);
+
+        // Read-ahead: how far ahead of the playhead, and the two caps that bound what it may hold.
+        public static int PlayerSetBuffer(IntPtr player, long aheadMs, long queueMs, long queueBytes) =>
+            _playerSetBuffer(player, aheadMs, queueMs, queueBytes);
 
         public static IntPtr YtSearch(string query, string continuation) => _ytSearch(Utf8z(query), Utf8z(continuation));
         public static IntPtr YtSuggest(string query) => _ytSuggest(Utf8z(query));

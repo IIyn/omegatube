@@ -36,7 +36,8 @@ namespace OmegaTube.Ui
             }
             VideoId = videoId;
             IntPtr window = app.EcoreWindow;
-            int w = (int)Window.Instance.WindowSize.Width, h = (int)Window.Instance.WindowSize.Height;
+            // the design size, not the window: Screen.FitToWindow scales this subtree to the window
+            int w = Theme.DesignWidth, h = Theme.DesignHeight;
             string codecs = app.Config.Player.Codecs;
             PlayerScreen.Decoder(() =>
             {

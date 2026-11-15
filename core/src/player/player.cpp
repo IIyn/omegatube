@@ -7,6 +7,7 @@
 #include <memory>
 #include <vector>
 
+#include "media/seek_window.h"
 #include "net/http.h"
 #include "util/log.h"
 
@@ -35,6 +36,9 @@ bool video_mime(media::Codec c, esp::VideoMime& out) {
 }  // namespace
 
 Player::Player(PlayerConfig cfg) : cfg_(std::move(cfg)) {
+    feed_ahead_ = cfg_.feed_ahead_ms;
+    queue_cap_ = cfg_.max_queue_ms;
+    queue_bytes_cap_ = static_cast<int64_t>(cfg_.max_queue_bytes);
     video_.type = esp::STREAM_VIDEO;
     video_.url = cfg_.video_url;
     audio_.type = esp::STREAM_AUDIO;
@@ -292,6 +296,8 @@ void Player::stop_track(Track& t) {
     t.queue.clear();
     t.queued_ms = 0;
     t.queued_bytes = 0;
+    t.history.clear();
+    t.history_bytes = 0;
     t.demux_done = false;
 }
 
@@ -304,12 +310,22 @@ bool Player::seek(int64_t ms) {
     int64_t target = ms;
     auto t0 = Clock::now();
 
+    // Fast path: if the target is inside the window the demuxer is holding, restart playback from the keyframe in that
+    // window instead of reopening the stream. This is what makes a tap inside the buffered range instant.
+    if (seek_from_queue(target)) {
+        OLOG("seek %lld: served from the buffer (no network), threads untouched", static_cast<long long>(target));
+        return true;
+    }
+
     Track* tracks[] = {&video_, &audio_};
     bool use[] = {cfg_.use_video, cfg_.use_audio};
     for (int i = 0; i < 2; ++i)
         if (use[i]) stop_track(*tracks[i]);
 
     for (Track* t : tracks) t->ready_to_feed = false;
+    ++seek_gen_;
+    resume_lead_ms_ = 2000;   // the data has to come over the network again
+    lead_base_ms_ = 0;
     feed_from_ms_ = target;
     eos_ = false;
     seek_pending_ = true;
@@ -378,7 +394,8 @@ void Player::demux_loop(Track& t, media::Demuxer* reader_raw, net::StreamSource*
         {
             std::unique_lock<std::mutex> lock(t.mutex);
             t.cv.wait(lock, [&] {
-                return !running_ || !t.active || (t.queued_ms < cfg_.max_queue_ms && t.queued_bytes < cfg_.max_queue_bytes);
+                return !running_ || !t.active ||
+                       (t.queued_ms < queue_cap_.load() && static_cast<int64_t>(t.queued_bytes) < queue_bytes_cap_.load());
             });
         }
         if (!running_ || !t.active) break;
@@ -403,6 +420,7 @@ void Player::feed_loop(Track& t) {
     OLOG("%s feed: start", stream_name(t.type));
     while (running_ && t.active) {
         media::Sample s;
+        const uint32_t gen = seek_gen_.load();
         {
             std::unique_lock<std::mutex> lock(t.mutex);
             t.cv.wait(lock, [&] { return !running_ || !t.active || !t.queue.empty() || t.demux_done; });
@@ -420,9 +438,11 @@ void Player::feed_loop(Track& t) {
             t.cv.notify_all();
         }
 
+        // A seek landed while this sample was in flight: it belongs to the position we just left.
+        if (gen != seek_gen_.load()) continue;
         // Pace submission on the playback clock so ESPlayer never holds more than feed_ahead_ms
         // (keeps memory bounded and makes seeks / quality switches cheap). Paused => clock frozen => we wait.
-        while (running_ && t.active && s.pts_ms > position_ms_ + cfg_.feed_ahead_ms) sleep_ms(20);
+        while (running_ && t.active && s.pts_ms > position_ms_ + feed_ahead_.load()) sleep_ms(20);
         if (!running_ || !t.active) break;
         // After a seek (or a live start) the audio segment starts a bit before the video keyframe.
         if (s.pts_ms < 0 || (t.type == esp::STREAM_AUDIO && s.pts_ms < feed_from_ms_)) continue;
@@ -446,6 +466,17 @@ void Player::feed_loop(Track& t) {
             break;
         }
         t.submitted_ms = s.pts_ms;
+        // Keep what we fed. ESPlayer takes a pointer to this buffer, so holding the sample also keeps that data alive;
+        // the retained span is what a seek can start from without touching the network.
+        t.history_bytes += s.data.size();
+        t.history.push_back(std::move(s));
+        const int64_t keep_from = position_ms_.load() - keep_behind_ms();
+        while (!t.history.empty() &&
+               (t.history_bytes > static_cast<size_t>(history_byte_cap()) ||
+                t.history.front().pts_ms + t.history.front().duration_ms < keep_from)) {
+            t.history_bytes -= t.history.front().data.size();
+            t.history.pop_front();
+        }
     }
 }
 
@@ -496,8 +527,29 @@ void Player::control_loop() {
 // unit: when either track has less than kStarveMs fed ahead of the playhead, hold playback (the clock stops, so
 // does the progress bar) and carry on once both have kResumeMs again. The hold gives up after kMaxHoldMs and tries
 // anyway, so a stuck connection never leaves the player held for ever.
+void Player::set_buffer(int64_t ahead_ms, int64_t queue_ms, int64_t queue_bytes) {
+    const int64_t ahead = ahead_ms < 1000 ? 1000 : (ahead_ms > 120000 ? 120000 : ahead_ms);
+    const int64_t queue = queue_ms < ahead + 5000 ? ahead + 5000 : queue_ms;
+    const int64_t bytes = queue_bytes <= 0 ? (48 << 20)
+                          : queue_bytes < (8 << 20) ? (8 << 20)
+                          : queue_bytes > (512 << 20) ? (512 << 20) : queue_bytes;
+    // The buffer setting sizes what WE hold, not what the TV's player is fed. Feeding the whole window into ESPlayer used
+    // to leave nothing here to seek in: the retained copy was byte-capped and trimmed from the front, so once the cap
+    // bit, the samples around the playhead were gone and a seek fell into the hole ("target is behind the buffer").
+    // A small, fixed feed window keeps ESPlayer smooth; the rest waits in our queue and is retained as it is played, so
+    // every point of the grey bar belongs to us and can serve a seek.
+    feed_ahead_ = std::min<int64_t>(ahead, 8000);
+    queue_cap_ = queue;
+    queue_bytes_cap_ = bytes;
+    keep_behind_ = ahead;
+    OLOG("buffer: %lld ms kept behind, %lld ms fed to the TV, queue %lld ms / %lld MB",
+         static_cast<long long>(ahead), static_cast<long long>(feed_ahead_.load()),
+         static_cast<long long>(queue), static_cast<long long>(bytes >> 20));
+}
+
 void Player::update_rebuffering() {
-    constexpr int64_t kStarveMs = 200, kResumeMs = 2000, kMaxHoldMs = 10000, kStartGraceMs = 1500;
+    constexpr int64_t kStarveMs = 200, kMaxHoldMs = 10000, kStartGraceMs = 1500;
+    const int64_t kResumeMs = resume_lead_ms_.load();
     if (paused_ || eos_ || seek_pending_ || !prepared_) return;
     const auto now = Clock::now();
     Track* tracks[] = {cfg_.use_video ? &video_ : nullptr, cfg_.use_audio ? &audio_ : nullptr};
@@ -517,15 +569,90 @@ void Player::update_rebuffering() {
         return;
     }
     bool ready = true;
+    const int64_t base = lead_base_ms_.load() > 0 ? lead_base_ms_.load() : position_ms_.load();
     for (Track* t : tracks)
-        if (t && !track_finished(*t) && lead_ms(*t) < kResumeMs) ready = false;
+        if (t && !track_finished(*t) && t->submitted_ms.load() - base < kResumeMs) ready = false;
     const int64_t held = std::chrono::duration_cast<std::chrono::milliseconds>(now - rebuffer_since_).count();
     if (!ready && held < kMaxHoldMs) return;
     rebuffering_ = false;
+    lead_base_ms_ = 0;
+    resume_lead_ms_ = 2000;   // back to the conservative gate: only a buffer-served seek lowers it
     rebuffer_grace_until_ = now + std::chrono::milliseconds(1000);   // let the feed settle before judging again
     if (held > longest_stall_ms_) longest_stall_ms_ = held;
     api_->resume(handle_);
     OLOG("rebuffering: playback resumed after %lld ms%s", static_cast<long long>(held), ready ? "" : " (gave up waiting)");
+}
+
+bool Player::seek_from_queue(int64_t target) {
+    std::scoped_lock lock(video_.mutex, audio_.mutex);
+    // history first, then the queue: together they are everything we hold, and the retained past is what makes a tap
+    // in the fed region (and a short step back) servable at all.
+    auto entries = [](const Track& t) {
+        std::vector<media::WindowEntry> v;
+        v.reserve(t.history.size() + t.queue.size());
+        for (const auto& s : t.history) v.push_back({s.pts_ms, s.duration_ms, s.key});
+        for (const auto& s : t.queue) v.push_back({s.pts_ms, s.duration_ms, s.key});
+        return v;
+    };
+    const media::SeekPlan plan =
+        media::plan_seek(target, entries(video_), entries(audio_), cfg_.use_video, cfg_.use_audio);
+    if (!plan.from_queue) {
+        OLOG("seek %lld: needs the network (%s)", static_cast<long long>(target), plan.why);
+        return false;
+    }
+    // Drop what comes before the anchor across history then queue; whatever history is left sits in front of the queue
+    // again, so the feed loop replays it from the anchor.
+    auto drop = [](Track& t, size_t from) {
+        while (from > 0 && !t.history.empty()) {
+            t.history_bytes -= t.history.front().data.size();
+            t.history.pop_front();
+            --from;
+        }
+        while (from > 0 && !t.queue.empty()) {
+            t.queued_ms -= t.queue.front().duration_ms;
+            t.queued_bytes -= t.queue.front().data.size();
+            t.queue.pop_front();
+            --from;
+        }
+        while (!t.history.empty()) {
+            t.queue.push_front(std::move(t.history.back()));
+            t.queued_ms += t.queue.front().duration_ms;
+            t.queued_bytes += t.queue.front().data.size();
+            t.history.pop_back();
+        }
+        t.history_bytes = 0;
+    };
+    if (cfg_.use_video) drop(video_, plan.video_from);
+    if (cfg_.use_audio) drop(audio_, plan.audio_from);
+    const int64_t anchor = cfg_.use_video && !video_.queue.empty() ? video_.queue.front().pts_ms : target;
+
+    ++seek_gen_;
+    feed_from_ms_ = target;
+    eos_ = false;
+    seek_pending_ = true;
+    // Pace from the target, not from the keyframe: the feed loop stops submitting at position + feed_ahead, so pacing
+    // from the (earlier) anchor would stop short of the target itself and stall there. The bar reads submitted + queued
+    // against this position, so it also shows what is really held from the new spot.
+    position_ms_ = target;
+    stall_grace_until_ms_ = ms_since(started_at_) + 3000;
+    video_.submitted_ms = anchor;
+    audio_.submitted_ms = target;
+    const auto seek_start = Clock::now();
+    const int rc = api_->seek(handle_, static_cast<uint64_t>(target));
+    const long long seek_ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - seek_start).count();
+    resume_lead_ms_ = 400;   // the data is already here: do not wait for two seconds of it
+    lead_base_ms_ = anchor;  // and resume once the anchor has been fed, not once the feed reaches the target
+    if (!paused_) {
+        const bool already_held = rebuffering_.exchange(true);
+        rebuffer_since_ = Clock::now();
+        if (!already_held) api_->pause(handle_);
+    }
+    video_.cv.notify_all();
+    audio_.cv.notify_all();
+    OLOG("seek %lld: from the buffer at %lld, %lld ms of video and %lld ms of audio kept, esp %d in %lld ms",
+         static_cast<long long>(target), static_cast<long long>(anchor),
+         static_cast<long long>(video_.queued_ms), static_cast<long long>(audio_.queued_ms), rc, seek_ms);
+    return rc == 0;
 }
 
 int64_t Player::lead_ms(Track& t) { return t.submitted_ms - position_ms_; }
