@@ -382,4 +382,5 @@ Only Omega stays in the app. To remove:
 
 - Fonts: undecided. Whether a font file loaded from the data dir works on the TV must first be tested on a
   Tizen 6 TV (then 5.5). Until then `type.font` is not part of SDK 1.0.
-- Nine-patch images from the data dir instead of `res/`: to check on the TV.
+- ~~Nine-patch images from the data dir instead of `res/`~~: they work on a Tizen 6 TV (UE65AU6905, 2026-11-16),
+  as does unpacking the zip there (.NET Core 3.1). Still to check on a Tizen 5.5 TV.
