@@ -36,8 +36,8 @@ namespace OmegaTube
                 // Managed first: the UI language for the report screen if the core does not load.
                 Config = AppConfig.Load(DirectoryInfo.Data);
                 Ui.Theme.Apply(Config.UiStyle);
-                EnableDevLog();
                 NativeCore.RegisterResolver();  // load the core under UEP on Tizen 5.5 (#15)
+                EnableDevLog();                 // needs the core's functions bound
                 NativeCore.Init(DirectoryInfo.Data);
                 BugReport.CoreLoaded = true;
                 LocalStore.Init(DirectoryInfo.Data);
