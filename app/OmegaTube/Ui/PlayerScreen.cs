@@ -848,10 +848,9 @@ namespace OmegaTube.Ui
             suggestions = InList
                 ? new FeedRow(item.Kind == "mix" || item.PlaylistId.StartsWith("RD") ? T("Up next in the mix") : T("Up next in the playlist"),
                               c => YouTube.Playlist(item.Id, item.PlaylistId), 1920 - 40)
-                : new FeedRow(T("Suggested videos"), c => YouTube.Related(item.Id), 1920 - 40)
-            {
-                Position = new Position(40, SuggestionsY),
-            };
+                : new FeedRow(T("Suggested videos"), c => YouTube.Related(item.Id), 1920 - 40);
+            // Set on the row itself: an initializer on the conditional above would apply to its last branch only.
+            suggestions.Position = new Position(40, SuggestionsY);
             chrome.Add(suggestions);
             await suggestions.Load();
         }
