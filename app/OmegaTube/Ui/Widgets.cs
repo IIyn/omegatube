@@ -134,20 +134,27 @@ namespace OmegaTube.Ui
             return new ImageView { ResourceUrl = Theme.Image("round9.9"), Size = new Size(width, height), Color = fill };
         }
 
-        // Baked glass nine-patch (tools/glass-panel/make_glass.py): translucent fill, bright rim and a soft top
-        // highlight, rounded at any size. `lit` is the brighter variant for the focused entry. Drawn untinted;
-        // tint it through Color (e.g. accent) when needed.
-        // `pill` uses the rounder variant (buttons, selected entries) instead of the card one.
-        public static ImageView GlassCard(bool lit, int width, int height, bool pill = false)
+        // One of the theme's surfaces (ThemeSpec), a nine-patch drawn at any size: Glorious's baked glass
+        // (tools/glass-panel/make_glass.py) has a translucent fill, a bright rim and a soft top highlight. `lit` is
+        // the brighter variant for the focused entry; `pill` the rounder one (buttons, selected entries) instead of
+        // the card one. Drawn untinted; tint it through Color (e.g. accent) when needed. A theme without that
+        // surface gets an empty view of the same size, so callers need no check.
+        public static ImageView SurfaceCard(bool lit, int width, int height, bool pill = false)
         {
-            string name = (pill ? "glass_pill" : "glass") + (lit ? "_lit" : "") + "9.9";
-            return new ImageView { ResourceUrl = Theme.Image(name), Size = new Size(width, height) };
+            ThemeSpec t = Theme.Current;
+            SurfaceSpec s = pill ? (lit ? t.PillLitSurface : t.PillSurface) : (lit ? t.PanelLitSurface : t.PanelSurface);
+            var view = new ImageView { Size = new Size(width, height) };
+            if (s != null)
+            {
+                view.ResourceUrl = s.Path;
+            }
+            return view;
         }
 
-        // A card / panel background: glass in Glorious, the flat rounded fill otherwise.
+        // A card / panel background: the theme's panel surface when it has one, the flat rounded fill otherwise.
         public static View Panel(Color flat, int width, int height, float radius)
         {
-            return Theme.Glorious ? (View)GlassCard(false, width, height) : Rounded(flat, width, height, radius);
+            return Theme.Current.GlassScreens ? (View)SurfaceCard(false, width, height) : Rounded(flat, width, height, radius);
         }
 
         public static void SetVisible(View view, bool visible)
@@ -224,16 +231,16 @@ namespace OmegaTube.Ui
         {
             private readonly TextLabel label;
             private readonly ImageView icon;
-            private readonly View glassLit;       // Glorious: brighter glass while focused
+            private readonly View glassLit;       // glass themes: brighter surface while focused
 
             public PillButton(string text, string iconName, int width, int height = 76)
             {
                 Size = new Size(width, height);
                 Round(this, height / 2f);
-                if (Theme.Glorious)
+                if (Theme.Current.GlassScreens)
                 {
-                    Add(GlassCard(false, width, height, true));
-                    glassLit = GlassCard(true, width, height, true);
+                    Add(SurfaceCard(false, width, height, true));
+                    glassLit = SurfaceCard(true, width, height, true);
                     Add(glassLit);
                 }
                 int x = 34;
@@ -247,7 +254,7 @@ namespace OmegaTube.Ui
                 label = Label(text, Theme.BodySize + 2, Theme.Text, width - x - 24, height);
                 label.VerticalAlignment = VerticalAlignment.Center;
                 label.Position = new Position(x, 0);
-                if (Theme.Glorious && iconName == null)
+                if (Theme.Current.GlassScreens && iconName == null)
                 {
                     // A text-only pill (Yes / No ...): the text sits in the middle.
                     label.Size = new Size(width, height);

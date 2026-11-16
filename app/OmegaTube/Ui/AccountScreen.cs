@@ -39,7 +39,7 @@ namespace OmegaTube.Ui
 
         public AccountScreen(App app) : base(app)
         {
-            Root.BackgroundColor = Theme.Glorious ? Color.Transparent : Theme.Background;   // Glorious: glass cards over the page
+            Root.BackgroundColor = Theme.Current.GlassScreens ? Color.Transparent : Theme.Background;   // glass themes: glass cards over the page
             var title = Widgets.Label(T("Account"), Theme.TitleSize + 12, Theme.Text, 1200, 70);
             title.Position = new Position(CardX, 64);
             Root.Add(title);

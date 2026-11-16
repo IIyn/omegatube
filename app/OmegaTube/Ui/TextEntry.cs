@@ -15,7 +15,7 @@ namespace OmegaTube.Ui
         private const int CharRows = 4, ActionRow = 4, ActionKeys = 5;
         private const int KeyW = 104, KeyH = 76, KeyGap = 10;
         private const int PanelW = 1240, BoxW = PanelW - 120, BoxLines = 5;
-        private const float BoxSize = Theme.BodySize + 4;
+        private static float BoxSize => Theme.BodySize + 4;
 
         // (text) on Send, null on Cancel / Back.
         public Action<string> Done;

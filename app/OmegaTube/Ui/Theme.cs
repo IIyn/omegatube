@@ -2,54 +2,58 @@ using Tizen.NUI;
 
 namespace OmegaTube.Ui
 {
-    // SmartTube's "Dark Grey" look (as followed by ytps5): black page, grey panels, YouTube red accent.
-    // 1920x1080 layout, sizes in pixels.
+    // The interface's look. Colours, type sizes, radii and surfaces come from Current (a ThemeSpec: Omega by default,
+    // see Apply); the layout geometry below is still fixed. 1920x1080 layout, sizes in pixels.
     public static class Theme
     {
-        public static readonly Color Background = Rgb(0x000000);
-        public static readonly Color Surface = Rgb(0x262626);
-        public static readonly Color SurfaceHigh = Rgb(0x3a3a3a);
-        public static readonly Color SurfaceFocused = Rgb(0x3a3a3a);
-        public static readonly Color CardInfo = Rgb(0x1f1f1f);
-        public static readonly Color CardInfoFocused = Rgb(0xe3e3e3);
-        public static readonly Color CardTextFocused = Rgb(0x2a2a2a);
-        public static readonly Color Accent = Rgb(0xe52d27);
-        // Glorious: the page behind the rows from the second row down (the first row has the artwork backdrop).
-        public static readonly Color PageTint = Rgb(0x0F121C);   // a dark blue-slate: #2D3452 at 49% brightness
-        public static readonly Color Text = Rgb(0xf1f1f1);
-        public static readonly Color TextDim = Rgb(0xaaaaaa);
-        public static readonly Color Scrim = new Color(0f, 0f, 0f, 0.65f);
-        public static readonly Color Panel = Rgb(0x181818);         // settings / account cards, player panels
-        public static readonly Color PanelLine = Rgb(0x2c2c2c);     // separators
-        public static readonly Color TextMuted = Rgb(0x6f6f6f);
-        public static readonly Color Success = Rgb(0x2ba640);
-        // Grey rather than a white tint: as light as before on dark scenes, but it darkens bright ones under the icons.
-        public static readonly Color GlassButton = new Color(0.24f, 0.24f, 0.24f, 0.6f);
+        public static ThemeSpec Current { get; private set; } = ThemeSpec.Omega();
 
-        // "Liquid glass" for the Glorious theme. The TV's NUI has no backdrop blur, so the glass is translucent fills
-        // (mostly the baked nine-patches glass*9.9.png, see tools/glass-panel); these two tints serve the few plain
-        // tinted panels: GlassPanel darkens a card over the artwork, GlassHigh is a light translucent disc.
-        public static readonly Color GlassPanel = new Color(0.10f, 0.11f, 0.14f, 0.34f);
-        public static readonly Color GlassHigh = new Color(1f, 1f, 1f, 0.16f);
+        // Selects the interface (config "uiStyle"): at start-up and when the user changes it. Screens read the theme
+        // when they are built, so the caller rebuilds what is on screen.
+        public static void Apply(string uiStyle)
+        {
+            Glorious = uiStyle == "glorious";
+            Current = Glorious ? ThemeSpec.Glorious() : ThemeSpec.Omega();
+        }
 
-        // True while the Glorious interface is selected (set from the config at startup and when it changes):
-        // shared widgets (panels, buttons) draw as glass instead of flat grey.
-        public static bool Glorious;
+        public static Color Background => Current.Background;
+        public static Color Surface => Current.Surface;
+        public static Color SurfaceHigh => Current.SurfaceHigh;
+        public static Color SurfaceFocused => Current.SurfaceFocused;
+        public static Color CardInfo => Current.CardInfo;
+        public static Color CardInfoFocused => Current.CardInfoFocused;
+        public static Color CardTextFocused => Current.CardTextFocused;
+        public static Color Accent => Current.Accent;
+        public static Color PageTint => Current.PageTint;
+        public static Color Text => Current.Text;
+        public static Color TextDim => Current.TextDim;
+        public static Color Scrim => Current.Scrim;
+        public static Color Panel => Current.Panel;
+        public static Color PanelLine => Current.PanelLine;
+        public static Color TextMuted => Current.TextMuted;
+        public static Color Success => Current.Success;
+        public static Color GlassButton => Current.GlassButton;
+        public static Color GlassPanel => Current.GlassPanel;
+        public static Color GlassHigh => Current.GlassHigh;
 
-        public const float TitleSize = 34f;
-        public const float BodySize = 24f;
-        public const float SmallSize = 19f;
+        // True while the Glorious interface is selected (set by Apply): its home layout (hero, featured row, overlay
+        // nav). Its look (glass surfaces) is in Current.
+        public static bool Glorious { get; private set; }
+
+        public static float TitleSize => Current.TitleSize;
+        public static float BodySize => Current.BodySize;
+        public static float SmallSize => Current.SmallSize;
+        public static int CardRadius => Current.CardRadius;
+        public static int PanelRadius => Current.PanelRadius;
 
         public const int RailWidth = 110;          // collapsed: icons only
         public const int RailExpandedWidth = 330;  // focused: icons + labels
         public const int CardWidth = 352;
         public const int CardGap = 30;
         public const int CardInfoHeight = 104;     // title (2 lines) + channel line
-        public const int CardRadius = 14;          // soft corners (no sharp edges)
         public const float FocusScale = 1.1f;
         public const int FocusMargin = 30;         // room for the focused card's scale-up
         public const int RowHeight = 470;
-        public const int PanelRadius = 20;
 
         // Glorious home geometry.
         public const int NavShift = 25;          // the Glorious nav sits this far in from the screen edge
@@ -90,8 +94,5 @@ namespace OmegaTube.Ui
         public static string Image(string name) => Resolve(images, "images", name);
 
         public static string Icon(string name) => Resolve(icons, "icons", name);
-
-        private static Color Rgb(int rgb) =>
-            new Color(((rgb >> 16) & 0xff) / 255f, ((rgb >> 8) & 0xff) / 255f, (rgb & 0xff) / 255f, 1f);
     }
 }

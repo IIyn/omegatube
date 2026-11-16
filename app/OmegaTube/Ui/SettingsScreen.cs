@@ -72,16 +72,16 @@ namespace OmegaTube.Ui
         private TextLabel notesText;
         private float notesScroll;
         private bool relabel;              // the app language or the interface changed: every part has to be rebuilt
-        private readonly bool glorious;    // Glorious interface: glass cards instead of flat panels
+        private readonly bool glassLook;    // glass theme (image surfaces): glass cards instead of flat panels
 
         // startCategory / startRow: where to come back after a rebuild (app language or interface change).
         public SettingsScreen(App app, int startCategory = 0, int startRow = -1) : base(app)
         {
-            glorious = Theme.Glorious;   // the one source of truth: set from the config at start-up and when it changes
-            Root.BackgroundColor = glorious ? Color.Transparent : Theme.Background;   // Glorious: glass over the page
+            glassLook = Theme.Current.GlassScreens;   // the one source of truth: Theme.Apply at start-up and when it changes
+            Root.BackgroundColor = glassLook ? Color.Transparent : Theme.Background;   // glass over the page
 
-            View pane = glorious ? Widgets.GlassCard(false, PaneWidth - 80, 1000) : Widgets.Box(Theme.Panel, PaneWidth, 1080);   // transparent glass over the page
-            if (glorious)
+            View pane = glassLook ? Widgets.SurfaceCard(false, PaneWidth - 80, 1000) : Widgets.Box(Theme.Panel, PaneWidth, 1080);   // transparent glass over the page
+            if (glassLook)
             {
                 pane.Position = new Position(40, 40);
             }
@@ -154,11 +154,11 @@ namespace OmegaTube.Ui
         {
             int i = categories.Count;
             View view, glass = null, glassLit = null;
-            if (glorious)
+            if (glassLook)
             {
                 view = new View { Size = new Size(PaneWidth - 128, 80), Position = new Position(64, 220 + i * 92) };
-                glass = Widgets.GlassCard(false, PaneWidth - 128, 80, true);
-                glassLit = Widgets.GlassCard(true, PaneWidth - 128, 80, true);
+                glass = Widgets.SurfaceCard(false, PaneWidth - 128, 80, true);
+                glassLit = Widgets.SurfaceCard(true, PaneWidth - 128, 80, true);
                 glass.Hide();
                 glassLit.Hide();
                 view.Add(glass);
@@ -234,11 +234,11 @@ namespace OmegaTube.Ui
 
         private void MakeRowView(Row r)
         {
-            if (glorious)
+            if (glassLook)
             {
                 r.View = new View { Size = new Size(ListW, RowH) };
-                r.View.Add(Widgets.GlassCard(false, ListW, RowH));
-                r.GlassLit = Widgets.GlassCard(true, ListW, RowH);
+                r.View.Add(Widgets.SurfaceCard(false, ListW, RowH));
+                r.GlassLit = Widgets.SurfaceCard(true, ListW, RowH);
                 r.GlassLit.Hide();
                 r.View.Add(r.GlassLit);
             }
@@ -371,7 +371,7 @@ namespace OmegaTube.Ui
                          d =>
                          {
                              App.Config.UiStyle = App.Config.UiStyle == "glorious" ? "omega" : "glorious";
-                             Theme.Glorious = App.Config.UiStyle == "glorious";
+                             Theme.Apply(App.Config.UiStyle);
                              App.Home.InvalidateRows();
                              relabel = true;   // rebuild this screen in the new style
                          });
@@ -579,7 +579,7 @@ namespace OmegaTube.Ui
                 Category c = categories[i];
                 bool selected = i == category;
                 bool focused = selected && !inRows;
-                if (glorious)
+                if (glassLook)
                 {
                     // Glass pills: a resting one for the open category, a lit one while the categories have focus.
                     Widgets.SetVisible(c.Glass, selected);
@@ -597,8 +597,8 @@ namespace OmegaTube.Ui
                 Row r = rows[i];
                 bool f = inRows && i == index;
                 bool lifted = r.Home != null && r.Home == moving;
-                bool dark = f && !lifted && !glorious;   // Omega: the focused row is light with dark text
-                if (glorious)
+                bool dark = f && !lifted && !glassLook;   // Omega: the focused row is light with dark text
+                if (glassLook)
                 {
                     // Brighter glass under the focused row (accent-tinted while a section is picked up); text stays light.
                     Widgets.SetVisible(r.GlassLit, f || lifted);
@@ -613,7 +613,7 @@ namespace OmegaTube.Ui
                 r.TitleLabel.TextColor = text;
                 if (r.HintLabel != null)
                 {
-                    r.HintLabel.TextColor = dark ? new Color(0.33f, 0.33f, 0.33f, 1f) : f && glorious ? new Color(0.85f, 0.85f, 0.85f, 1f) : Theme.TextDim;
+                    r.HintLabel.TextColor = dark ? new Color(0.33f, 0.33f, 0.33f, 1f) : f && glassLook ? new Color(0.85f, 0.85f, 0.85f, 1f) : Theme.TextDim;
                 }
                 if (r.SwitchView != null)
                 {
@@ -623,7 +623,7 @@ namespace OmegaTube.Ui
                 {
                     string v = r.Value();
                     r.ValueLabel.Text = f && r.Change != null && v.Length > 0 ? "‹   " + v + "   ›" : v;
-                    r.ValueLabel.TextColor = dark ? Theme.CardTextFocused : f && glorious ? Theme.Text : Theme.TextDim;
+                    r.ValueLabel.TextColor = dark ? Theme.CardTextFocused : f && glassLook ? Theme.Text : Theme.TextDim;
                 }
             }
             if (categories[category].CaptionPreview)

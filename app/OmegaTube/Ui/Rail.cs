@@ -70,7 +70,7 @@ namespace OmegaTube.Ui
                                         Opacity = 0f };
                 Add(panel);
                 // The pill that lifts the focused entry; parked until the rail is focused.
-                glassPill = Widgets.GlassCard(true, Theme.RailExpandedWidth - 24, ItemHeight - 14, true);
+                glassPill = Widgets.SurfaceCard(true, Theme.RailExpandedWidth - 24, ItemHeight - 14, true);
                 glassPill.Hide();
                 Add(glassPill);
 
