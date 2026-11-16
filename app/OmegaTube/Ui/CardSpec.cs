@@ -31,8 +31,9 @@ namespace OmegaTube.Ui
         public int BoxHeight = 104;   // title (2 lines) + channel line
         public Color BoxColor, BoxFocusedColor, TextFocusedColor;
 
-        // Overlay
+        // Overlay: the focused title's panel and text colour (null: Theme.Text).
         public string OverlayPanel = "card_info9.9";
+        public Color OverlayTextColor;
 
         // The card's height at a width: the 16:9 thumbnail plus what its info style adds under it.
         public int Height(int width)

@@ -275,9 +275,13 @@ namespace OmegaTube.Ui
             {
                 if (glassLit != null)
                 {
-                    // Glass: the focused pill is a brighter glass and keeps its light text and icon.
+                    // Glass: the focused pill is a brighter glass and keeps its text and icon colours.
                     SetVisible(glassLit, focused);
                     label.TextColor = Theme.Text;
+                    if (icon != null)
+                    {
+                        icon.Color = Theme.IconTint;
+                    }
                     Scale = focused ? new Vector3(1.04f, 1.04f, 1f) : Vector3.One;
                     return;
                 }
@@ -285,8 +289,8 @@ namespace OmegaTube.Ui
                 label.TextColor = focused ? Theme.CardTextFocused : Theme.Text;
                 if (icon != null)
                 {
-                    // White icons on the light focused pill: darken them through the mix colour.
-                    icon.Color = focused ? new Color(0.16f, 0.16f, 0.16f, 1f) : Color.White;
+                    // The white icon images take the theme's icon colours (darker on the focused pill).
+                    icon.Color = focused ? Theme.IconFocused : Theme.IconTint;
                 }
                 Scale = focused ? new Vector3(1.04f, 1.04f, 1f) : Vector3.One;
             }

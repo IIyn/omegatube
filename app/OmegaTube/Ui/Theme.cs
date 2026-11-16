@@ -21,6 +21,8 @@ namespace OmegaTube.Ui
             ThemeSpec spec = uiStyle != "omega" ? Plugins.PluginStore.Load(uiStyle) : null;
             Current = spec ?? ThemeSpec.Omega();
             Active = spec != null ? uiStyle : "omega";
+            Player = ThemeSpec.Omega();
+            Player.Accent = Current.Accent;
             Generation++;
         }
 
@@ -43,6 +45,14 @@ namespace OmegaTube.Ui
         public static Color GlassButton => Current.GlassButton;
         public static Color GlassPanel => Current.GlassPanel;
         public static Color GlassHigh => Current.GlassHigh;
+        public static Color IconTint => Current.IconTint;
+        public static Color IconDim => Current.IconDim;
+        public static Color IconFocused => Current.IconFocused;
+        public static Color TextFocusedDim => Current.TextFocusedDim;
+
+        // The player's look (controls, watch section, side panels): always Omega's dark palette, since it sits over
+        // the video, with the theme's accent (progress bar, focus). Themeable player controls are for a later SDK.
+        public static ThemeSpec Player { get; private set; } = ThemeSpec.Omega();
 
         public static float TitleSize => Current.TitleSize;
         public static float BodySize => Current.BodySize;

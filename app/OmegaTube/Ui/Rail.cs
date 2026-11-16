@@ -119,7 +119,8 @@ namespace OmegaTube.Ui
                 }
                 // The spec's replacement or variant (e.g. outline icons) when there is one, else the app's icon.
                 var icon = new ImageView { ResourceUrl = this.spec.IconPath(entries[i].Icon), Size = new Size(IconSize, IconSize),
-                                           Position = new Position(overlay ? IconX : 21, (ItemHeight - 12 - IconSize) / 2) };
+                                           Position = new Position(overlay ? IconX : 21, (ItemHeight - 12 - IconSize) / 2),
+                                           Color = Theme.IconTint };
                 item.Add(icon);
                 icons.Add(icon);
                 if (overlay)
@@ -331,6 +332,13 @@ namespace OmegaTube.Ui
                 {
                     items[i].BackgroundColor = focused && current ? spec.FocusedColor ?? Theme.Accent
                                              : current ? spec.CurrentColor ?? Theme.SurfaceHigh : Color.Transparent;
+                    if (spec.FocusedTextColor != null)
+                    {
+                        // Text and icon of the focused entry, on its FocusedColor.
+                        bool lit = focused && current;
+                        labels[i].TextColor = lit ? spec.FocusedTextColor : Theme.Text;
+                        icons[i].Color = lit ? spec.FocusedTextColor : Theme.IconTint;
+                    }
                 }
             }
             UpdateChip();

@@ -868,12 +868,12 @@ namespace OmegaTube.Ui
                     Widgets.SetVisible(c.Glass, selected);
                     Widgets.SetVisible(c.GlassLit, focused);
                     c.Label.TextColor = selected ? Theme.Text : Theme.TextDim;
-                    c.IconView.Color = selected ? Color.White : new Color(0.67f, 0.67f, 0.67f, 1f);
+                    c.IconView.Color = selected ? Theme.IconTint : Theme.IconDim;
                     continue;
                 }
                 c.View.BackgroundColor = focused ? Theme.CardInfoFocused : selected ? Theme.SurfaceHigh : Color.Transparent;
                 c.Label.TextColor = focused ? Theme.CardTextFocused : selected ? Theme.Text : Theme.TextDim;
-                c.IconView.Color = focused ? new Color(0.16f, 0.16f, 0.16f, 1f) : selected ? Color.White : new Color(0.67f, 0.67f, 0.67f, 1f);
+                c.IconView.Color = focused ? Theme.IconFocused : selected ? Theme.IconTint : Theme.IconDim;
             }
             for (int i = 0; i < rows.Count; i++)
             {
@@ -896,7 +896,8 @@ namespace OmegaTube.Ui
                 r.TitleLabel.TextColor = text;
                 if (r.HintLabel != null)
                 {
-                    r.HintLabel.TextColor = dark ? new Color(0.33f, 0.33f, 0.33f, 1f) : f && glassLook ? new Color(0.85f, 0.85f, 0.85f, 1f) : Theme.TextDim;
+                    r.HintLabel.TextColor = dark ? Theme.TextFocusedDim
+                                          : f && glassLook ? new Color(Theme.Text.R, Theme.Text.G, Theme.Text.B, 0.85f) : Theme.TextDim;
                 }
                 if (r.SwitchView != null)
                 {

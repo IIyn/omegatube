@@ -20,8 +20,9 @@ namespace OmegaTube.Ui
         public int OpenWidth = 330;   // focused: icons + labels
         public int Shift;             // the whole nav sits this far in from the screen edge (overlay)
 
-        // Drawer: the panel resting / open, and the current entry resting / focused.
-        public Color PanelColor, PanelOpenColor, CurrentColor, FocusedColor;
+        // Drawer: the panel resting / open, and the current entry resting / focused; the focused entry's text and icon
+        // (null: Theme.Text and Theme.IconTint).
+        public Color PanelColor, PanelOpenColor, CurrentColor, FocusedColor, FocusedTextColor;
 
         // Overlay
         public string Fade = "nav_fade";            // dark fade behind the open list, from the screen edge

@@ -144,7 +144,8 @@ namespace OmegaTube.Ui
                 var circle = new ImageView { ResourceUrl = Theme.Image("circle_mask"), Color = Theme.GlassHigh,
                                              Size = new Size(128, 128), Position = new Position((panelW - 128) / 2, 46) };
                 emptyView.Add(circle);
-                var icon = new ImageView { ResourceUrl = Theme.Icon("set_account"), Size = new Size(66, 66), Position = new Position(31, 31) };
+                var icon = new ImageView { ResourceUrl = Theme.Icon("set_account"), Size = new Size(66, 66), Position = new Position(31, 31),
+                                           Color = Theme.IconTint };
                 circle.Add(icon);
 
                 emptyMessage = Widgets.Label("", Theme.BodySize + 4, Theme.Text, panelW - 160, 150);

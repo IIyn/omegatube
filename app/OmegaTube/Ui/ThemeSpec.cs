@@ -45,6 +45,14 @@ namespace OmegaTube.Ui
         public Color GlassPanel = new Color(0.10f, 0.11f, 0.14f, 0.34f);
         public Color GlassHigh = new Color(1f, 1f, 1f, 0.16f);
 
+        // The app's icons are white images drawn through these (a light theme makes them dark): on the page,
+        // receding (other categories), and on a focused light element (CardInfoFocused). TextFocusedDim: a hint on
+        // such an element.
+        public Color IconTint = Rgb(0xffffff);
+        public Color IconDim = new Color(0.67f, 0.67f, 0.67f, 1f);
+        public Color IconFocused = new Color(0.16f, 0.16f, 0.16f, 1f);
+        public Color TextFocusedDim = new Color(0.33f, 0.33f, 0.33f, 1f);
+
         public float TitleSize = 34f;
         public float BodySize = 24f;
         public float SmallSize = 19f;

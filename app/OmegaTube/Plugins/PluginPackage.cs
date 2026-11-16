@@ -401,6 +401,7 @@ namespace OmegaTube.Plugins
                     c.BoxFocusedColor = ColorValue(o, "boxFocusedColor", c.BoxFocusedColor, where, allowNull: true);
                     c.TextFocusedColor = ColorValue(o, "textFocusedColor", c.TextFocusedColor, where, allowNull: true);
                     c.OverlayPanel = Image(o, "overlayPanel", c.OverlayPanel, where: where);
+                    c.OverlayTextColor = ColorValue(o, "overlayTextColor", c.OverlayTextColor, where, allowNull: true);
                     t.Cards[kv.Key] = c;
                 }
             }
@@ -424,6 +425,7 @@ namespace OmegaTube.Plugins
                 r.PanelOpenColor = ColorValue(o, "panelOpenColor", r.PanelOpenColor, where, allowNull: true);
                 r.CurrentColor = ColorValue(o, "currentColor", r.CurrentColor, where, allowNull: true);
                 r.FocusedColor = ColorValue(o, "focusedColor", r.FocusedColor, where, allowNull: true);
+                r.FocusedTextColor = ColorValue(o, "focusedTextColor", r.FocusedTextColor, where, allowNull: true);
                 r.Fade = Image(o, "fade", r.Fade, where: where);
                 r.FadeTail = Int(o, "fadeTail", r.FadeTail, 0, 600, where);
                 r.Chip = Image(o, "chip", r.Chip, where: where);
@@ -568,6 +570,10 @@ namespace OmegaTube.Plugins
             new ColorToken("glassButton", t => t.GlassButton, (t, c) => t.GlassButton = c),
             new ColorToken("glassPanel", t => t.GlassPanel, (t, c) => t.GlassPanel = c),
             new ColorToken("glassHigh", t => t.GlassHigh, (t, c) => t.GlassHigh = c),
+            new ColorToken("icon", t => t.IconTint, (t, c) => t.IconTint = c),
+            new ColorToken("iconDim", t => t.IconDim, (t, c) => t.IconDim = c),
+            new ColorToken("iconFocused", t => t.IconFocused, (t, c) => t.IconFocused = c),
+            new ColorToken("textFocusedDim", t => t.TextFocusedDim, (t, c) => t.TextFocusedDim = c),
         };
     }
 }

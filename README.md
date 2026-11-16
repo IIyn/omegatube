@@ -40,7 +40,7 @@
 - **Audio tracks** for multi-language videos, playback speed and loop.
 - **Dislike counts**, from [Return YouTube Dislike](https://returnyoutubedislike.com).
 - **A remote-friendly interface** that follows SmartTube's layout, with a customisable side menu.
-- **Interface plugins** (Settings → Interface): new looks for the app, made by the community and installed by address or from the [official list](https://iiyn.github.io/omegatube/plugins/). A plugin is data only (JSON and images): it cannot see your accounts or reach the network. Example: [Glorious](https://github.com/saalmaan/glorious-omegatube-plugin), an immersive home where the focused video fills the screen. Format: [docs/plugins.md](docs/plugins.md).
+- **Interface plugins** (Settings → Interface): new looks for the app, made by the community and installed by address or from the [official list](https://iiyn.github.io/omegatube/plugins/). A plugin is data only (JSON and images): it cannot see your accounts or reach the network. Examples: [Glorious](https://github.com/saalmaan/glorious-omegatube-plugin), an immersive home where the focused video fills the screen, and [Catppuccin Latte](https://github.com/IIyn/catppuccin-latte-omegatube-plugin), a light theme that documents every key. Format: [docs/plugins.md](docs/plugins.md).
 - **Languages**: English, French, Spanish.
 
 ## Why OmegaTube?

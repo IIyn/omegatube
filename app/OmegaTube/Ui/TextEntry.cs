@@ -44,7 +44,7 @@ namespace OmegaTube.Ui
             BackgroundColor = new Color(0, 0, 0, 0.6f);
 
             int panelH = 110 + (int)(BoxLines * BoxSize * 1.35f) + 70 + 5 * (KeyH + KeyGap) + 40;
-            var panel = Widgets.Rounded(new Color(0.09f, 0.09f, 0.09f, 0.98f), PanelW, panelH, Theme.PanelRadius);
+            var panel = Widgets.Rounded(new Color(Theme.Panel.R, Theme.Panel.G, Theme.Panel.B, 0.98f), PanelW, panelH, Theme.PanelRadius);
             panel.Position = new Position((1920 - PanelW) / 2, (1080 - panelH) / 2);
             Add(panel);
 

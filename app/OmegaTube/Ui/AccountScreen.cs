@@ -119,6 +119,7 @@ namespace OmegaTube.Ui
             avatarBack.Position = new Position(50, 50);
             profile.Add(avatarBack);
             var person = Widgets.Icon("person", 120);
+            person.Color = Theme.IconTint;
             person.Position = new Position(35, 35);
             avatarBack.Add(person);
             avatar = Widgets.Round(new ImageView { Size = new Size(190, 190), Position = new Position(50, 50) }, 95);
@@ -165,6 +166,7 @@ namespace OmegaTube.Ui
         {
             int y = 34 + i * 96;
             var img = Widgets.Icon(icon, 48);
+            img.Color = Theme.IconTint;
             img.Position = new Position(56, y + 12);
             card.Add(img);
             var t = Widgets.Label(title, Theme.BodySize + 4, Theme.Text, 860, 40);

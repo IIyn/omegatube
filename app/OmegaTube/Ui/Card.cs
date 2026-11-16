@@ -25,6 +25,7 @@ namespace OmegaTube.Ui
         public bool Shown { get; private set; } = true;   // managed mirror of Visibility (rows show / hide far cards)
 
         public const int MetaRowH = 44;   // Overlay: the meta line under the thumbnail
+        private static readonly Color BadgeText = new Color(0.945f, 0.945f, 0.945f, 1f);   // Omega's text, on the dark badge
         private const int InfoInset = 8, InfoHeight = 54, TitlePad = 14;
         private const int MarqueePauseMs = 1100, MarqueePxPerSec = 70;
 
@@ -131,7 +132,7 @@ namespace OmegaTube.Ui
             string badge = Item.Live ? T("LIVE") : Item.Duration;
             if (!string.IsNullOrEmpty(badge))
             {
-                var duration = Widgets.Label(" " + badge + " ", Theme.SmallSize - 2, Theme.Text);
+                var duration = Widgets.Label(" " + badge + " ", Theme.SmallSize - 2, BadgeText);   // on a dark badge, any theme
                 duration.BackgroundColor = Item.Live ? Theme.Accent : new Color(0, 0, 0, 0.82f);
                 Widgets.Round(duration, 4);
                 duration.ParentOrigin = Tizen.NUI.ParentOrigin.TopLeft;
@@ -147,7 +148,7 @@ namespace OmegaTube.Ui
                 int titleW = width - 2 * InfoInset - 2 * TitlePad;
                 titleClip = new View { Position = new Position(TitlePad, 9), Size = new Size(titleW, 36),
                                        ClippingMode = ClippingModeType.ClipChildren };
-                title = Widgets.Label(Item.Title, Theme.BodySize, Theme.Text, titleW, 36);
+                title = Widgets.Label(Item.Title, Theme.BodySize, spec.OverlayTextColor ?? Theme.Text, titleW, 36);
                 titleClip.Add(title);
                 info.Add(titleClip);
                 // Channel, views and age on one line under the card.

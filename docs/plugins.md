@@ -179,7 +179,15 @@ dies while starting with a plugin (before the home shows), the next start uses O
 
 Colour names usable as values elsewhere: `background`, `surface`, `surfaceHigh`, `surfaceFocused`, `cardInfo`,
 `cardInfoFocused`, `cardTextFocused`, `accent`, `pageTint`, `text`, `textDim`, `textMuted`, `scrim`, `panel`,
-`panelLine`, `success`, `glassButton`, `glassPanel`, `glassHigh`. Ranges: type sizes 12 to 80, radii 0 to 60.
+`panelLine`, `success`, `glassButton`, `glassPanel`, `glassHigh`, `icon`, `iconDim`, `iconFocused`,
+`textFocusedDim`. Ranges: type sizes 12 to 80, radii 0 to 60.
+
+The app's icons are white images drawn through `icon` (on the page), `iconDim` (receding, e.g. the other Settings
+categories) and `iconFocused` (on a focused light element, `cardInfoFocused`); `textFocusedDim` is a hint on such
+an element. They default to white, grey, near black and dark grey: a light theme sets them dark / light.
+
+The player (controls, watch section, side panels) keeps Omega's dark palette because it sits over the video; only
+`accent` follows the theme (progress bar, focus).
 
 **Images**, in every file: a path inside the package (`"images/x.png"`, `.png` / `.jpg` / `.webp`), or the name of
 one of the app's own images without extension (`"round_mask"`). Where an image is optional (`shadow`, `outline`,
@@ -209,6 +217,9 @@ plugin tunes it. A new info style is a host PR, like a new rail mode.
   "featured": { "info": "none", "shadow": "images/card_shadow9.9.png", "outline": "images/card_ring9.9.png" }
 }
 ```
+
+`overlay` also takes `overlayTextColor` (default `text`), for a title panel lighter or darker than the
+page.
 
 Common to every look: `focusScale` (1–1.2), `mask` (the alpha mask that rounds the thumbnail), `shadow` (a
 pre-blurred nine-patch; its blur margin `shadowMargin` 0–100 and drop `shadowDrop` 0–50 travel with it), `outline`
@@ -244,7 +255,8 @@ views, age); a plugin never sees ids or URLs.
   one pill with the current section, opens over the content with a fade and a glass pill on the focused entry).
   Both are native. A new kind of rail is a host PR that adds a mode.
 - Geometry: `width` (icons only), `openWidth` (with labels), `shift` (distance from the screen edge).
-- `drawer` colours: `panelColor`, `panelOpenColor`, `currentColor`, `focusedColor` (default: theme tokens).
+- `drawer` colours: `panelColor`, `panelOpenColor`, `currentColor`, `focusedColor` (default: theme tokens), and
+  `focusedTextColor`, the focused entry's text and icon (default: `text` and `icon`).
 - `overlay`: `fade` (image behind the open list) and `fadeTail`, `chip` (folded pill background), `idleOpacity` /
   `openOpacity` (entries other than the current one, folded / open), `underlineColor`. The focused entry's pill is
   the theme's `pillLit` surface.
@@ -252,8 +264,7 @@ views, age); a plugin never sees ids or URLs.
   `history`, `set_account`, `settings`, and the section icons `music`, `gaming`, `trending`, `news`, `sports`,
   `live`, `kids`); otherwise `iconSuffix` picks a variant of the app's icon when it exists; otherwise the app's icon.
 - Ranges: `width` 60–300, `openWidth` up to 700, `shift` 0–100, `fadeTail` 0–600, opacities 0–1.
-- Tube is a `drawer` with `panelOpenColor: "background"`, a light `focusedColor` and dark text on it (a
-  `focusedTextColor` key to add with the Tube port).
+- Tube is a `drawer` with `panelOpenColor: "background"`, a light `focusedColor` and `focusedTextColor` dark.
 
 ## home.json — home layout
 
@@ -335,6 +346,26 @@ omega.log("loaded");   // goes to the dev log only
 - The engine is created in the background during start-up. Measured on a UE65AU6905 (Tizen 6, .NET Core 3.1.3 ARM):
   about 0.9 s cold (engine + parse + first call), then about 0.1 ms per focus callback and about 3 ms for a
   50-card computation. That is why scripts react to focus and never run per frame. Animations are always native.
+
+## Evolving the format
+
+The app keeps changing (a Playlists section, Shorts, a new screen...). Plugins describe looks, not sections, so new
+parts of the app show up in every plugin, drawn with the plugin's colours and surfaces. The rules that keep it so:
+
+- **New things get defaults that look right in any theme**: built from the theme's tokens and surfaces, never from
+  hard-coded colours. A plugin that does not know them still shows them properly.
+- **Adding** a key, a card look, a rail entry icon key or a colour token is a **minor** SDK version (1.0 -> 1.1):
+  older plugins keep loading and get the defaults; a plugin using the new keys declares the new `sdk`, and older
+  apps list it as "needs a newer OmegaTube" instead of half-loading it. Bump `PluginPackage.SdkMinor` and list
+  the new keys here.
+- **Renaming, removing or changing the meaning** of a key is a **major** version (2.0): every plugin needs an
+  update. Avoid it; add a new key next to the old one instead.
+- A new section only needs its icon key listed under `rail.json`; a new kind of item (vertical Shorts...) needs a
+  new built-in card look or info style with defaults, then plugins may restyle it.
+
+SDK versions: **1.0**, the first format (still open to changes until the first release that ships it).
+
+A complete example using every key: the Catppuccin Latte plugin (`catppuccin-latte-omegatube-plugin`).
 
 ## Host work this needs
 
