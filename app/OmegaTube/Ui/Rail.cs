@@ -4,7 +4,7 @@ using Tizen.NUI.BaseComponents;
 
 namespace OmegaTube.Ui
 {
-    // Navigation rail. Two styles:
+    // Navigation rail, drawn from a RailSpec (the theme's rail). Two modes:
     //  - Omega (default): a panel that shows icons only while the content has focus, icons + labels while the
     //    rail has focus.
     //  - Glorious (overlay): while the content has the focus the nav is folded into one dark glass pill with the
@@ -23,9 +23,9 @@ namespace OmegaTube.Ui
         private const int VisibleItems = 11;       // beyond this the list scrolls with the focus
         private const int IconX = 56;              // icon left edge inside the rail (breathing space from the screen edge)
         private const int IconSize = 40;
-        private const float IdleOpacity = 0.25f;   // overlay: entries other than the current one, while the nav is not open
         private const int ChipHeight = 60, ChipTextX = 96, ChipPadRight = 28;   // the folded pill: icon + name of the current entry
 
+        private readonly RailSpec spec;
         private readonly bool overlay;
         private readonly List<View> items = new List<View>();
         private readonly List<ImageView> icons = new List<ImageView>();
@@ -54,23 +54,25 @@ namespace OmegaTube.Ui
         public int Index => index;
         public int Count => items.Count;
 
-        public Rail(IList<Entry> entries, bool overlay = false)
+        // spec: the rail look (null: the theme's).
+        public Rail(IList<Entry> entries, RailSpec spec = null)
         {
-            this.overlay = overlay;
-            Size = new Size(overlay ? Theme.RailWidth : Theme.RailExpandedWidth, 1080);
+            this.spec = spec ?? Theme.Current.Rail;
+            overlay = this.spec.Mode == RailMode.Overlay;
+            Size = new Size(overlay ? this.spec.Width : this.spec.OpenWidth, 1080);
 
             if (overlay)
             {
                 // Frosted panel, shown (widened) only while the rail is focused.
-                // The whole nav sits NavShift in from the screen edge; its backdrop is a dark fade that starts at the
+                // The whole nav sits the spec's Shift in from the screen edge; its backdrop is a dark fade that starts at the
                 // screen edge and eases out to the right (so labels stay legible without a visible panel edge).
-                Position = new Position(Theme.NavShift, 0);
-                panel = new ImageView { ResourceUrl = Theme.Image("nav_fade"), FittingMode = FittingModeType.ScaleToFill,
-                                        Size = new Size(FadeWidth(false), 1080), Position = new Position(-Theme.NavShift, 0),
+                Position = new Position(this.spec.Shift, 0);
+                panel = new ImageView { ResourceUrl = Theme.ImagePath(this.spec.Fade), FittingMode = FittingModeType.ScaleToFill,
+                                        Size = new Size(FadeWidth(false), 1080), Position = new Position(-this.spec.Shift, 0),
                                         Opacity = 0f };
                 Add(panel);
                 // The pill that lifts the focused entry; parked until the rail is focused.
-                glassPill = Widgets.SurfaceCard(true, Theme.RailExpandedWidth - 24, ItemHeight - 14, true);
+                glassPill = Widgets.SurfaceCard(true, this.spec.OpenWidth - 24, ItemHeight - 14, true);
                 glassPill.Hide();
                 Add(glassPill);
 
@@ -84,7 +86,7 @@ namespace OmegaTube.Ui
             }
             else
             {
-                panel = new View { Size = new Size(Theme.RailWidth, 1080), BackgroundColor = Theme.Background };
+                panel = new View { Size = new Size(this.spec.Width, 1080), BackgroundColor = PanelColor(false) };
                 Add(panel);
                 // Omega: the top-left profile avatar (falls back to a person icon when signed out / no photo).
                 // Focusable: the home screen moves focus here from the top rail entry, and OK cycles accounts.
@@ -97,11 +99,11 @@ namespace OmegaTube.Ui
                 Widgets.MaskedImage(avatar, Theme.Icon("person"), Theme.Image("circle_mask"));
             }
 
-            var clip = new View { Position = new Position(0, Top), Size = new Size(Theme.RailExpandedWidth, 1080 - Top),
+            var clip = new View { Position = new Position(0, Top), Size = new Size(this.spec.OpenWidth, 1080 - Top),
                                   ClippingMode = ClippingModeType.ClipChildren };
             railClip = clip;
             Add(clip);
-            list = new View { Size = new Size(Theme.RailExpandedWidth, 2000) };
+            list = new View { Size = new Size(this.spec.OpenWidth, 2000) };
             clip.Add(list);
 
             for (int i = 0; i < entries.Count; i++)
@@ -109,26 +111,21 @@ namespace OmegaTube.Ui
                 var item = new View
                 {
                     Position = new Position(overlay ? 0 : 14, i * ItemHeight),
-                    Size = new Size(overlay ? Theme.RailExpandedWidth : Theme.RailWidth - 28, ItemHeight - 12),
+                    Size = new Size(overlay ? this.spec.OpenWidth : this.spec.Width - 28, ItemHeight - 12),
                 };
                 if (!overlay)
                 {
                     Widgets.Round(item, (ItemHeight - 12) / 2);
                 }
-                // Overlay uses the outline variant when it exists, else falls back to the filled icon.
-                string iconName = entries[i].Icon;
-                if (overlay && System.IO.File.Exists(Theme.Icon(iconName + "_outline")))
-                {
-                    iconName += "_outline";
-                }
-                var icon = new ImageView { ResourceUrl = Theme.Icon(iconName), Size = new Size(IconSize, IconSize),
+                // The spec's replacement or variant (Glorious: outline icons) when there is one, else the app's icon.
+                var icon = new ImageView { ResourceUrl = this.spec.IconPath(entries[i].Icon), Size = new Size(IconSize, IconSize),
                                            Position = new Position(overlay ? IconX : 21, (ItemHeight - 12 - IconSize) / 2) };
                 item.Add(icon);
                 icons.Add(icon);
                 if (overlay)
                 {
                     // Thick accent underline the width of the icon, marking the current section.
-                    var underline = Widgets.Rounded(Theme.Accent, IconSize, 6, 3);
+                    var underline = Widgets.Rounded(this.spec.UnderlineColor ?? Theme.Accent, IconSize, 6, 3);
                     underline.Position = new Position(IconX, (ItemHeight - 12 + IconSize) / 2 + 2);
                     underline.Hide();
                     item.Add(underline);
@@ -148,7 +145,7 @@ namespace OmegaTube.Ui
             {
                 // Folded pill (the nav's resting state): dark smoked glass so it reads on any artwork.
                 chip = new View { Position = new Position(0, 38), Size = new Size(240, ChipHeight) };
-                chipGlass = new ImageView { ResourceUrl = Theme.Image("glass_dark9.9"), Size = new Size(240, ChipHeight) };
+                chipGlass = new ImageView { ResourceUrl = Theme.ImagePath(this.spec.Chip), Size = new Size(240, ChipHeight) };
                 chip.Add(chipGlass);
                 var chevron = Widgets.Label("‹", Theme.BodySize + 8, Theme.TextDim, 30, ChipHeight);
                 chevron.VerticalAlignment = VerticalAlignment.Center;
@@ -212,18 +209,18 @@ namespace OmegaTube.Ui
             }
             widen?.Stop();
             widen = new Animation(160);
-            float w = value ? Theme.RailExpandedWidth : Theme.RailWidth;
+            float w = value ? spec.OpenWidth : spec.Width;
             widen.AnimateTo(panel, "SizeWidth", w, Widgets.EaseOut);
             widen.Play();
             foreach (View item in items)
             {
-                item.SizeWidth = (value ? Theme.RailExpandedWidth : Theme.RailWidth) - 28;
+                item.SizeWidth = (value ? spec.OpenWidth : spec.Width) - 28;
             }
             foreach (TextLabel l in labels)
             {
                 Widgets.SetVisible(l, value);
             }
-            panel.BackgroundColor = value ? Theme.Surface : Theme.Background;
+            panel.BackgroundColor = PanelColor(value);
             Refresh();
         }
 
@@ -290,8 +287,11 @@ namespace OmegaTube.Ui
         }
 
         // Width of the overlay's fade, from the screen's left edge: icons only, or past the labels when expanded.
-        private static int FadeWidth(bool expanded) =>
-            Theme.NavShift + (expanded ? Theme.RailExpandedWidth + Theme.NavFadeTail : Theme.RailWidth);
+        private int FadeWidth(bool expanded) =>
+            spec.Shift + (expanded ? spec.OpenWidth + spec.FadeTail : spec.Width);
+
+        // Drawer: the panel's colour, resting or open.
+        private Color PanelColor(bool open) => open ? spec.PanelOpenColor ?? Theme.Surface : spec.PanelColor ?? Theme.Background;
 
         public void Move(int delta)
         {
@@ -324,13 +324,13 @@ namespace OmegaTube.Ui
                 {
                     // Focused: every entry is legible, the current one lit. Idle: unselected icons recede to
                     // 25%, the current section stays bright with its thick accent underline.
-                    items[i].Opacity = open ? (current ? 1f : 0.7f) : (current ? 1f : IdleOpacity);
+                    items[i].Opacity = open ? (current ? 1f : spec.OpenOpacity) : (current ? 1f : spec.IdleOpacity);
                     Widgets.SetVisible(underlines[i], current && !open);
                 }
                 else
                 {
-                    items[i].BackgroundColor = focused && current ? Theme.Accent
-                                             : current ? Theme.SurfaceHigh : Color.Transparent;
+                    items[i].BackgroundColor = focused && current ? spec.FocusedColor ?? Theme.Accent
+                                             : current ? spec.CurrentColor ?? Theme.SurfaceHigh : Color.Transparent;
                 }
             }
             UpdateChip();

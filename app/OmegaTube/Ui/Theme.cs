@@ -44,18 +44,15 @@ namespace OmegaTube.Ui
         public static float BodySize => Current.BodySize;
         public static float SmallSize => Current.SmallSize;
         public static int CardRadius => Current.CardRadius;
+        public static RailSpec Rail => Current.Rail;
         public static int PanelRadius => Current.PanelRadius;
 
-        public const int RailWidth = 110;          // collapsed: icons only
-        public const int RailExpandedWidth = 330;  // focused: icons + labels
         public const int CardWidth = 352;
         public const int CardGap = 30;
         public const int FocusMargin = 30;         // room for the focused card's scale-up
         public const int RowHeight = 470;
 
         // Glorious home geometry.
-        public const int NavShift = 25;          // the Glorious nav sits this far in from the screen edge
-        public const int NavFadeTail = 150;        // the nav's fade reaches this far past the expanded labels
         public const int GloriousInset = 75;    // rows start here, clearing the nav; earlier cards slide under it
         public const int GloriousRowsTop = 120;    // the rows' list starts here on screen; the hero fills the band above
         public const int HeroFirstRowTop = 500;    // first row's top inside that list: below the hero's text block

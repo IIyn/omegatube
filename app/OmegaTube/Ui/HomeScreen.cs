@@ -28,11 +28,11 @@ namespace OmegaTube.Ui
             public Func<Screen> Embed;                    // a screen shown beside the rail
         }
 
-        private const int ContentX = Theme.RailWidth + 20;
+        private static int ContentX => Theme.Rail.Width + 20;
         private const int GridTop = 110;
         private const int OpenDelayMs = 350;   // pause on a rail entry before it opens
         // Hosted screens (Account, Settings) sit beside the rail; Glorious's nav is shifted in, so they start further right.
-        private int EmbedX => Glorious ? Theme.RailWidth + Theme.NavShift : Theme.RailWidth;
+        private int EmbedX => Theme.Rail.Width + Theme.Rail.Shift;
         private float EmbedScale => (1920f - EmbedX) / 1920f;
         private static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(5);
         private const int PrewarmIdleMs = 1500;   // remote untouched that long: build one entry ahead
@@ -312,7 +312,7 @@ namespace OmegaTube.Ui
             {
                 entries.Add(new Rail.Entry { Icon = s.Icon, Label = s.Title });
             }
-            rail = new Rail(entries, Glorious);
+            rail = new Rail(entries);
             Root.Add(rail);  // last: the expanded rail draws over the content
             embedHost.Position = new Position(EmbedX, 0);
             embedHost.Size = new Size(1920 - EmbedX, 1080);

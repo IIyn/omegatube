@@ -196,24 +196,26 @@ views, age); a plugin never sees ids or URLs.
 {
   "mode": "overlay",
   "width": 110, "openWidth": 330, "shift": 25,
-  "background": { "image": "images/nav_fade.png" },
-  "icons": { "home": "images/icons/home.png", "search": "images/icons/search.png" },
-  "entry": {
-    "height": 84, "iconSize": 40,
-    "idle":    { "opacity": 0.25 },
-    "current": { "underline": { "color": "accent", "height": 4 } },
-    "focused": { "surface": "pill", "labelColor": "text" }
-  },
-  "folded": { "chip": { "surface": "panel", "height": 60 } },
-  "avatar": { "size": 72, "ring": "accent" }
+  "fade": "images/nav_fade.png", "fadeTail": 150,
+  "chip": "images/glass_dark9.9.png",
+  "idleOpacity": 0.25, "openOpacity": 0.7, "underlineColor": "accent",
+  "iconSuffix": "_outline",
+  "icons": { "home": "images/icons/home.png", "search": "images/icons/search.png" }
 }
 ```
 
-- `mode`: `drawer` (Omega: a panel that widens with labels) or `overlay` (Glorious: a folded chip that opens over
-  the content). Both are native. A new kind of rail is a host PR that adds a mode.
-- Tube is a `drawer` with `background: "background"` and `focused.surface: { "color": "#e8e8e8", "radius": 42 }`
-  plus `focused.labelColor: "#0f0f0f"`.
-- Icons default to the app's set; a plugin may replace any of them by key.
+- `mode`: `drawer` (Omega: a panel that widens with the labels while focused) or `overlay` (Glorious: folded into
+  one pill with the current section, opens over the content with a fade and a glass pill on the focused entry).
+  Both are native. A new kind of rail is a host PR that adds a mode.
+- Geometry: `width` (icons only), `openWidth` (with labels), `shift` (distance from the screen edge).
+- `drawer` colours: `panelColor`, `panelOpenColor`, `currentColor`, `focusedColor` (default: theme tokens).
+- `overlay`: `fade` (image behind the open list) and `fadeTail`, `chip` (folded pill background), `idleOpacity` /
+  `openOpacity` (entries other than the current one, folded / open), `underlineColor`. The focused entry's pill is
+  the theme's `pillLit` surface.
+- Icons: `icons` replaces an entry's icon by key; otherwise `iconSuffix` picks a variant of the app's icon when it
+  exists (Glorious: outline icons); otherwise the app's icon.
+- Tube is a `drawer` with `panelOpenColor: "background"`, a light `focusedColor` and dark text on it (a
+  `focusedTextColor` key to add with the Tube port).
 
 ## home.json — home layout
 
@@ -299,7 +301,7 @@ In the order it would land. Each step is useful on its own.
 2. **Card looks**: `Card` builds from a `CardSpec` (info style + parameters). Classic, glass and featured are
    specs in the theme; `FeedRow` / `ShelfList` take a spec instead of `glass` / `thumbOnly`. Tube adds the
    `lines` style.
-3. **Rail modes**: `Rail(entries, overlay)` becomes `Rail(entries, RailSpec)`.
+3. **Rail modes**: `Rail(entries, overlay)` becomes `Rail(entries, RailSpec)`; the rail geometry leaves `Theme`.
 4. **Home layout**: `HomeScreen.FeedFor`, `ShelfList(bigFirst, heroMode)` and `UpdateHero` read `HomeSpec`. The
    hero becomes optional per spec, not per `Theme.Glorious`.
 5. **Plugin loader**: download, unzip into the data dir, validate (JSON schema, sizes, paths stay inside the
