@@ -377,9 +377,9 @@ namespace OmegaTube.Ui
                          });
             style.Section = T("Interface");
             l.Add(style);
-            if (App.Config.UiStyle == "glorious")
+            if (Theme.Home.Hero != null)
             {
-                // Glorious options, shown right under the interface choice.
+                // Options of a home with a hero backdrop (Glorious), shown right under the interface choice.
                 Row hero = Toggle(T("Home video preview"), T("Plays a muted video behind the first home row after a short rest"),
                                   () => App.Config.HeroPreview, v => App.Config.HeroPreview = v);
                 l.Add(hero);

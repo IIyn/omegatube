@@ -6,9 +6,9 @@ using Tizen.NUI.BaseComponents;
 
 namespace OmegaTube.Ui
 {
-    // Full-screen backdrop for the "Glorious" home style: the focused item's thumbnail fills the screen and
-    // fades to black on the left (under the nav / behind the text) and along the bottom (under the rows), with
-    // the item's title and a metadata line over it. Hero.Display(item) is called by HomeScreen as focus moves.
+    // Full-screen backdrop behind a home's first row (HomeSpec.Hero, the Glorious home): the focused item's
+    // thumbnail fills the screen and fades to black on the left (under the nav / behind the text) and along the
+    // bottom (under the rows), with the item's title and a metadata line over it. Hero.Display(item) is called by HomeScreen as focus moves.
     //
     // The picture (Backdrop) is the video's sharp maxresdefault frame, fetched by id and cross-faded in once it is
     // loaded, so the screen never shows a blurry or stretched half-loaded stage; a video with no such frame gets the
@@ -32,12 +32,10 @@ namespace OmegaTube.Ui
         private const double PlayTimeoutS = 15;     // created but never playing
         private const int Playing = 3;              // esp::State PLAYING
 
-        // Text block geometry (bottom aligned, just above the first row's heading).
-        // The block ends just above the first row's heading; the title is 40% of the screen wide, up to two lines of 59 px,
-        // then an ellipsis.
-        private const int TextBottom = Theme.GloriousRowsTop + Theme.HeroFirstRowTop - 16;
-        private const int MetaH = 44, TitleGap = 26, TitleH = 150, TitleW = 768;
-        private const int TitleTop = TextBottom - MetaH - TitleGap - TitleH;
+        // Text block geometry: bottom aligned, ending just above the first row's heading (from the rows' spec); the
+        // title (HeroSpec width and size) wraps to two lines, then an ellipsis.
+        private const int MetaH = 44, TitleGap = 26, TitleH = 150;
+        private readonly HeroSpec spec;
 
         private readonly App app;
         private readonly Backdrop art;
@@ -51,7 +49,7 @@ namespace OmegaTube.Ui
         private string currentId = "";
         private string armedId;     // its countdown is running or its preview is on
         private string doneId;      // its preview ended / failed: not retried until the focus leaves and comes back
-        private bool active;        // on screen: first row of a Glorious feed, home visible
+        private bool active;        // on screen: first row of a hero home feed, home visible
         private bool countdownDone;
         private bool revealed;      // the still has faded out over the playing video
         private long firstPlayingMs = -1;   // position at the first PLAYING sample: motion is measured from it
@@ -61,9 +59,12 @@ namespace OmegaTube.Ui
         // The layers under the hero (window, home root) must turn see-through while the video plane shows.
         public Action<bool> SeeThrough;
 
-        public Hero(App app)
+        public Hero(App app, HeroSpec spec, RowsSpec rows)
         {
             this.app = app;
+            this.spec = spec;
+            int textBottom = rows.Top + rows.FirstRowTop - 16;
+            int titleTop = textBottom - MetaH - TitleGap - TitleH;
             Size = new Size(1920, 1080);
             BackgroundColor = Theme.Background;
 
@@ -72,19 +73,19 @@ namespace OmegaTube.Ui
             // Left fade: solid black at the left edge -> clear by the centre. Bottom fade: clear in the upper screen
             // -> dark across the lower band under the rows. Both full-screen (so no seam), pre-rendered PNGs: the TV's
             // gradient visuals band and cost a shader pass each (tools/hero-scrims).
-            Add(new ImageView { ResourceUrl = Theme.Image("hero_left"), Size = new Size(1920, 1080), FittingMode = FittingModeType.ScaleToFill });
-            Add(new ImageView { ResourceUrl = Theme.Image("hero_bottom"), Size = new Size(1920, 1080), FittingMode = FittingModeType.ScaleToFill });
+            Add(new ImageView { ResourceUrl = Theme.ImagePath(spec.LeftScrim), Size = new Size(1920, 1080), FittingMode = FittingModeType.ScaleToFill });
+            Add(new ImageView { ResourceUrl = Theme.ImagePath(spec.BottomScrim), Size = new Size(1920, 1080), FittingMode = FittingModeType.ScaleToFill });
 
             // The text block is bottom-aligned just above the first row: the channel, views and age on the last line
             // and the title (one or two lines, growing upward) above it.
-            title = Widgets.Label("", 59f, Theme.Text, TitleW, TitleH);   // regular weight; wraps to a second line
-            title.Position = new Position(Theme.GloriousInset, TitleTop);
+            title = Widgets.Label("", spec.TitleSize, Theme.Text, spec.TitleWidth, TitleH);   // regular weight; wraps to a second line
+            title.Position = new Position(rows.Inset, titleTop);
             title.MultiLine = true;
             title.VerticalAlignment = VerticalAlignment.Bottom;
             Add(title);
 
             meta = Widgets.Label("", Theme.BodySize + 2, Theme.Text, 760, MetaH);
-            meta.Position = new Position(Theme.GloriousInset, TextBottom - MetaH);
+            meta.Position = new Position(rows.Inset, textBottom - MetaH);
             Add(meta);
 
             video.Ready += () => UiGuard.Run("Hero.VideoReady", OnVideoReady);
@@ -206,7 +207,7 @@ namespace OmegaTube.Ui
         private void Arm()
         {
             if (!active || currentItem == null || string.IsNullOrEmpty(currentId) || armedId == currentId
-                || doneId == currentId || !app.Config.HeroPreview)
+                || doneId == currentId || !app.Config.HeroPreview || !spec.VideoPreview)
             {
                 return;
             }

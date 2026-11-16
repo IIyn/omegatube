@@ -222,30 +222,34 @@ views, age); a plugin never sees ids or URLs.
 ```json
 {
   "feeds": "rows",
-  "rows": {
-    "top": 120, "inset": 75, "edgeFades": { "left": "images/fade_l.png", "right": "images/fade_r.png", "bottom": "images/fade_b.png" },
-    "first":  { "card": "featured", "height": 340, "top": 500, "title": true },
-    "others": { "card": "glass", "height": 374, "title": true },
-    "flat":   { "featured": 10, "gridColumns": 5, "gridCard": "glass" }
-  },
-  "grid": { "columns": 3, "card": "wall", "gapX": 34, "gapY": 48, "top": 160 },
   "header": false,
-  "page": { "background": "background", "belowFirstRow": "pageTint" },
+  "rows": {
+    "top": 120, "underRail": true, "inset": 75,
+    "card": "glass", "cardWidth": 352, "cardGap": 30, "rowHeight": 374,
+    "firstCard": "featured", "firstCardWidth": 317, "firstCardGap": 34, "firstRowHeight": 340, "firstRowTop": 500,
+    "flatFeatured": 10, "gridColumns": 5, "gridCardWidth": 330, "gridGap": 30,
+    "gridRowHeight": 300, "gridTitledRowHeight": 360
+  },
+  "grid": { "top": 600, "left": 45 },
   "hero": {
-    "rows": [0],
-    "art": "maxres",
-    "scrims": [ "images/hero_left.png", "images/hero_bottom.png" ],
-    "title": { "x": 75, "bottom": 604, "width": 768, "lines": 2, "size": 59 },
-    "meta":  { "bind": "item.meta", "size": 26 },
-    "videoPreview": { "after": 3000, "ring": true }
-  }
+    "leftScrim": "images/hero_left.png", "bottomScrim": "images/hero_bottom.png",
+    "titleWidth": 768, "titleSize": 59, "videoPreview": true
+  },
+  "tintBelowFirstRow": true,
+  "fades": { "left": "images/scrim_left.png", "right": "images/scrim_right.png", "bottom": "images/scrim_rowbottom.png" }
 }
 ```
 
-- `feeds`: `rows` (every section as titled rows, like Glorious), `auto` (Omega: Home as rows, other sections as a
-  grid) or `grid`.
-- `hero`: the native `Hero` + `Backdrop` + `VideoPreview` block, enabled on the listed rows. Omit it for no hero.
-- `page.belowFirstRow`: the tint Glorious switches to under the first row.
+- `feeds`: `auto` (Omega: Home as rows, the other sections as a grid) or `rows` (every section as rows; a flat
+  feed becomes a first row of `flatFeatured` videos, then grid rows of `gridColumns`).
+- `rows`: where the list sits (`top`; `underRail`: full width so cards slide under the nav, else beside the rail),
+  the focused card's x (`inset`), the card look and geometry of the rows, and an optional different first row
+  (`firstCard`...; `firstRowTop` holds it lower while focused, under the hero text).
+- `grid`: the grid feeds' position (`left` omitted: beside the rail).
+- `hero`: the native backdrop block (focused video's picture, title, details, muted video preview after a rest)
+  behind the first row. Omit it for no hero. Its text block ends just above the first row.
+- `tintBelowFirstRow`: the page turns `pageTint` once the focus leaves the first row (hero homes).
+- `fades`: edge fades over the rows band while the hero shows.
 - The user-facing toggles (hero video preview, card preview, data saver) stay app settings. A plugin can only
   enable a block; the user can still switch the behaviour off.
 
@@ -302,8 +306,9 @@ In the order it would land. Each step is useful on its own.
    specs in the theme; `FeedRow` / `ShelfList` take a spec instead of `glass` / `thumbOnly`. Tube adds the
    `lines` style.
 3. **Rail modes**: `Rail(entries, overlay)` becomes `Rail(entries, RailSpec)`; the rail geometry leaves `Theme`.
-4. **Home layout**: `HomeScreen.FeedFor`, `ShelfList(bigFirst, heroMode)` and `UpdateHero` read `HomeSpec`. The
-   hero becomes optional per spec, not per `Theme.Glorious`.
+4. **Home layout**: `HomeScreen.FeedFor`, `ShelfList` and `UpdateHero` read `HomeSpec` (rows, grid, hero,
+   tint, fades). The hero is optional per spec. `Theme.Glorious` is gone: Glorious is entirely data
+   (`ThemeSpec.Glorious()`), which is what the plugin loader will read from JSON.
 5. **Plugin loader**: download, unzip into the data dir, validate (JSON schema, sizes, paths stay inside the
    package), Settings › Interface lists Omega + official + installed plugins, the "not validated" warning,
    updates (through the index for official ones), fallback. On `gh-pages`: `plugins/index.json`, the

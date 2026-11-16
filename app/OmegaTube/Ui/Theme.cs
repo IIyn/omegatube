@@ -3,7 +3,7 @@ using Tizen.NUI;
 namespace OmegaTube.Ui
 {
     // The interface's look. Colours, type sizes, radii and surfaces come from Current (a ThemeSpec: Omega by default,
-    // see Apply); the layout geometry below is still fixed. 1920x1080 layout, sizes in pixels.
+    // see Apply); the constants below are the defaults the specs start from. 1920x1080 layout, sizes in pixels.
     public static class Theme
     {
         public static ThemeSpec Current { get; private set; } = ThemeSpec.Omega();
@@ -12,8 +12,7 @@ namespace OmegaTube.Ui
         // when they are built, so the caller rebuilds what is on screen.
         public static void Apply(string uiStyle)
         {
-            Glorious = uiStyle == "glorious";
-            Current = Glorious ? ThemeSpec.Glorious() : ThemeSpec.Omega();
+            Current = uiStyle == "glorious" ? ThemeSpec.Glorious() : ThemeSpec.Omega();
         }
 
         public static Color Background => Current.Background;
@@ -36,15 +35,12 @@ namespace OmegaTube.Ui
         public static Color GlassPanel => Current.GlassPanel;
         public static Color GlassHigh => Current.GlassHigh;
 
-        // True while the Glorious interface is selected (set by Apply): its home layout (hero, featured row, overlay
-        // nav). Its look (glass surfaces) is in Current.
-        public static bool Glorious { get; private set; }
-
         public static float TitleSize => Current.TitleSize;
         public static float BodySize => Current.BodySize;
         public static float SmallSize => Current.SmallSize;
         public static int CardRadius => Current.CardRadius;
         public static RailSpec Rail => Current.Rail;
+        public static HomeSpec Home => Current.Home;
         public static int PanelRadius => Current.PanelRadius;
 
         public const int CardWidth = 352;
@@ -52,20 +48,6 @@ namespace OmegaTube.Ui
         public const int FocusMargin = 30;         // room for the focused card's scale-up
         public const int RowHeight = 470;
 
-        // Glorious home geometry.
-        public const int GloriousInset = 75;    // rows start here, clearing the nav; earlier cards slide under it
-        public const int GloriousRowsTop = 120;    // the rows' list starts here on screen; the hero fills the band above
-        public const int HeroFirstRowTop = 500;    // first row's top inside that list: below the hero's text block
-        public const int BigCardWidth = 317;       // featured first row (thumbnail-only, small to show more backdrop)
-        public const int BigCardGap = 34;          // more spacing between featured cards
-        public const int GloriousRowHeight = RowHeight - 96;   // rows 2+: half the empty space under the thumbnails
-        // Glorious grid rows (the videos after the featured first row of a category): five columns, loaded downward.
-        public const int GridColumns = 5;
-        public const int GridCardWidth = 330;      // 5 cards + 4 gaps fit between the left inset and the right margin
-        public const int GridGap = 30;
-        public const int GridRowHeight = 300;      // thumbnail + the line under it + room for the focus zoom
-        public const int GridTitledRowHeight = 360;   // the same with a heading above
-        public const int BigRowHeight = 340;       // tall so the next row's heading clears the featured thumbnails
 
         public static int ThumbHeight(int cardWidth) => cardWidth * 9 / 16;
 
