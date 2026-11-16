@@ -1,6 +1,7 @@
-# Interface plugins — format draft (v0, not implemented)
+# Interface plugins — format (SDK 1.0, in progress)
 
-Status: design draft, open for discussion. Nothing here exists in the app yet.
+Status: the JSON part is implemented (host plan steps 1 to 5 below): `theme.json`, `cards.json`, `rail.json`,
+`home.json`, `strings.json`, installing by address, the official index. Still to come: `player.json`, the script.
 
 ## Goal
 
@@ -37,7 +38,16 @@ my-plugin/
   images/ fonts/     assets referenced by relative path
 ```
 
-Published as a zip (a GitHub release asset, for example). Size cap: 20 MB unpacked.
+Published as a zip (a GitHub release asset, for example). The files sit at the root of the zip or in a single top
+folder (as in GitHub's source archives). The app unpacks it with strict rules, and refuses or skips anything else:
+
+- at most 20 MB downloaded, 20 MB unpacked (counted while unpacking) and 1000 files;
+- plain relative names, at most 6 folders deep, no hidden files, no `..`;
+- only `.json`, `.png`, `.jpg`, `.jpeg`, `.webp`, `.js`, `.txt` and `.md` files are kept;
+- JSON files up to 1 MB, nested at most 128 levels.
+
+Only `plugin.json` can make a package unusable. In the other files, unknown keys are ignored, and a wrong type or
+a missing image is logged and leaves the default; numbers out of range are clamped.
 
 ### plugin.json
 
@@ -55,9 +65,13 @@ Published as a zip (a GitHub release asset, for example). Size cap: 20 MB unpack
 }
 ```
 
+- `id`: a reverse domain name (`io.github.<user>.<name>`), lower case. It names the install folder.
+- `name`, `author`, `description`: plain text, or `"@key"` to take it from `strings.json`.
 - `sdk`: the format version it was written for. The app loads a plugin whose `sdk` major version matches its own
-  and whose minor version is lower or equal. Otherwise the plugin is listed as "needs an update" and Omega is used.
-- `update`: checked like `remote-config.json`. A new version is downloaded, validated, then swapped in on the next launch.
+  and whose minor version is lower or equal. Otherwise the plugin is listed as "needs a newer OmegaTube" and Omega
+  is used.
+- `update` (https): where Settings › Interface looks when the user asks to update a plugin that is not official.
+  Official plugins update through the index only.
 
 ### Official plugins
 
@@ -99,8 +113,8 @@ decides whether the app shows a warning.
 - `preview` images are copied into `gh-pages` (`plugins/img/`), so neither the site nor the app loads images from
   third-party servers to show the list.
 - Maintainer workflow: the author opens an issue ("Plugin validation request") with the release URL. The maintainer
-  tests it on a TV, adds the entry in the `gh-pages` worktree (a small script fills `sha256`, `version`, `sdk`
-  and `id` from the zip), and pushes. Removing an entry stops listing it; installed copies keep working but become
+  tests it on a TV, runs `tools/plugin-index/add_plugin.py <release zip URL>` (it fills `id`, `name`,
+  `version`, `sdk`, `sha256` and the screenshot from the zip into the `gh-pages` worktree), and pushes. Removing an entry stops listing it; installed copies keep working but become
   "not validated" (with a notice).
 - The site page follows the public wording rules (no claims about ads; keep the non-affiliation disclaimer).
 
@@ -109,8 +123,12 @@ decides whether the app shows a warning.
 Settings › Interface lists, in this order: Omega (built in), the official plugins (from the index, with preview
 and description), and installed non-official plugins.
 
-**Add by URL** (type it, or scan a QR code that opens a small page on the phone) installs any plugin. When its
-`id` + `sha256` is not in the official index, the app asks for confirmation first:
+**Add a plugin by its address** installs any plugin: the address of its zip, typed with the remote (a QR code that
+opens a small page on the phone is planned). Addresses are `https://`, or `http://` to a local network address
+(`10.x`, `172.16-31.x`, `192.168.x`) so that an author can try a plugin served from their computer
+(`python3 -m http.server`; from the TV emulator, the computer is `10.0.2.2`). The transport does not change what
+a plugin can do, and official files are checked against their hash. When its `id` + `sha256` is not in the
+official index, the app asks for confirmation first:
 
 > **This plugin is not validated by OmegaTube.**
 > It cannot access your accounts or your data, but it has not been checked and may look wrong or be slow.
@@ -119,6 +137,11 @@ and description), and installed non-official plugins.
 `Cancel` has the focus first, as in the quit dialog. Installed plugins carry an "Official" or "Not validated" tag
 in the list. If the index cannot be downloaded, the last cached copy is used; with no copy at all, every plugin
 counts as not validated.
+
+A plugin is used as soon as it is installed; the Interface row switches between Omega, Glorious (until it becomes a
+plugin) and the installed plugins. Installed plugins live in the app's data folder (`plugins/<id>/`, with a
+`.install.json` record of the zip's hash and address), and the index is cached as `plugins/index.json`. If the app
+dies while starting with a plugin (before the home shows), the next start uses Omega and says so in Settings.
 
 ## Units and values
 
@@ -148,10 +171,18 @@ counts as not validated.
 }
 ```
 
-`surfaces` replace `Widgets.Panel`, `Widgets.GlassCard` and the `PillButton` background. A surface is either
-`{ "color": ..., "radius": ... }` (flat, Omega) or `{ "image": "...9.9.png" }` (nine-patch). This is all the
-Settings / Account / dialogs screens take from a plugin: their layout stays native, only their skin changes. That
-is what Glorious does today with `if (Theme.Glorious)`.
+`surfaces` replace `Widgets.Panel`, `Widgets.SurfaceCard` and the `PillButton` background. A surface is
+`{ "image": "...9.9.png" }` (nine-patch); left out, the screens use flat rounded fills in the theme's colours
+(Omega). The four go together: with image surfaces, Settings / Account / dialogs take their "glass" variant
+(transparent page, surfaces instead of panels). Their layout stays native, only their skin changes.
+
+Colour names usable as values elsewhere: `background`, `surface`, `surfaceHigh`, `surfaceFocused`, `cardInfo`,
+`cardInfoFocused`, `cardTextFocused`, `accent`, `pageTint`, `text`, `textDim`, `textMuted`, `scrim`, `panel`,
+`panelLine`, `success`, `glassButton`, `glassPanel`, `glassHigh`. Ranges: type sizes 12 to 80, radii 0 to 60.
+
+**Images**, in every file: a path inside the package (`"images/x.png"`, `.png` / `.jpg` / `.webp`), or the name of
+one of the app's own images without extension (`"round_mask"`). Where an image is optional (`shadow`, `outline`,
+fades, surfaces), `null` turns it off.
 
 ## cards.json — card looks
 
@@ -179,9 +210,13 @@ plugin tunes it. A new info style is a host PR, like a new rail mode.
 ```
 
 Common to every look: `focusScale` (1–1.2), `mask` (the alpha mask that rounds the thumbnail), `shadow` (a
-pre-blurred nine-patch; its blur margin and drop travel with it), `outline` (nine-patch ring round the focused
-card), `preview` (the animated preview may play, `overlay` only). The duration / LIVE badge and the watched bar
-are always there. Colours left out follow `theme.json`.
+pre-blurred nine-patch; its blur margin `shadowMargin` 0–100 and drop `shadowDrop` 0–50 travel with it), `outline`
+(nine-patch ring round the focused card), `preview` (the animated preview may play, `overlay` only). `box`:
+`boxHeight` 60–200. The duration / LIVE badge and the watched bar are always there. Colours left out follow
+`theme.json`.
+
+A look named like a built-in one starts from it; a new name starts from `base` (default `classic`). At most 16
+looks; names are letters, digits, `-` and `_`.
 
 Layouts refer to looks by name (`home.json` rows, the player's suggestions); `classic`, `glass` and `featured`
 always exist (built in), a plugin may redefine them or add its own names.
@@ -212,8 +247,10 @@ views, age); a plugin never sees ids or URLs.
 - `overlay`: `fade` (image behind the open list) and `fadeTail`, `chip` (folded pill background), `idleOpacity` /
   `openOpacity` (entries other than the current one, folded / open), `underlineColor`. The focused entry's pill is
   the theme's `pillLit` surface.
-- Icons: `icons` replaces an entry's icon by key; otherwise `iconSuffix` picks a variant of the app's icon when it
-  exists (Glorious: outline icons); otherwise the app's icon.
+- Icons: `icons` replaces an entry's icon by key (package images only; keys: `home`, `search`, `subscriptions`,
+  `history`, `set_account`, `settings`, and the section icons `music`, `gaming`, `trending`, `news`, `sports`,
+  `live`, `kids`); otherwise `iconSuffix` picks a variant of the app's icon when it exists; otherwise the app's icon.
+- Ranges: `width` 60–300, `openWidth` up to 700, `shift` 0–100, `fadeTail` 0–600, opacities 0–1.
 - Tube is a `drawer` with `panelOpenColor: "background"`, a light `focusedColor` and dark text on it (a
   `focusedTextColor` key to add with the Tube port).
 
@@ -242,6 +279,8 @@ views, age); a plugin never sees ids or URLs.
 
 - `feeds`: `auto` (Omega: Home as rows, the other sections as a grid) or `rows` (every section as rows; a flat
   feed becomes a first row of `flatFeatured` videos, then grid rows of `gridColumns`).
+- Left out, every key has Omega's value (`rows.top` 90, `inset` 30, `cardWidth` 352, `cardGap` 30, `rowHeight`
+  470, `grid.top` 110...). `firstCardWidth`, `firstCardGap` and `firstRowHeight` default to the other rows' values.
 - `rows`: where the list sits (`top`; `underRail`: full width so cards slide under the nav, else beside the rail),
   the focused card's x (`inset`), the card look and geometry of the rows, and an optional different first row
   (`firstCard`...; `firstRowTop` holds it lower while focused, under the hero text).
@@ -309,10 +348,12 @@ In the order it would land. Each step is useful on its own.
 4. **Home layout**: `HomeScreen.FeedFor`, `ShelfList` and `UpdateHero` read `HomeSpec` (rows, grid, hero,
    tint, fades). The hero is optional per spec. `Theme.Glorious` is gone: Glorious is entirely data
    (`ThemeSpec.Glorious()`), which is what the plugin loader will read from JSON.
-5. **Plugin loader**: download, unzip into the data dir, validate (JSON schema, sizes, paths stay inside the
-   package), Settings › Interface lists Omega + official + installed plugins, the "not validated" warning,
-   updates (through the index for official ones), fallback. On `gh-pages`: `plugins/index.json`, the
-   "Official plugins" page and the script that writes an entry from a release zip.
+5. **Plugin loader** (done): `Plugins/PluginPackage.cs` reads a package into a `ThemeSpec`,
+   `Plugins/PluginStore.cs` downloads (`omega_download` in the core: https or local http, size cap, sha256),
+   unpacks, installs, removes and reads the index; Settings › Interface lists Omega + official + installed
+   plugins, with the "not validated" warning; start-up fallback to Omega. On `gh-pages`: `plugins/index.json`
+   and the "Official plugins" page; `tools/plugin-index/add_plugin.py` writes an entry from a release zip.
+   Later: the phone page (QR) to send an address, preview images in the app's list.
 6. **Script**: Jint 3.x, `omega.on` events, limits, disable-on-failure.
 7. **Move Glorious and Tube out**: publish them as plugins in their authors' repositories, then delete their code
    from the app (cleanup below).

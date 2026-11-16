@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using OmegaTube.Config;
 using OmegaTube.Data;
+using OmegaTube.Plugins;
 using OmegaTube.Util;
 using Tizen.NUI;
 using Tizen.NUI.BaseComponents;
@@ -73,6 +74,10 @@ namespace OmegaTube.Ui
         private float notesScroll;
         private bool relabel;              // the app language or the interface changed: every part has to be rebuilt
         private readonly bool glassLook;    // glass theme (image surfaces): glass cards instead of flat panels
+        private TextEntry urlEntry;        // "Add a plugin by its address", while open
+        // Plugin download / install: one at a time, and its last outcome, across the rebuilds of this screen.
+        private static bool pluginBusy;
+        private static string pluginStatus = "";
 
         // startCategory / startRow: where to come back after a rebuild (app language or interface change).
         public SettingsScreen(App app, int startCategory = 0, int startRow = -1) : base(app)
@@ -134,6 +139,7 @@ namespace OmegaTube.Ui
             AddCategory(T("Subtitles and audio"), "subtitles", T("Languages and appearance of subtitles"), BuildCaptions, true);
             AddCategory("SponsorBlock", "shield", T("Skipping sponsors and other segments reported by the community"), BuildSponsorBlock);
             AddCategory(T("Menu"), "view_list", T("Sidebar sections (add some from Search)"), BuildMenu);
+            AddCategory(T("Interface"), "palette", T("The look of the app, and interface plugins"), BuildInterface);
             AddCategory(T("General"), "language", T("App language, content language and updates"), BuildGeneral);
             aboutCategory = categories.Count;
             AddCategory(T("About"), "info_outline", T("Version, license and credits"), BuildAbout);
@@ -364,28 +370,301 @@ namespace OmegaTube.Ui
             }
         }
 
-        private void BuildGeneral(List<Row> l)
+        // ---------------------------------------------------------------- interface and plugins
+
+        private void BuildInterface(List<Row> l)
         {
-            Row style = Choice(T("Interface"), T("Home screen style: Omega (classic) or Glorious (immersive)"),
-                         () => App.Config.UiStyle == "glorious" ? T("Glorious") : T("Omega"),
-                         d =>
-                         {
-                             App.Config.UiStyle = App.Config.UiStyle == "glorious" ? "omega" : "glorious";
-                             Theme.Apply(App.Config.UiStyle);
-                             App.Home.InvalidateRows();
-                             relabel = true;   // rebuild this screen in the new style
-                         });
+            List<PluginInfo> installed = PluginStore.Installed();
+            // What the interface row cycles through: the built-in ones, then the installed plugins this app can use.
+            var ids = new List<string> { "omega", "glorious" };
+            var names = new List<string> { "Omega", "Glorious" };
+            foreach (PluginInfo p in installed)
+            {
+                if (p.Incompatible == null)
+                {
+                    ids.Add(p.Id);
+                    names.Add(p.Name);
+                }
+            }
+            Row style = Choice(T("Interface"), App.PluginFallback != null
+                                   ? T("A plugin stopped the app from starting: back to Omega")
+                                   : T("Omega (built in), Glorious, or an installed plugin"),
+                               () => names[Math.Max(0, ids.IndexOf(Theme.Active))],
+                               d =>
+                               {
+                                   int i = Math.Max(0, ids.IndexOf(Theme.Active));
+                                   UseInterface(ids[(i + d + ids.Count) % ids.Count]);
+                               });
             style.Section = T("Interface");
             l.Add(style);
             if (Theme.Home.Hero != null)
             {
-                // Options of a home with a hero backdrop (Glorious), shown right under the interface choice.
-                Row hero = Toggle(T("Home video preview"), T("Plays a muted video behind the first home row after a short rest"),
-                                  () => App.Config.HeroPreview, v => App.Config.HeroPreview = v);
-                l.Add(hero);
+                // Options of a home with a hero backdrop, shown right under the interface choice.
+                l.Add(Toggle(T("Home video preview"), T("Plays a muted video behind the first home row after a short rest"),
+                             () => App.Config.HeroPreview, v => App.Config.HeroPreview = v));
                 l.Add(Toggle(T("Card animated previews"), T("Animates the other cards with a short preview after a short rest"),
                              () => App.Config.CardPreview, v => App.Config.CardPreview = v));
             }
+
+            // Validated by the OmegaTube maintainer (the index on the project's site).
+            bool first = true;
+            foreach (OfficialPlugin o in PluginStore.Index)
+            {
+                PluginInfo p = installed.Find(i => i.Id == o.Id);
+                var actions = new List<KeyValuePair<string, Action>>();
+                string state;
+                if (p == null)
+                {
+                    state = o.Compatible ? "" : T("Needs a newer OmegaTube");
+                    if (o.Compatible)
+                    {
+                        actions.Add(Act(T("Install"), () => StartInstall(o.Url, o.Sha256)));
+                    }
+                }
+                else
+                {
+                    bool official = PluginStore.IsOfficial(p);
+                    state = official ? T("Installed") : T("Installed · not validated");
+                    OfficialPlugin update = PluginStore.OfficialUpdate(p);
+                    if (update != null)
+                    {
+                        actions.Add(Act(official ? T("Update to {0}", update.Version) : T("Install the validated version"),
+                                        () => StartInstall(update.Url, update.Sha256)));
+                    }
+                    actions.Add(Act(T("Remove"), () => AskRemove(p)));
+                }
+                Row r = ActionRow(o.Name, Describe(o.Description, o.Author, state), actions);
+                r.Section = first ? T("Official plugins") : null;
+                first = false;
+                l.Add(r);
+            }
+            if (first)
+            {
+                Row r = ActionRow(T("Official plugins"), T("The list could not be downloaded yet"),
+                                  new List<KeyValuePair<string, Action>> { Act(T("Retry"), () => UiGuard.Fire("SettingsScreen.Index", RefreshIndex)) });
+                r.Section = T("Official plugins");
+                l.Add(r);
+            }
+
+            // Installed from an address, not in the official list.
+            first = true;
+            foreach (PluginInfo p in installed)
+            {
+                if (PluginStore.Listed(p.Id))
+                {
+                    continue;   // listed above
+                }
+                var actions = new List<KeyValuePair<string, Action>>();
+                if (p.Update != null)
+                {
+                    actions.Add(Act(T("Update"), () => StartInstall(p.Update, null)));
+                }
+                actions.Add(Act(T("Remove"), () => AskRemove(p)));
+                string state = p.Incompatible != null ? T("Needs a newer OmegaTube") : T("Not validated");
+                Row r = ActionRow(p.Name, Describe(p.Description, p.Author, state + " · " + p.Version), actions);
+                r.Section = first ? T("Other plugins") : null;
+                first = false;
+                l.Add(r);
+            }
+            // The last install's outcome shows in place of the hint.
+            Row add = new Row
+            {
+                Title = T("Add a plugin by its address"),
+                Hint = pluginStatus.Length > 0 ? pluginStatus : T("The https:// address of the plugin's .zip file"),
+                Value = () => pluginBusy ? T("Working…") : "",
+                Activate = OpenUrlEntry,
+            };
+            add.Section = first ? T("Other plugins") : null;
+            l.Add(add);
+        }
+
+        private static KeyValuePair<string, Action> Act(string label, Action run) => new KeyValuePair<string, Action>(label, run);
+
+        // ◀ ▶ picks one of the actions (shown as the value), OK runs it.
+        private static Row ActionRow(string title, string hint, List<KeyValuePair<string, Action>> actions)
+        {
+            int selected = 0;
+            var row = new Row { Title = title, Hint = hint };
+            if (actions.Count == 0)
+            {
+                return row;
+            }
+            row.Value = () => actions[selected].Key;
+            if (actions.Count > 1)
+            {
+                row.Change = d => selected = (selected + d + actions.Count) % actions.Count;
+            }
+            row.Activate = () =>
+            {
+                if (!pluginBusy)
+                {
+                    actions[selected].Value();
+                }
+            };
+            return row;
+        }
+
+        private static string Describe(string description, string author, string state)
+        {
+            var parts = new List<string>();
+            foreach (string s in new[] { state, author, description })
+            {
+                if (!string.IsNullOrEmpty(s))
+                {
+                    parts.Add(s);
+                }
+            }
+            return string.Join("  ·  ", parts);
+        }
+
+        // Switches the interface now (the home and this screen are rebuilt in it).
+        private void UseInterface(string id)
+        {
+            Theme.Apply(id);
+            if (Theme.Active != id)
+            {
+                pluginStatus = T("This plugin could not be loaded");
+            }
+            App.Config.UiStyle = Theme.Active;
+            App.Home.InvalidateRows();
+            relabel = true;
+        }
+
+        private async Task RefreshIndex()
+        {
+            pluginBusy = true;
+            Refresh();
+            bool ok = await PluginStore.RefreshIndex();
+            pluginBusy = false;
+            pluginStatus = ok ? "" : T("Could not download the list");
+            Rebuilt();
+        }
+
+        // This screen again, at the same place (the lists changed, or the interface).
+        private void Rebuilt()
+        {
+            if (Root.HasBody())
+            {
+                App.ReplaceScreen(this, new SettingsScreen(App, category, inRows ? index : -1));
+            }
+        }
+
+        private void OpenUrlEntry()
+        {
+            if (pluginBusy)
+            {
+                return;
+            }
+            urlEntry = new TextEntry(T("Add a plugin by its address"), "https://…", "https://", 400);
+            urlEntry.Done = text => UiGuard.Run("SettingsScreen.UrlDone", () =>
+            {
+                CloseUrlEntry();
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    StartInstall(text.Trim(), null);
+                }
+            });
+            Window.Instance.Add(urlEntry);
+        }
+
+        private void CloseUrlEntry()
+        {
+            if (urlEntry == null)
+            {
+                return;
+            }
+            urlEntry.Unparent();
+            urlEntry.Dispose();
+            urlEntry = null;
+        }
+
+        private void StartInstall(string url, string sha256)
+        {
+            UiGuard.Fire("SettingsScreen.Install", () => Install(url, sha256));
+        }
+
+        // Download, unpack and check; a plugin that is not in the official list needs the user's go-ahead.
+        private async Task Install(string url, string sha256)
+        {
+            if (pluginBusy)
+            {
+                return;
+            }
+            pluginBusy = true;
+            pluginStatus = "";
+            Refresh();
+            StagedPlugin staged;
+            try
+            {
+                staged = await PluginStore.Download(url, sha256);
+            }
+            catch (Exception e)
+            {
+                NativeCore.Log("plugin install " + url + ": " + e.Message);
+                pluginBusy = false;
+                pluginStatus = e is PluginException ? e.Message : T("Could not install: {0}", e.Message);
+                Rebuilt();
+                return;
+            }
+            if (staged.Official)
+            {
+                FinishInstall(staged);
+                return;
+            }
+            App.Confirm(T("This plugin is not validated by OmegaTube"),
+                        () => UiGuard.Run("SettingsScreen.InstallYes", () => FinishInstall(staged)),
+                        T("It cannot access your accounts or your data, but it has not been checked and may look wrong or be slow. Install anyway?"),
+                        T("Install"), T("Cancel"),
+                        () =>
+                        {
+                            PluginStore.Discard(staged);
+                            pluginBusy = false;
+                            pluginStatus = "";
+                            Rebuilt();
+                        });
+        }
+
+        // Puts the plugin in place and switches to it (what it was installed for; an update reloads the one in use).
+        private void FinishInstall(StagedPlugin staged)
+        {
+            PluginInfo p;
+            try
+            {
+                p = PluginStore.Commit(staged);
+            }
+            catch (Exception e)
+            {
+                PluginStore.Discard(staged);
+                pluginBusy = false;
+                pluginStatus = T("Could not install: {0}", e.Message);
+                Rebuilt();
+                return;
+            }
+            pluginBusy = false;
+            pluginStatus = T("{0} {1} installed", p.Name, p.Version);
+            UseInterface(p.Id);
+            Save();
+            Rebuilt();
+        }
+
+        private void AskRemove(PluginInfo p)
+        {
+            App.Confirm(T("Remove {0}?", p.Name), () => UiGuard.Run("SettingsScreen.Remove", () =>
+            {
+                bool inUse = Theme.Active == p.Id;
+                PluginStore.Remove(p.Id);
+                pluginStatus = "";
+                if (inUse)
+                {
+                    UseInterface("omega");
+                    Save();
+                }
+                Rebuilt();
+            }));
+        }
+
+        private void BuildGeneral(List<Row> l)
+        {
             Row appLang = Choice(T("App language"), T("Language of the app's texts"),
                          () => I18n.Names[Math.Max(0, Array.IndexOf(I18n.Codes, App.Config.UiLanguage))],
                          d =>
@@ -536,6 +815,7 @@ namespace OmegaTube.Ui
 
         public override void OnHide()
         {
+            CloseUrlEntry();
             if (notesLayer != null)
             {
                 CloseNotes();
@@ -657,6 +937,11 @@ namespace OmegaTube.Ui
 
         public override bool OnKey(string key)
         {
+            if (urlEntry != null)
+            {
+                urlEntry.Key(key);
+                return true;
+            }
             if (notesLayer != null)
             {
                 NotesKey(key);

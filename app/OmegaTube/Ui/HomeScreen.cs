@@ -46,6 +46,7 @@ namespace OmegaTube.Ui
         private readonly View embedHost;
         private readonly ImageView rowFadeLeft, rowFadeRight, rowFadeBottom;   // edge fades over the rows band (HomeSpec)
         private HomeSpec fadesFor;  // the home spec whose fade images are loaded
+        private HomeSpec heroFor;   // the home spec the hero was built for
         private Hero hero;          // homes with a hero (HomeSpec.Hero), built on first use (Omega never pays for it)
         private bool heroShown;     // the backdrop is on screen (a managed mirror: no native read per key)
         private bool visible;       // this screen is the one on display (not under the player, not paused)
@@ -271,7 +272,7 @@ namespace OmegaTube.Ui
         {
             List<Section> next = BuildSections();
             var sig = new System.Text.StringBuilder();
-            sig.Append(App.Config.UiStyle).Append('\n');   // switching Omega/Glorious must rebuild the rail + feeds
+            sig.Append(Theme.Generation).Append('\n');   // another interface (or the same plugin updated): new rail + feeds
             foreach (Section s in next)
             {
                 sig.Append(s.Key).Append('|').Append(s.Title).Append('|').Append(s.Icon).Append('|').Append(s.Loader != null).Append('\n');
@@ -675,11 +676,19 @@ namespace OmegaTube.Ui
         // built-in specs are shared instances, so switching between the built-in interfaces keeps it.
         private void EnsureHero()
         {
-            if (hero != null)
+            HomeSpec home = Theme.Home;
+            if (hero != null && heroFor == home)
             {
                 return;
             }
-            HomeSpec home = Theme.Home;
+            if (hero != null)
+            {
+                // Another interface (a plugin) with its own hero geometry and images.
+                hero.Release();
+                Root.Remove(hero);
+                hero.Dispose();
+            }
+            heroFor = home;
             hero = new Hero(App, home.Hero, home.Rows);
             // While its video preview plays, the TV's video plane (under the window) must show through.
             hero.SeeThrough = on =>

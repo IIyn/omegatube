@@ -134,6 +134,15 @@ namespace OmegaTube.Ui
             currentItem = null;
         }
 
+        // Before the home drops this hero (another interface): stops everything it runs (video, timers, ring).
+        public void Release()
+        {
+            SetActive(false);
+            ClearArt();
+            ring.Off();
+            ring.Unparent();
+        }
+
         // The hero is (not) on screen. Off: any preview stops right away.
         public void SetActive(bool on)
         {

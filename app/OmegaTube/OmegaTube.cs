@@ -14,6 +14,8 @@ namespace OmegaTube
         private Splash splash;          // launch screen: keys wait until it is gone
 
         public AppConfig Config { get; private set; }
+        // The interface plugin that stopped the previous start (Omega was used instead), or null.
+        public string PluginFallback { get; private set; }
         public HomeScreen Home { get; private set; }
         // Latest GitHub release when newer than this build ({"version","url","notes"...}), else null.
         public object NewRelease { get; set; }
@@ -35,7 +37,20 @@ namespace OmegaTube
             {
                 // Managed first: the UI language for the report screen if the core does not load.
                 Config = AppConfig.Load(DirectoryInfo.Data);
+                Plugins.PluginStore.Init(DirectoryInfo.Data);
+                if (Plugins.PluginStore.LastStartFailed(out string failedPlugin) && failedPlugin == Config.UiStyle)
+                {
+                    // The previous launch with this plugin never reached the home: Omega this time.
+                    Tizen.Log.Error("OmegaTube", "plugin " + failedPlugin + " stopped the last start: Omega");
+                    PluginFallback = failedPlugin;
+                    Config.UiStyle = "omega";
+                    Config.Save();
+                }
                 Ui.Theme.Apply(Config.UiStyle);
+                if (Ui.Theme.Active != "omega" && Ui.Theme.Active != "glorious")
+                {
+                    Plugins.PluginStore.Starting(Ui.Theme.Active);
+                }
                 NativeCore.RegisterResolver();  // load the core under UEP on Tizen 5.5 (#15)
                 EnableDevLog();                 // needs the core's functions bound
                 NativeCore.Init(DirectoryInfo.Data);
@@ -64,6 +79,11 @@ namespace OmegaTube
             splash.Closed += () => UiGuard.Run("splash closed", () =>
             {
                 splash = null;
+                Plugins.PluginStore.Started();
+                if (PluginFallback != null)
+                {
+                    NativeCore.Log("plugin " + PluginFallback + " stopped the last start: back to Omega");
+                }
                 if (crash != null && !ShowingReport)
                 {
                     PushReport(crash, false);
@@ -101,6 +121,7 @@ namespace OmegaTube
         private async System.Threading.Tasks.Task RefreshRemote()
         {
             await System.Threading.Tasks.Task.Run(() => YouTube.Call(NativeCore.ConfigRefresh()));
+            await Plugins.PluginStore.RefreshIndex();   // which plugins are official (Settings › Interface)
             if (!Config.CheckUpdates)
             {
                 return;
@@ -252,14 +273,16 @@ namespace OmegaTube
         }
 
         // A playlist card opens the list to pick from; a mix (endless) plays right away.
-        // Yes / No question over the current screen; onYes runs after it closes.
-        public void Confirm(string question, Action onYes)
+        // Yes / No question over the current screen; onYes runs after it closes (see ConfirmDialog for the rest).
+        public void Confirm(string question, Action onYes, string detail = null, string yesLabel = null,
+                            string noLabel = null, Action onNo = null)
         {
             if (dialog != null)
             {
+                onNo?.Invoke();
                 return;
             }
-            dialog = new ConfirmDialog(question, onYes);
+            dialog = new ConfirmDialog(question, onYes, detail, yesLabel, noLabel, onNo);
             dialog.Closed += () => dialog = null;
             Window.Instance.Add(dialog);
         }

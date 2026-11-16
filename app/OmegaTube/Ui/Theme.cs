@@ -8,11 +8,28 @@ namespace OmegaTube.Ui
     {
         public static ThemeSpec Current { get; private set; } = ThemeSpec.Omega();
 
+        // The interface in use: "omega", "glorious" or an installed plugin's id (Omega when that one could not load).
+        public static string Active { get; private set; } = "omega";
+
+        // Changes at each Apply: what was built for the previous theme must be built again.
+        public static int Generation { get; private set; }
+
         // Selects the interface (config "uiStyle"): at start-up and when the user changes it. Screens read the theme
-        // when they are built, so the caller rebuilds what is on screen.
+        // when they are built, so the caller rebuilds what is on screen. A plugin that cannot be read gives Omega.
         public static void Apply(string uiStyle)
         {
-            Current = uiStyle == "glorious" ? ThemeSpec.Glorious() : ThemeSpec.Omega();
+            ThemeSpec spec = null;
+            if (uiStyle == "glorious")
+            {
+                spec = ThemeSpec.Glorious();
+            }
+            else if (uiStyle != "omega")
+            {
+                spec = Plugins.PluginStore.Load(uiStyle);
+            }
+            Current = spec ?? ThemeSpec.Omega();
+            Active = spec != null ? uiStyle : "omega";
+            Generation++;
         }
 
         public static Color Background => Current.Background;

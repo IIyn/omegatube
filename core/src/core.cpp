@@ -11,6 +11,9 @@
 #include <mutex>
 #include <set>
 
+#include <cstdio>
+
+#include <mbedtls/sha256.h>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <string>
@@ -855,6 +858,60 @@ char* omega_report_upload(const char* text) {
     if (url.rfind("https://", 0) != 0) return to_c_json({{"error", "unexpected answer"}});
     // 206: some services (paste.rs) keep only the beginning of a text over their size limit.
     return to_c_json({{"url", url}, {"partial", res.status == 206}});
+}
+
+namespace {
+std::string sha256_hex(const std::string& s) {
+    unsigned char digest[32];
+    mbedtls_sha256(reinterpret_cast<const unsigned char*>(s.data()), s.size(), digest, 0);
+    static const char* hex = "0123456789abcdef";
+    std::string out;
+    for (unsigned char b : digest) {
+        out += hex[b >> 4];
+        out += hex[b & 15];
+    }
+    return out;
+}
+
+// A private IPv4 address (10/8, 172.16/12, 192.168/16): a plugin author's computer on the local network.
+bool private_lan_host(const std::string& host) {
+    unsigned a, b, c, d;
+    char extra;
+    if (sscanf(host.c_str(), "%u.%u.%u.%u%c", &a, &b, &c, &d, &extra) != 4 || a > 255 || b > 255 || c > 255 || d > 255)
+        return false;
+    return a == 10 || (a == 172 && b >= 16 && b <= 31) || (a == 192 && b == 168);
+}
+}  // namespace
+
+// Plugins and the plugin index (docs/plugins.md). The shell checks the hash and unpacks the file; nothing here is
+// interpreted. Written to a temporary name first so a cut transfer never leaves a partial file at out_path.
+// https, or plain http to a local network address (testing a plugin from one's computer; what is installed is the
+// same sandboxed data whatever the transport, and official files are checked against their hash).
+char* omega_download(const char* url, const char* out_path, int max_bytes) {
+    try {
+        const std::string target = out_path ? out_path : "";
+        omega::net::Request req;
+        req.url = url ? url : "";
+        omega::net::Url parsed;
+        if (!omega::net::Url::parse(req.url, parsed) || (!parsed.tls && !private_lan_host(parsed.host)))
+            return to_c_json({{"error", "https addresses only (or http on the local network)"}});
+        if (target.empty() || max_bytes <= 0) return to_c_json({{"error", "bad arguments"}});
+        req.headers = {{"User-Agent", "OmegaTube"}};
+        omega::net::Response res = omega::net::fetch(req, static_cast<size_t>(max_bytes));
+        if (!res.ok()) return to_c_json({{"error", res.error.empty() ? "HTTP " + std::to_string(res.status) : res.error}});
+        const std::string part = target + ".part";
+        FILE* f = fopen(part.c_str(), "wb");
+        if (!f) return to_c_json({{"error", "cannot write the file"}});
+        bool written = fwrite(res.body.data(), 1, res.body.size(), f) == res.body.size();
+        written = fclose(f) == 0 && written;
+        if (!written || rename(part.c_str(), target.c_str()) != 0) {
+            remove(part.c_str());
+            return to_c_json({{"error", "cannot write the file"}});
+        }
+        return to_c_json({{"size", res.body.size()}, {"sha256", sha256_hex(res.body)}});
+    } catch (const std::exception& e) {
+        return to_c_json({{"error", std::string("download: ") + e.what()}});
+    }
 }
 
 void omega_auth_init(const char* token_path) { omega::yt::shared_auth().init(token_path ? token_path : ""); }
