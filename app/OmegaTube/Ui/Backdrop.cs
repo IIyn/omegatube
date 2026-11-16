@@ -4,7 +4,7 @@ using Tizen.NUI.BaseComponents;
 
 namespace OmegaTube.Ui
 {
-    // The full-screen picture behind the Glorious hero. A new picture is loaded in the background and only shown
+    // The full-screen picture behind a home's hero (Hero). A new picture is loaded in the background and only shown
     // (cross-faded over the old one) once it is ready, so the screen never shows a half-loaded stage: no blank, no
     // blurry placeholder that sharpens a moment later, no stretched frame. The sharp 1280x720 picture is asked for
     // first; a video without one (a 404, no "ready" signal) gets the small 16:9 one after a short wait.

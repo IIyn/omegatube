@@ -7,8 +7,8 @@ namespace OmegaTube.Ui
     public enum CardInfoStyle
     {
         Box,       // Omega: a box glued under the thumbnail (title on two lines, then the meta line), lit when focused
-        Overlay,   // Glorious: a dark panel with the title fades in on the thumbnail when focused, the meta line under it
-        None,      // Glorious featured row: the thumbnail alone (the title lives elsewhere, on the hero)
+        Overlay,   // a dark panel with the title fades in on the thumbnail when focused, the meta line under it
+        None,      // the thumbnail alone (featured rows) (the title lives elsewhere, on the hero)
     }
 
     // One card look, as data (docs/plugins.md: cards.json). Images are a resource name in res/images or a full path

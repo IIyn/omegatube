@@ -48,7 +48,7 @@ namespace OmegaTube.Ui
         public int RowHeight { get; }    // as built (a managed copy: the list lays rows out without native reads)
         public bool Shown { get; private set; } = true;   // managed mirror of Visibility
         private readonly CardSpec cardSpec;   // the cards' look (the theme's classic one unless the layout asks for another)
-        private readonly bool grid;      // Glorious grid row: the cards stay put (no sliding strip), focus moves along them
+        private readonly bool grid;      // grid row (a flat feed shown as rows): the cards stay put (no sliding strip), focus moves along them
         private readonly int stripY;
         public bool IsGrid => grid;
         private int SlideX => grid ? leftInset : leftInset - FocusIndex * Step;
@@ -60,7 +60,7 @@ namespace OmegaTube.Ui
             Query = query;
         }
 
-        // cardWidth / leftInset default to the Omega look; the Glorious home passes a larger featured width and
+        // cardWidth / leftInset default to the Omega look; a rows home (HomeSpec) passes its own widths and
         // an inset that clears the nav column. card: the card look (null: the theme's classic card).
         public FeedRow(string title, Func<string, Task<FeedPage>> loader, int width,
                        int cardWidth = Theme.CardWidth, int leftInset = Theme.FocusMargin, int rowHeight = Theme.RowHeight,

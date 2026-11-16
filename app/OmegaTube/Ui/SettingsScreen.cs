@@ -33,7 +33,7 @@ namespace OmegaTube.Ui
             public View View;
             public TextLabel TitleLabel, HintLabel, ValueLabel;
             public View SwitchView;
-            public View GlassLit;            // Glorious: brighter glass behind the focused row
+            public View GlassLit;            // glass screens: brighter glass behind the focused row
         }
 
         private class Category
@@ -44,7 +44,7 @@ namespace OmegaTube.Ui
             public View View;
             public ImageView IconView;
             public TextLabel Label;
-            public View Glass, GlassLit;     // Glorious: resting (selected) and focused glass pills
+            public View Glass, GlassLit;     // glass screens: resting (selected) and focused glass pills
         }
 
         private const int PaneWidth = 600;
@@ -375,9 +375,9 @@ namespace OmegaTube.Ui
         private void BuildInterface(List<Row> l)
         {
             List<PluginInfo> installed = PluginStore.Installed();
-            // What the interface row cycles through: the built-in ones, then the installed plugins this app can use.
-            var ids = new List<string> { "omega", "glorious" };
-            var names = new List<string> { "Omega", "Glorious" };
+            // What the interface row cycles through: Omega (built in), then the installed plugins this app can use.
+            var ids = new List<string> { "omega" };
+            var names = new List<string> { "Omega" };
             foreach (PluginInfo p in installed)
             {
                 if (p.Incompatible == null)
@@ -386,9 +386,12 @@ namespace OmegaTube.Ui
                     names.Add(p.Name);
                 }
             }
+            // Hint: why Omega is back when it is (a plugin that broke the start, Glorious now being a plugin).
             Row style = Choice(T("Interface"), App.PluginFallback != null
                                    ? T("A plugin stopped the app from starting: back to Omega")
-                                   : T("Omega (built in), Glorious, or an installed plugin"),
+                                   : App.Config.UiStyle == "glorious"
+                                   ? T("Glorious is now a plugin: install it from the list below")
+                                   : T("Omega (built in) or an installed plugin"),
                                () => names[Math.Max(0, ids.IndexOf(Theme.Active))],
                                d =>
                                {

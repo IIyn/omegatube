@@ -9,10 +9,10 @@ namespace OmegaTube.Ui
 {
     // A video card, drawn from a CardSpec (the theme's card looks). Its info style says where the texts go:
     //  - Box (classic, Omega): rounded 16:9 thumbnail with an info box under it that lights up when focused;
-    //  - Overlay (glass, Glorious rows 2+): a bare rounded thumbnail. Focused, a dark panel with the title (one line,
+    //  - Overlay (glass, an immersive home's rows 2+): a bare rounded thumbnail. Focused, a dark panel with the title (one line,
     //    scrolling when it is longer) appears on the thumbnail and the channel / views / age line under it. A short
     //    animated preview can play over the thumbnail;
-    //  - None (featured, Glorious row 1): a bare rounded thumbnail, no text: the title and details live on the hero.
+    //  - None (featured, a hero home's row 1): a bare rounded thumbnail, no text: the title and details live on the hero.
     // The spec adds a soft shadow and a hairline outline round the focused card (glass, featured).
     // Duration badge bottom right and a red progress bar for started videos in all of them.
     // Built in two steps for smooth scrolling: the constructor only makes the cheap frame (thumbnail, info box);

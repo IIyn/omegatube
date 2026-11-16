@@ -40,7 +40,7 @@
 - **Audio tracks** for multi-language videos, playback speed and loop.
 - **Dislike counts**, from [Return YouTube Dislike](https://returnyoutubedislike.com).
 - **A remote-friendly interface** that follows SmartTube's layout, with a customisable side menu.
-- **Two home interfaces** (Settings → General → Interface): **Omega**, the classic one, and **Glorious**, an immersive one: the focused video's artwork fills the screen, the menu folds into a pill, cards have glass styling, and resting on a card plays a muted video preview (first row) or an animated preview (the other rows). Both previews can be switched off in Settings.
+- **Interface plugins** (Settings → Interface): new looks for the app, made by the community and installed by address or from the [official list](https://iiyn.github.io/omegatube/plugins/). A plugin is data only (JSON and images): it cannot see your accounts or reach the network. Example: [Glorious](https://github.com/saalmaan/glorious-omegatube-plugin), an immersive home where the focused video fills the screen. Format: [docs/plugins.md](docs/plugins.md).
 - **Languages**: English, French, Spanish.
 
 ## Why OmegaTube?
@@ -282,8 +282,8 @@ app/OmegaTube/        C# shell: OmegaTube.cs (app + navigation), Ui/ (screens), 
 core/                 C++ core: include/omega/core.h (C API), src/{net,media,player,yt,util}, tools/
 toolchain/            Docker cross toolchain (Tizen 6.0 rootstrap, armv7, softfp; the core is held to glibc 2.24 so 5.5 TVs load it)
 scripts/              fetch-deps, build-core, build-app, deploy, gen-cert, install-tv, serve-test-media
-tools/                samsung-cert (headless certificate generator), yt-probe, flaky-server, and the generators of the
-                      Glorious images (glass-panel, nav-fade, hero-scrims, preview-ring, outline-icons)
+tools/                samsung-cert (headless certificate generator), yt-probe, flaky-server, plugin-index (official
+                      plugins list), and the image generators (glass-panel, nav-fade, hero-scrims, preview-ring, stall-ring)
 remote-config.json    YouTube client parameters, fetched by the app at startup
 VERSION               the single version number (copied into the manifest and the core at build time)
 ```

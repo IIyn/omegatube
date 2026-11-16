@@ -138,7 +138,7 @@ namespace OmegaTube.Data
         public List<VideoItem> Items = new List<VideoItem>();
         public string Continuation = "";
         public Func<string, Task<FeedPage>> Loader;   // more items of this row; null: YouTube.Browse("", Continuation)
-        public bool Grid;   // Glorious: a fixed row of the grid under the featured row (no sliding, an optional heading)
+        public bool Grid;   // rows homes (HomeSpec.Feeds): a fixed row of the grid under the featured row (no sliding, an optional heading)
     }
 
     // Async wrappers over the native core's YouTube data calls (network runs on the thread pool,

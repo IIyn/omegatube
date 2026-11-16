@@ -114,7 +114,7 @@ def main():
     plugin_id = manifest.get("id", "")
     version = manifest.get("version", "")
     sdk = manifest.get("sdk", "")
-    if not ID.match(plugin_id) or plugin_id in ("omega", "glorious"):
+    if not ID.match(plugin_id) or plugin_id == "omega":
         fail("bad id in plugin.json: %r" % plugin_id)
     if not VERSION.match(version):
         fail("bad version in plugin.json: %r" % version)

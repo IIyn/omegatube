@@ -8,7 +8,7 @@ namespace OmegaTube.Ui
     public enum RailMode
     {
         Drawer,    // Omega: a panel that shows icons only, and widens with the labels while the rail has the focus
-        Overlay,   // Glorious: folded into one pill with the current section; opens over the content when focused
+        Overlay,   // folded into one pill with the current section; opens over the content when focused
     }
 
     // The rail as data (docs/plugins.md: rail.json). Images are a resource name or a full path (Theme.ImagePath);
@@ -31,7 +31,7 @@ namespace OmegaTube.Ui
         public float OpenOpacity = 0.7f;            // open: entries other than the current one
         public Color UnderlineColor;                // folded: the thick underline under the current entry
 
-        // Icon variant tried first (Glorious: "_outline"), and per-entry replacements (icon key -> image).
+        // Icon variant tried first (e.g. "_outline", when the app has one), and per-entry replacements (icon key -> image).
         public string IconSuffix;
         public Dictionary<string, string> Icons = new Dictionary<string, string>();
 
@@ -51,13 +51,12 @@ namespace OmegaTube.Ui
 
         public static RailSpec Drawer() => new RailSpec();
 
-        // Outline icons floating over the artwork, round avatar on top; idle, the current entry is marked with a
+        // Icons floating over the artwork, round avatar on top; idle, the current entry is marked with a
         // thick accent underline; focused, a frosted fade and a glass pill on the focused entry.
         public static RailSpec Overlay() => new RailSpec
         {
             Mode = RailMode.Overlay,
             Shift = 25,
-            IconSuffix = "_outline",
         };
     }
 }

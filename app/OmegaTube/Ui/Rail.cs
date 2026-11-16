@@ -7,7 +7,7 @@ namespace OmegaTube.Ui
     // Navigation rail, drawn from a RailSpec (the theme's rail). Two modes:
     //  - Omega (default): a panel that shows icons only while the content has focus, icons + labels while the
     //    rail has focus.
-    //  - Glorious (overlay): while the content has the focus the nav is folded into one dark glass pill with the
+    //  - Overlay: while the content has the focus the nav is folded into one dark glass pill with the
     //    current section's icon and name; focused (or with the profile avatar focused) it opens into the column of
     //    outline icons with their labels over a dark fade, a glass pill on the focused entry and the round profile
     //    avatar on top. No opaque drawer.
@@ -117,7 +117,7 @@ namespace OmegaTube.Ui
                 {
                     Widgets.Round(item, (ItemHeight - 12) / 2);
                 }
-                // The spec's replacement or variant (Glorious: outline icons) when there is one, else the app's icon.
+                // The spec's replacement or variant (e.g. outline icons) when there is one, else the app's icon.
                 var icon = new ImageView { ResourceUrl = this.spec.IconPath(entries[i].Icon), Size = new Size(IconSize, IconSize),
                                            Position = new Position(overlay ? IconX : 21, (ItemHeight - 12 - IconSize) / 2) };
                 item.Add(icon);

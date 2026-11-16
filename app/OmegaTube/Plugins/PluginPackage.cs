@@ -35,8 +35,8 @@ namespace OmegaTube.Plugins
         private static readonly Regex IconSuffixPattern = new Regex(@"^_[a-z0-9_]{1,20}$");
         private static readonly string[] ImageExtensions = { ".png", ".jpg", ".jpeg", ".webp" };
 
-        // Ids the app keeps for its built-in interfaces.
-        public static bool Reserved(string id) => id == "omega" || id == "glorious";
+        // The id of the built-in interface.
+        public static bool Reserved(string id) => id == "omega";
 
         // The manifest, or null with the reason in error.
         public static PluginInfo ReadInfo(string dir, out string error)

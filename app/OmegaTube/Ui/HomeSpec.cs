@@ -4,7 +4,7 @@ namespace OmegaTube.Ui
     public enum FeedLayout
     {
         Auto,   // Omega: Home (topic shelves) as rows, the other feeds as a grid
-        Rows,   // Glorious: every feed as rows (a flat feed becomes a featured row, then grid rows)
+        Rows,   // every feed as rows (a flat feed becomes a featured row, then grid rows)
     }
 
     // The rows of a home feed (ShelfList), in pixels on the 1920x1080 page.
@@ -56,33 +56,5 @@ namespace OmegaTube.Ui
         public string FadeLeft, FadeRight, FadeBottom;
 
         public static readonly HomeSpec Omega = new HomeSpec();
-
-        // The immersive home: the focused video fills the screen behind a large featured first row; the rows scroll
-        // left under the floating nav; flat feeds look like Home.
-        public static readonly HomeSpec Glorious = new HomeSpec
-        {
-            Feeds = FeedLayout.Rows,
-            Header = false,
-            Rows = new RowsSpec
-            {
-                Top = 120,
-                UnderRail = true,
-                Inset = 75,
-                Card = "glass",
-                RowHeight = Theme.RowHeight - 96,   // half the empty space under the thumbnails
-                FirstCard = "featured",
-                FirstCardWidth = 317,   // thumbnail-only, small to show more backdrop
-                FirstCardGap = 34,
-                FirstRowHeight = 340,   // tall so the next row's heading clears the featured thumbnails
-                FirstRowTop = 500,      // below the hero's text block
-            },
-            GridTop = 600,
-            GridLeft = 45,
-            Hero = new HeroSpec(),
-            TintBelowFirstRow = true,
-            FadeLeft = "scrim_left",
-            FadeRight = "scrim_right",
-            FadeBottom = "scrim_rowbottom",
-        };
     }
 }

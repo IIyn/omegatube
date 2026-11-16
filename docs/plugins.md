@@ -1,7 +1,9 @@
 # Interface plugins — format (SDK 1.0, in progress)
 
-Status: the JSON part is implemented (host plan steps 1 to 5 below): `theme.json`, `cards.json`, `rail.json`,
-`home.json`, `strings.json`, installing by address, the official index. Still to come: `player.json`, the script.
+Status: the JSON part is implemented (host plan steps 1 to 5 and 7 below): `theme.json`, `cards.json`,
+`rail.json`, `home.json`, `strings.json`, installing by address, the official index. Glorious is a plugin
+(`glorious-omegatube-plugin`); only Omega is built in. Still to come: `player.json`, the script (step 6, when a
+plugin needs it), Tube (with the `lines` card style).
 
 ## Goal
 
@@ -138,8 +140,7 @@ official index, the app asks for confirmation first:
 in the list. If the index cannot be downloaded, the last cached copy is used; with no copy at all, every plugin
 counts as not validated.
 
-A plugin is used as soon as it is installed; the Interface row switches between Omega, Glorious (until it becomes a
-plugin) and the installed plugins. Installed plugins live in the app's data folder (`plugins/<id>/`, with a
+A plugin is used as soon as it is installed; the Interface row switches between Omega and the installed plugins. Installed plugins live in the app's data folder (`plugins/<id>/`, with a
 `.install.json` record of the zip's hash and address), and the index is cached as `plugins/index.json`. If the app
 dies while starting with a plugin (before the home shows), the next start uses Omega and says so in Settings.
 
@@ -194,8 +195,8 @@ plugin tunes it. A new info style is a host PR, like a new rail mode.
 | `info` | what | used by |
 |---|---|---|
 | `box` | a box glued under the thumbnail: title on two lines, then the meta line; lit when focused | Omega |
-| `overlay` | focused: a dark title panel fades in on the thumbnail (long titles scroll), the meta line under it | Glorious rows 2+ |
-| `none` | the thumbnail alone | Glorious featured row |
+| `overlay` | focused: a dark title panel fades in on the thumbnail (long titles scroll), the meta line under it | Glorious rows 2+ (`glass`) |
+| `none` | the thumbnail alone | Glorious featured row (`featured`) |
 | `lines` *(planned)* | title on two lines, channel, then views · age, on the page colour | Tube |
 
 ```json
@@ -354,29 +355,33 @@ In the order it would land. Each step is useful on its own.
    plugins, with the "not validated" warning; start-up fallback to Omega. On `gh-pages`: `plugins/index.json`
    and the "Official plugins" page; `tools/plugin-index/add_plugin.py` writes an entry from a release zip.
    Later: the phone page (QR) to send an address, preview images in the app's list.
-6. **Script**: Jint 3.x, `omega.on` events, limits, disable-on-failure.
-7. **Move Glorious and Tube out**: publish them as plugins in their authors' repositories, then delete their code
-   from the app (cleanup below).
+6. **Script** (postponed until a plugin needs it: Glorious and Tube do not): Jint 3.x, `omega.on` events, limits,
+   disable-on-failure.
+7. **Move Glorious and Tube out**: Glorious done (see below). Tube: the `lines` card style, then its own
+   repository.
 
 Parts of PR #35 that are not about the Tube look belong to the app regardless and can land first:
 `Screen.FitToWindow`, the Sharp / Data saver thumbnails, the `CropToMask` fix, the line-height fix and
 `tools/ui-preview` (which should then render plugin specs instead of parsing C# constants).
 
-## Cleanup once Glorious and Tube are plugins
+## Glorious as a plugin (done)
 
-Only Omega stays in the app. To remove:
+Glorious lives in `glorious-omegatube-plugin` (its author's repository): `plugin.json`, `strings.json`,
+`theme.json` (the four glass surfaces), `rail.json` (overlay menu, outline icons) and `home.json` (rows home with
+hero, featured first row, tint and edge fades), plus the generators of its images. It needs no `cards.json`: the
+built-in `glass` and `featured` looks are what it uses.
 
-- `Theme.Glorious`, `Theme.Tube`, `Theme.GlassPanel` / `GlassHigh` / `PageTint` / `TubePill` / `TubeSub`, every
-  `Glorious*`, `Big*`, `Grid*`, `Nav*`, `Hero*` and `Tube*` constant in `Ui/Theme.cs`.
-- `AppConfig.UiStyle` values other than `omega` (migrate `glorious` / `tube` to "install the plugin" on first launch,
-  or to Omega).
-- Every `if (Theme.Glorious)` / `Glorious ?` / `Theme.Tube ?` branch in `HomeScreen`, `ShelfList`, `FeedRow`,
-  `FeedGrid`, `Card`, `Rail`, `Widgets`, `SettingsScreen`, `AccountScreen`, `PlayerScreen` (by then they read specs).
-- The hard-coded interface choice in `SettingsScreen` (replaced by the plugin list) and its strings in `I18n.cs`.
-- Assets only Glorious uses (`glass*9.9.png`, outline icons, hero scrims, nav fade) and their generators in
-  `tools/` (`glass-panel`, `hero-scrims`, `nav-fade`, `outline-icons`) move to the Glorious plugin repository.
-- Kept as host building blocks, not as Glorious code: `Hero`, `Backdrop`, `VideoPreview`, `CardPreviews`,
-  `PreviewRing` (any plugin can enable them through `home.json` / `cards.json`).
+What left the app: `ThemeSpec.Glorious()` and `HomeSpec.Glorious`, the built-in interface choice, the glass surfaces
+(`glass*.9.png` but `glass_dark`), the row edge fades (`scrim_left` / `scrim_right` / `scrim_rowbottom`), the
+outline menu icons and `tools/outline-icons`. A TV still set to `glorious` starts in Omega and Settings › Interface
+says that Glorious is now a plugin.
+
+What stays as host building blocks any plugin can turn on, with their default images: `Hero` + `Backdrop` +
+`VideoPreview` (hero scrims `hero_left` / `hero_bottom`, `tools/hero-scrims`), overlay cards with `CardPreviews`
+and `PreviewRing` (`card_shadow`, `card_ring`, `card_info`, `tools/glass-panel`), the overlay menu (`nav_fade`,
+`glass_dark`, `tools/nav-fade`).
+
+Tube (PR #35) will follow the same path once the `lines` card style exists.
 
 ## Open questions
 

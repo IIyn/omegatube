@@ -109,9 +109,9 @@ namespace OmegaTube.Config
         public List<HomeRow> HomeRows = new List<HomeRow>();
         public PlayerOptions Player = new PlayerOptions();
         public string UiLanguage = "en"; // app texts (I18n): en | fr | es
-        public string UiStyle = "omega"; // interface: omega (default) | glorious (immersive home) | a plugin id
-        public bool HeroPreview = true;  // Glorious: video preview behind the first home row after a short rest
-        public bool CardPreview = true;  // Glorious: animated preview inside the other cards after a short rest
+        public string UiStyle = "omega"; // interface: omega (built in) | an installed plugin's id ("glorious": the former built-in, see Settings)
+        public bool HeroPreview = true;  // homes with a hero: video preview behind the first home row after a short rest
+        public bool CardPreview = true;  // overlay cards: animated preview inside the cards after a short rest
         public string Language = "en";   // InnerTube hl
         public string Region = "US";     // InnerTube gl
         public bool CheckUpdates = true;

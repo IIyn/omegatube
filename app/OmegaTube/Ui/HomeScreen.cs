@@ -30,7 +30,7 @@ namespace OmegaTube.Ui
 
         private static int ContentX => Theme.Rail.Width + 20;
         private const int OpenDelayMs = 350;   // pause on a rail entry before it opens
-        // Hosted screens (Account, Settings) sit beside the rail; a shifted nav (Glorious) moves them further right.
+        // Hosted screens (Account, Settings) sit beside the rail; a shifted nav (RailSpec.Shift) moves them further right.
         private int EmbedX => Theme.Rail.Width + Theme.Rail.Shift;
         private float EmbedScale => (1920f - EmbedX) / 1920f;
         private static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(5);
@@ -457,7 +457,7 @@ namespace OmegaTube.Ui
         }
 
         // Rows homes: a flat feed (history, a topic search...) shown like Home. The first videos (FlatFeatured) are the
-        // first row (over the hero backdrop in Glorious); the rest follow as grid rows (GridColumns), loaded downward
+        // first row (over the hero backdrop when there is one); the rest follow as grid rows (GridColumns), loaded downward
         // as you go (the feed's next pages add rows). Where the feed has its own groups (subscriptions' "most
         // relevant" shelf) that group is the first titled row, as on Home, and the latest videos follow as the grid.
         private static Func<string, Task<FeedPage>> AsRows(Func<string, Task<FeedPage>> flat, string title, RowsSpec spec)
@@ -623,7 +623,7 @@ namespace OmegaTube.Ui
                     hero?.SetActive(false);   // stops a video preview
                     ShowHero(false);
                 }
-                // From the second row down the page may turn the tint (Glorious: a dark blue-slate), so the cards (with
+                // From the second row down the page may turn the tint (Theme.PageTint), so the cards (with
                 // their shadows) lift off it. (Set after the preview stopped: that hands the window back its opaque
                 // background.)
                 tinted = heroSection && !onFirstRow;

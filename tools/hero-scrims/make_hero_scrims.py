@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Renders the two darkening layers of the Glorious hero backdrop (app/OmegaTube/res/images/hero_left.png, hero_bottom.png).
+"""Renders the two darkening layers of the home hero backdrop (HomeSpec.Hero defaults) (app/OmegaTube/res/images/hero_left.png, hero_bottom.png).
 
 Both are black with the gradient in the alpha channel and are stretched over the whole 1920x1080 screen by the app:
   hero_left   - solid at the left edge, easing out to clear by the middle (keeps the title legible);

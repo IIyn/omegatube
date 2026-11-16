@@ -47,7 +47,7 @@ namespace OmegaTube
                     Config.Save();
                 }
                 Ui.Theme.Apply(Config.UiStyle);
-                if (Ui.Theme.Active != "omega" && Ui.Theme.Active != "glorious")
+                if (Ui.Theme.Active != "omega")
                 {
                     Plugins.PluginStore.Starting(Ui.Theme.Active);
                 }

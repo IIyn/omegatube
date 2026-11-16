@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""Renders the "glass" nine-patches of the Glorious theme into app/OmegaTube/res/images/.
+"""Renders the app's glass nine-patches into app/OmegaTube/res/images/: the building blocks a plugin turns on (the
+overlay menu's chip, the overlay card's title panel and outline, the card shadow) and the preview corner mask.
 
 Tizen 5.5 has no CornerRadius, Borderline or BoxShadow and no backdrop blur, so the glass look is baked into a
 nine-patch: a very light translucent white fill, a thin (1 px), subtle rim for the edge reflection and a faint
 highlight just under the top edge, with anti-aliased rounded corners. Everything is white with the alpha carrying
 the look, so the app draws it untinted (or tints it, e.g. accent while a row is picked up).
-
-Variants: glass (cards, panels; radius 22) and glass_pill (buttons, selected entries; radius 32), each as resting
-glass and as a brighter "lit" glass for the focused entry.
 
 Usage: python3 tools/glass-panel/make_glass.py
 """
@@ -26,10 +24,6 @@ SMOKE = (14, 16, 22)     # the dark tint of the readable-on-anything variant
 
 # name, radius, content size, fixed edge (the middle SIZE - 2 * FIXED stretches), fill, rim, top highlight, fill colour
 VARIANTS = (
-    ("glass9.9.png", 22.0, 64, 26, 0.045, 0.20, 0.035, WHITE),
-    ("glass_lit9.9.png", 22.0, 64, 26, 0.15, 0.42, 0.06, WHITE),
-    ("glass_pill9.9.png", 32.0, 72, 34, 0.045, 0.20, 0.035, WHITE),
-    ("glass_pill_lit9.9.png", 32.0, 72, 34, 0.15, 0.42, 0.06, WHITE),
     # dark smoked glass for small floating controls over artwork (the collapsed nav chip)
     ("glass_dark9.9.png", 22.0, 64, 26, 0.58, 0.22, 0.05, SMOKE),
     # the focused card's title panel: dark smoked glass (81% opaque), no rim (the card's outline already frames it)

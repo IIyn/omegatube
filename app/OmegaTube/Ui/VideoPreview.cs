@@ -4,7 +4,7 @@ using Tizen.NUI;
 
 namespace OmegaTube.Ui
 {
-    // Muted, video-only playback of a home item behind the Glorious hero once the user rests on it. A preview is
+    // Muted, video-only playback of a home item behind a home's hero once the user rests on it. A preview is
     // not a watch: the core plays no audio and attaches no history reporter (omega_player_create_preview).
     // The TV has one video decoder, so creation and teardown run on PlayerScreen's decoder chain: the full player
     // (or the next preview) never starts while this one still holds it, even if it is still being created.

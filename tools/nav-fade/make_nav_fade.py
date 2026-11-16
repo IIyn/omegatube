@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Renders the fade behind the Glorious left nav (app/OmegaTube/res/images/nav_fade.png).
+"""Renders the fade behind the overlay menu (RailSpec.Fade default: app/OmegaTube/res/images/nav_fade.png).
 
 A black horizontal gradient: solid-ish at the left edge of the screen (where the nav icons and labels sit),
 holding, then easing out smoothly to fully transparent on the right so it never shows an edge over the artwork.

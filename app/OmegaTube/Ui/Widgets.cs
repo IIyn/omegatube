@@ -134,7 +134,7 @@ namespace OmegaTube.Ui
             return new ImageView { ResourceUrl = Theme.Image("round9.9"), Size = new Size(width, height), Color = fill };
         }
 
-        // One of the theme's surfaces (ThemeSpec), a nine-patch drawn at any size: Glorious's baked glass
+        // One of the theme's surfaces (ThemeSpec), a nine-patch drawn at any size (a plugin's baked glass, say)
         // (tools/glass-panel/make_glass.py) has a translucent fill, a bright rim and a soft top highlight. `lit` is
         // the brighter variant for the focused entry; `pill` the rounder one (buttons, selected entries) instead of
         // the card one. Drawn untinted; tint it through Color (e.g. accent) when needed. A theme without that

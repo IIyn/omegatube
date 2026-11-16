@@ -16,8 +16,8 @@ namespace OmegaTube.Ui
     }
 
     // The look of the interface as data: colours, type sizes, radii and surfaces. Theme.Current holds the one in use
-    // and Theme's static members read it. Omega() is the built-in default; Glorious() is the immersive look until it
-    // becomes a plugin (docs/plugins.md: theme.json, cards.json, rail.json, home.json).
+    // and Theme's static members read it. Omega() is the built-in look; plugins start from it
+    // (Plugins.PluginPackage, docs/plugins.md: theme.json, cards.json, rail.json, home.json).
     public sealed class ThemeSpec
     {
         // SmartTube's "Dark Grey" look (as followed by ytps5): black page, grey panels, YouTube red accent.
@@ -73,19 +73,6 @@ namespace OmegaTube.Ui
         public bool GlassScreens => PanelSurface != null;
 
         public static ThemeSpec Omega() => new ThemeSpec();
-
-        // Liquid glass: the baked nine-patches from tools/glass-panel.
-        public static ThemeSpec Glorious()
-        {
-            var t = new ThemeSpec();
-            t.PanelSurface = new SurfaceSpec(Theme.Image("glass9.9"));
-            t.PanelLitSurface = new SurfaceSpec(Theme.Image("glass_lit9.9"));
-            t.PillSurface = new SurfaceSpec(Theme.Image("glass_pill9.9"));
-            t.PillLitSurface = new SurfaceSpec(Theme.Image("glass_pill_lit9.9"));
-            t.Rail = RailSpec.Overlay();
-            t.Home = HomeSpec.Glorious;
-            return t;
-        }
 
         private static Color Rgb(int rgb) =>
             new Color(((rgb >> 16) & 0xff) / 255f, ((rgb >> 8) & 0xff) / 255f, (rgb & 0xff) / 255f, 1f);

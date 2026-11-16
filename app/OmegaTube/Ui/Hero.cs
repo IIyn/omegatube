@@ -6,7 +6,7 @@ using Tizen.NUI.BaseComponents;
 
 namespace OmegaTube.Ui
 {
-    // Full-screen backdrop behind a home's first row (HomeSpec.Hero, the Glorious home): the focused item's
+    // Full-screen backdrop behind a home's first row (HomeSpec.Hero, an immersive home): the focused item's
     // thumbnail fills the screen and fades to black on the left (under the nav / behind the text) and along the
     // bottom (under the rows), with the item's title and a metadata line over it. Hero.Display(item) is called by HomeScreen as focus moves.
     //
