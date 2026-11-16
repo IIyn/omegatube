@@ -62,7 +62,7 @@ namespace OmegaTube.Ui
             Size = new Size(width, height);
             ClippingMode = ClippingModeType.ClipChildren;
             cardW = (width - 2 * Pad - (Columns - 1) * GapX) / Columns;
-            rowStep = Theme.CardHeight(cardW) + GapY;
+            rowStep = Theme.Card("classic").Height(cardW) + GapY;
             content = new View { Position = new Position(0, Pad), Size = new Size(width, 100000) };
             Add(content);
             hlHeading = Widgets.Label(T("Most relevant"), Theme.TitleSize - 6, Theme.Text, width - 2 * Pad, HeadingH);

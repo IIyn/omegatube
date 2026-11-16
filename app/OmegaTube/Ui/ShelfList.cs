@@ -185,8 +185,8 @@ namespace OmegaTube.Ui
                     row = new FeedRow(title, s.Loader ?? (c => YouTube.Browse("", c)), width,
                                       big ? Theme.BigCardWidth : grid ? Theme.GridCardWidth : Theme.CardWidth, leftInset,
                                       grid ? (title.Length > 0 ? Theme.GridTitledRowHeight : Theme.GridRowHeight) : RowHeightAt(i),
-                                      thumbOnly: big, cardGap: big ? Theme.BigCardGap : grid ? Theme.GridGap : Theme.CardGap, grid: grid,
-                                      glass: heroMode)
+                                      Theme.Card(big ? "featured" : heroMode ? "glass" : "classic"),
+                                      big ? Theme.BigCardGap : grid ? Theme.GridGap : Theme.CardGap, grid)
                     {
                         Position = new Position(0, RowTop(i)),
                         RequestWork = () => UiWork.Request(pump),

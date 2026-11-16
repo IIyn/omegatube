@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Tizen.NUI;
 
 namespace OmegaTube.Ui
@@ -16,7 +17,7 @@ namespace OmegaTube.Ui
 
     // The look of the interface as data: colours, type sizes, radii and surfaces. Theme.Current holds the one in use
     // and Theme's static members read it. Omega() is the built-in default; Glorious() is the immersive look until it
-    // becomes a plugin (docs/plugins.md: theme.json). Layout geometry (cards, rows, rail, hero) is not here yet.
+    // becomes a plugin (docs/plugins.md: theme.json, cards.json). Layout geometry (rows, rail, hero) is not here yet.
     public sealed class ThemeSpec
     {
         // SmartTube's "Dark Grey" look (as followed by ytps5): black page, grey panels, YouTube red accent.
@@ -54,6 +55,15 @@ namespace OmegaTube.Ui
         // Panels (settings / account cards, dialogs) and pills (buttons, selected entries), resting and lit.
         // All null: flat rounded fills in the theme's colours.
         public SurfaceSpec PanelSurface, PanelLitSurface, PillSurface, PillLitSurface;
+
+        // Card looks by name. A layout asks for "classic" (default), "glass" or "featured"; Theme.Card falls back to
+        // classic for a name the theme does not define.
+        public Dictionary<string, CardSpec> Cards = new Dictionary<string, CardSpec>
+        {
+            ["classic"] = CardSpec.Classic(),
+            ["glass"] = CardSpec.Glass(),
+            ["featured"] = CardSpec.Featured(),
+        };
 
         // A theme with image surfaces gets the "glass" variant of the hosted screens (Settings, Account, dialogs):
         // transparent page, surfaces instead of flat panels.

@@ -47,12 +47,11 @@ namespace OmegaTube.Ui
         private readonly int leftInset;   // x of the focused card; earlier cards slide left of it (under the nav)
         public int RowHeight { get; }    // as built (a managed copy: the list lays rows out without native reads)
         public bool Shown { get; private set; } = true;   // managed mirror of Visibility
-        private readonly bool glass;     // Glorious home: glass cards (the other users of FeedRow keep the classic look)
+        private readonly CardSpec cardSpec;   // the cards' look (the theme's classic one unless the layout asks for another)
         private readonly bool grid;      // Glorious grid row: the cards stay put (no sliding strip), focus moves along them
         private readonly int stripY;
         public bool IsGrid => grid;
         private int SlideX => grid ? leftInset : leftInset - FocusIndex * Step;
-        private readonly bool thumbOnly;  // Glorious featured row: bare thumbnails (title/meta live on the hero)
 
         private int Step => cardWidth + cardGap;
 
@@ -62,19 +61,18 @@ namespace OmegaTube.Ui
         }
 
         // cardWidth / leftInset default to the Omega look; the Glorious home passes a larger featured width and
-        // an inset that clears the nav column.
+        // an inset that clears the nav column. card: the card look (null: the theme's classic card).
         public FeedRow(string title, Func<string, Task<FeedPage>> loader, int width,
                        int cardWidth = Theme.CardWidth, int leftInset = Theme.FocusMargin, int rowHeight = Theme.RowHeight,
-                       bool thumbOnly = false, int cardGap = Theme.CardGap, bool grid = false, bool glass = false)
+                       CardSpec card = null, int cardGap = Theme.CardGap, bool grid = false)
         {
             Title = title;
             this.loader = loader;
             this.cardWidth = cardWidth;
             this.cardGap = cardGap;
             this.leftInset = leftInset;
-            this.thumbOnly = thumbOnly;
             this.grid = grid;
-            this.glass = glass;
+            cardSpec = card ?? Theme.Card("classic");
             RowHeight = rowHeight;
             stripY = grid && title.Length == 0 ? GridStripY : StripY;
             pump = BuildNext;
@@ -89,7 +87,7 @@ namespace OmegaTube.Ui
             status.Position = new Position(leftInset, 140);
             Add(status);
 
-            strip = new View { Position = new Position(leftInset, stripY), Size = new Size(20000, Theme.CardHeight(cardWidth) + 40) };
+            strip = new View { Position = new Position(leftInset, stripY), Size = new Size(20000, cardSpec.Height(cardWidth) + 40) };
             Add(strip);
         }
 
@@ -156,7 +154,7 @@ namespace OmegaTube.Ui
                 }
                 else
                 {
-                    card = new Card(items[i], cardWidth, thumbOnly, glass) { Position = new Position(i * Step, 16) };
+                    card = new Card(items[i], cardWidth, cardSpec) { Position = new Position(i * Step, 16) };
                     strip.Add(card);
                 }
                 cards.Add(card);
@@ -176,7 +174,7 @@ namespace OmegaTube.Ui
             last = Math.Min(last, items.Count - 1);
             while (cards.Count <= last)
             {
-                var card = new Card(items[cards.Count], cardWidth, thumbOnly, glass) { Position = new Position(cards.Count * Step, 16) };
+                var card = new Card(items[cards.Count], cardWidth, cardSpec) { Position = new Position(cards.Count * Step, 16) };
                 cards.Add(card);
                 strip.Add(card);
             }

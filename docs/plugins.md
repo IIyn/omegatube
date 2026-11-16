@@ -29,7 +29,7 @@ my-plugin/
   plugin.json        manifest (required)
   theme.json         tokens: colours, type sizes, radii, surfaces (optional, defaults = Omega)
   home.json          home layout (optional, defaults = Omega)
-  cards.json         card templates (optional)
+  cards.json         card looks (optional)
   rail.json          navigation rail (optional)
   player.json        player suggestions row (optional)
   strings.json       the plugin's own labels per language (optional)
@@ -153,69 +153,42 @@ counts as not validated.
 Settings / Account / dialogs screens take from a plugin: their layout stays native, only their skin changes. That
 is what Glorious does today with `if (Theme.Glorious)`.
 
-## cards.json — card templates
+## cards.json — card looks
 
-A card is a small tree of primitives laid out by stacks, with a `focused` override on any node. There are no
-expressions and no absolute maths: stacks and anchors cover Omega, Glorious and Tube.
+A card look is **one native info style plus its parameters**, not a free tree of primitives. Cards are the
+most numerous views in the app (hundreds per page, built in two steps while scrolling, rounded with masks and
+nine-patches because Tizen 5.5 has no `CornerRadius`), so the host keeps their layout native and fast, and a
+plugin tunes it. A new info style is a host PR, like a new rail mode.
 
-Primitives:
-
-| type | what | notable properties |
+| `info` | what | used by |
 |---|---|---|
-| `thumb` | the video still, always 16:9 of the card width | `radius`, `shadow` (nine-patch), `mask` (alpha mask image) |
-| `text` | a bound or literal string | `bind` or `text`, `size`, `color`, `lines` (1–3), `marquee` (scroll when too long, focused only), `bold` |
-| `box` | a colour or surface | `color` / `surface`, `radius`, `w` / `h` (`"fill"` allowed) |
-| `image` | a package image | `src`, `w`, `h` |
-| `stack` | lays children out | `dir` (`v` / `h`), `gap`, `pad`, `align` |
-| `overlay` | children on top of the previous node | `anchor` (`top`, `bottom`, `bottomRight`...), `inset` |
-| `badge` | duration / LIVE badge (native) | `anchor`, `style` (`dark`, `pill`) |
-| `progress` | watched bar (native) | `color`, `height` |
-| `preview` | animated preview over the thumbnail (native `CardPreviews`) | `after` (rest time) |
+| `box` | a box glued under the thumbnail: title on two lines, then the meta line; lit when focused | Omega |
+| `overlay` | focused: a dark title panel fades in on the thumbnail (long titles scroll), the meta line under it | Glorious rows 2+ |
+| `none` | the thumbnail alone | Glorious featured row |
+| `lines` *(planned)* | title on two lines, channel, then views · age, on the page colour | Tube |
 
-Bindings (host-formatted, already translated): `item.title`, `item.channel`, `item.meta` (channel · views · age),
-`item.views`, `item.age`, `item.viewsAge`, `item.duration`. No raw ids, no URLs.
+```json
+{
+  "classic":  { "info": "box", "focusScale": 1.1, "boxHeight": 104,
+                "boxColor": "#1f1f1f", "boxFocusedColor": "#e3e3e3", "textFocusedColor": "#2a2a2a" },
+  "glass":    { "info": "overlay", "focusScale": 1.1, "shadow": "images/card_shadow9.9.png",
+                "shadowMargin": 36, "shadowDrop": 10, "outline": "images/card_ring9.9.png",
+                "overlayPanel": "images/card_info9.9.png", "preview": true },
+  "featured": { "info": "none", "shadow": "images/card_shadow9.9.png", "outline": "images/card_ring9.9.png" }
+}
+```
 
-Card-level properties: `width` (200–900), `focusScale` (1–1.2), `outline` (focused ring: colour, width, radius).
+Common to every look: `focusScale` (1–1.2), `mask` (the alpha mask that rounds the thumbnail), `shadow` (a
+pre-blurred nine-patch; its blur margin and drop travel with it), `outline` (nine-patch ring round the focused
+card), `preview` (the animated preview may play, `overlay` only). The duration / LIVE badge and the watched bar
+are always there. Colours left out follow `theme.json`.
+
+Layouts refer to looks by name (`home.json` rows, the player's suggestions); `classic`, `glass` and `featured`
+always exist (built in), a plugin may redefine them or add its own names.
+
 The host chooses the thumbnail file from the drawn width and the user's data-saver setting (`Data/Thumbs.cs` from
-PR #35), so a plugin never asks for a resolution.
-
-Omega's classic card, as a template:
-
-```json
-{
-  "classic": {
-    "width": 352, "focusScale": 1.1,
-    "root": { "type": "stack", "dir": "v", "children": [
-      { "type": "thumb", "radius": 14,
-        "overlays": [ { "type": "badge", "anchor": "bottomRight" }, { "type": "progress" } ] },
-      { "type": "box", "h": 104, "w": "fill", "color": "#1f1f1f", "focused": { "color": "#e3e3e3" },
-        "children": [ { "type": "stack", "dir": "v", "pad": 14, "children": [
-          { "type": "text", "bind": "item.title", "lines": 2, "size": 24, "color": "text", "focused": { "color": "#2a2a2a" } },
-          { "type": "text", "bind": "item.meta", "size": 19, "color": "textDim" } ] } ] }
-    ] }
-  }
-}
-```
-
-Tube's card (three lines on the page colour):
-
-```json
-{
-  "wall": {
-    "width": 660, "focusScale": 1.08,
-    "root": { "type": "stack", "dir": "v", "gap": 12, "children": [
-      { "type": "thumb", "radius": 14, "overlays": [ { "type": "badge", "anchor": "bottomRight" }, { "type": "progress" } ] },
-      { "type": "stack", "dir": "v", "pad": [0, 14], "children": [
-        { "type": "text", "bind": "item.title", "lines": 2, "size": 36, "color": "text" },
-        { "type": "text", "bind": "item.channel", "size": 24, "color": "#c9c9c9" },
-        { "type": "text", "bind": "item.viewsAge", "size": 24, "color": "textDim" } ] }
-    ] }
-  }
-}
-```
-
-Glorious's glass card: `thumb` with `shadow` and `outline`, an `overlay` panel anchored to the bottom that is
-`hidden` and becomes visible when `focused`, a `marquee` title, and `preview`. Its featured card is just a `thumb`.
+PR #35), so a plugin never asks for a resolution. Texts are host-formatted and translated (title, channel,
+views, age); a plugin never sees ids or URLs.
 
 ## rail.json — navigation
 
@@ -282,7 +255,7 @@ Glorious's glass card: `thumb` with `shadow` and `outline`, an `overlay` panel a
 
 In SDK 1.0 the player itself (controls, captions, watch section) stays native, and only the suggestions row uses
 plugin cards. **Planned for later**: themeable player controls (button surfaces, icons, progress bar colours and
-height, layout of the control bar), in the same token / surface / template style. They are wanted, but not first.
+height, layout of the control bar), in the same token / surface / native-style-with-parameters approach. They are wanted, but not first.
 
 ## strings.json
 
@@ -290,7 +263,7 @@ height, layout of the control bar), in the same token / surface / template style
 { "en": { "tagline": "Immersive home" }, "fr": { "tagline": "Accueil immersif" } }
 ```
 
-Used by `"text": "@tagline"` in templates. Missing language → `en` → the key itself.
+Used for the plugin's own texts shown by the app, such as `"name": "@name"` and `"description": "@tagline"` in `plugin.json`. Missing language → `en` → the key itself.
 
 ## Script (optional)
 
@@ -323,8 +296,9 @@ In the order it would land. Each step is useful on its own.
 
 1. **Tokens and surfaces**: `Theme` becomes an instance (`Theme.Current`) loaded from defaults, then
    `theme.json`. `Widgets.Panel` / `GlassCard` / `PillButton` take a surface instead of testing `Theme.Glorious`.
-2. **Card templates**: `Card` builds from a template tree. The classic, glass, featured and Tube looks become four
-   templates. `FeedRow`, `FeedGrid` and the player take a card template name instead of `glass` / `thumbOnly` / `tube`.
+2. **Card looks**: `Card` builds from a `CardSpec` (info style + parameters). Classic, glass and featured are
+   specs in the theme; `FeedRow` / `ShelfList` take a spec instead of `glass` / `thumbOnly`. Tube adds the
+   `lines` style.
 3. **Rail modes**: `Rail(entries, overlay)` becomes `Rail(entries, RailSpec)`.
 4. **Home layout**: `HomeScreen.FeedFor`, `ShelfList(bigFirst, heroMode)` and `UpdateHero` read `HomeSpec`. The
    hero becomes optional per spec, not per `Theme.Glorious`.

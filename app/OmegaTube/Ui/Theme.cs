@@ -50,8 +50,6 @@ namespace OmegaTube.Ui
         public const int RailExpandedWidth = 330;  // focused: icons + labels
         public const int CardWidth = 352;
         public const int CardGap = 30;
-        public const int CardInfoHeight = 104;     // title (2 lines) + channel line
-        public const float FocusScale = 1.1f;
         public const int FocusMargin = 30;         // room for the focused card's scale-up
         public const int RowHeight = 470;
 
@@ -73,7 +71,6 @@ namespace OmegaTube.Ui
         public const int BigRowHeight = 340;       // tall so the next row's heading clears the featured thumbnails
 
         public static int ThumbHeight(int cardWidth) => cardWidth * 9 / 16;
-        public static int CardHeight(int cardWidth) => ThumbHeight(cardWidth) + CardInfoHeight;
 
         // Resource paths, resolved once per name (a card asks for several, hundreds of cards a page).
         private static string resources;
@@ -92,6 +89,13 @@ namespace OmegaTube.Ui
         }
 
         public static string Image(string name) => Resolve(images, "images", name);
+
+        // A theme image: a full path (a plugin's file) as is, otherwise a name in res/images.
+        public static string ImagePath(string image) => System.IO.Path.IsPathRooted(image) ? image : Image(image);
+
+        // The card look of that name in the current theme (classic when it has none).
+        public static CardSpec Card(string name) =>
+            name != null && Current.Cards.TryGetValue(name, out CardSpec spec) ? spec : Current.Cards["classic"];
 
         public static string Icon(string name) => Resolve(icons, "icons", name);
     }
