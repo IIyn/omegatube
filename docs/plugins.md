@@ -114,9 +114,11 @@ decides whether the app shows a warning.
   non-official installs. A validated plugin therefore never silently turns into an unvalidated version.
 - `preview` images are copied into `gh-pages` (`plugins/img/`), so neither the site nor the app loads images from
   third-party servers to show the list.
-- Maintainer workflow: the author opens an issue ("Plugin validation request") with the release URL. The maintainer
+- Maintainer workflow: the author fills in the "Plugin validation request" issue form
+  (`.github/ISSUE_TEMPLATE/plugin-validation.yml`: release zip, repository, screenshot, TVs tested). The maintainer
   tests it on a TV, runs `tools/plugin-index/add_plugin.py <release zip URL>` (it fills `id`, `name`,
-  `version`, `sdk`, `sha256` and the screenshot from the zip into the `gh-pages` worktree), and pushes. Removing an entry stops listing it; installed copies keep working but become
+  `version`, `sdk`, `sha256` and the screenshot from the zip into the `gh-pages` worktree), and pushes. Removing
+  an entry stops listing it; installed copies keep working but become
   "not validated" (with a notice).
 - The site page follows the public wording rules (no claims about ads; keep the non-affiliation disclaimer).
 
