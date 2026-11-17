@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest package="org.omegatube.app" version="1.5.0" api-version="5.5" xmlns="http://tizen.org/ns/packages">
+  <profile name="tv" />
+  <ui-application appid="org.omegatube.app" exec="OmegaTube.dll" type="dotnet" multiple="false" nodisplay="false" taskmanage="true" launch_mode="single">
+    <label>OmegaTube</label>
+    <icon>omegatube.png</icon>
+    <splash-screens>
+      <splash-screen src="splash.png" type="img" dpi="hdpi" orientation="landscape" indicator-display="false" />
+    </splash-screens>
+  </ui-application>
+  <privileges>
+    <privilege>http://tizen.org/privilege/internet</privilege>
+    <privilege>http://tizen.org/privilege/tv.inputdevice</privilege>
+    <privilege>http://tizen.org/privilege/recorder</privilege>
+    <privilege>http://tizen.org/privilege/mediacapture</privilege>
+  </privileges>
+</manifest>
