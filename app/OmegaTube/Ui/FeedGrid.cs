@@ -62,7 +62,7 @@ namespace OmegaTube.Ui
             Size = new Size(width, height);
             ClippingMode = ClippingModeType.ClipChildren;
             cardW = (width - 2 * Pad - (Columns - 1) * GapX) / Columns;
-            rowStep = Theme.CardHeight(cardW) + GapY;
+            rowStep = Theme.Card("classic").Height(cardW) + GapY;
             content = new View { Position = new Position(0, Pad), Size = new Size(width, 100000) };
             Add(content);
             hlHeading = Widgets.Label(T("Most relevant"), Theme.TitleSize - 6, Theme.Text, width - 2 * Pad, HeadingH);
@@ -144,7 +144,8 @@ namespace OmegaTube.Ui
                 var circle = new ImageView { ResourceUrl = Theme.Image("circle_mask"), Color = Theme.GlassHigh,
                                              Size = new Size(128, 128), Position = new Position((panelW - 128) / 2, 46) };
                 emptyView.Add(circle);
-                var icon = new ImageView { ResourceUrl = Theme.Icon("set_account"), Size = new Size(66, 66), Position = new Position(31, 31) };
+                var icon = new ImageView { ResourceUrl = Theme.Icon("set_account"), Size = new Size(66, 66), Position = new Position(31, 31),
+                                           Color = Theme.IconTint };
                 circle.Add(icon);
 
                 emptyMessage = Widgets.Label("", Theme.BodySize + 4, Theme.Text, panelW - 160, 150);

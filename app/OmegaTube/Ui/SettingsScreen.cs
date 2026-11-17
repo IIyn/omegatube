@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using OmegaTube.Config;
 using OmegaTube.Data;
+using OmegaTube.Plugins;
 using OmegaTube.Util;
 using Tizen.NUI;
 using Tizen.NUI.BaseComponents;
@@ -32,7 +33,7 @@ namespace OmegaTube.Ui
             public View View;
             public TextLabel TitleLabel, HintLabel, ValueLabel;
             public View SwitchView;
-            public View GlassLit;            // Glorious: brighter glass behind the focused row
+            public View GlassLit;            // glass screens: brighter glass behind the focused row
         }
 
         private class Category
@@ -43,7 +44,7 @@ namespace OmegaTube.Ui
             public View View;
             public ImageView IconView;
             public TextLabel Label;
-            public View Glass, GlassLit;     // Glorious: resting (selected) and focused glass pills
+            public View Glass, GlassLit;     // glass screens: resting (selected) and focused glass pills
         }
 
         private const int PaneWidth = 600;
@@ -72,16 +73,20 @@ namespace OmegaTube.Ui
         private TextLabel notesText;
         private float notesScroll;
         private bool relabel;              // the app language or the interface changed: every part has to be rebuilt
-        private readonly bool glorious;    // Glorious interface: glass cards instead of flat panels
+        private readonly bool glassLook;    // glass theme (image surfaces): glass cards instead of flat panels
+        private TextEntry urlEntry;        // "Add a plugin by its address", while open
+        // Plugin download / install: one at a time, and its last outcome, across the rebuilds of this screen.
+        private static bool pluginBusy;
+        private static string pluginStatus = "";
 
         // startCategory / startRow: where to come back after a rebuild (app language or interface change).
         public SettingsScreen(App app, int startCategory = 0, int startRow = -1) : base(app)
         {
-            glorious = Theme.Glorious;   // the one source of truth: set from the config at start-up and when it changes
-            Root.BackgroundColor = glorious ? Color.Transparent : Theme.Background;   // Glorious: glass over the page
+            glassLook = Theme.Current.GlassScreens;   // the one source of truth: Theme.Apply at start-up and when it changes
+            Root.BackgroundColor = glassLook ? Color.Transparent : Theme.Background;   // glass over the page
 
-            View pane = glorious ? Widgets.GlassCard(false, PaneWidth - 80, 1000) : Widgets.Box(Theme.Panel, PaneWidth, 1080);   // transparent glass over the page
-            if (glorious)
+            View pane = glassLook ? Widgets.SurfaceCard(false, PaneWidth - 80, 1000) : Widgets.Box(Theme.Panel, PaneWidth, 1080);   // transparent glass over the page
+            if (glassLook)
             {
                 pane.Position = new Position(40, 40);
             }
@@ -134,6 +139,7 @@ namespace OmegaTube.Ui
             AddCategory(T("Subtitles and audio"), "subtitles", T("Languages and appearance of subtitles"), BuildCaptions, true);
             AddCategory("SponsorBlock", "shield", T("Skipping sponsors and other segments reported by the community"), BuildSponsorBlock);
             AddCategory(T("Menu"), "view_list", T("Sidebar sections (add some from Search)"), BuildMenu);
+            AddCategory(T("Interface"), "palette", T("The look of the app, and interface plugins"), BuildInterface);
             AddCategory(T("General"), "language", T("App language, content language and updates"), BuildGeneral);
             aboutCategory = categories.Count;
             AddCategory(T("About"), "info_outline", T("Version, license and credits"), BuildAbout);
@@ -154,11 +160,11 @@ namespace OmegaTube.Ui
         {
             int i = categories.Count;
             View view, glass = null, glassLit = null;
-            if (glorious)
+            if (glassLook)
             {
                 view = new View { Size = new Size(PaneWidth - 128, 80), Position = new Position(64, 220 + i * 92) };
-                glass = Widgets.GlassCard(false, PaneWidth - 128, 80, true);
-                glassLit = Widgets.GlassCard(true, PaneWidth - 128, 80, true);
+                glass = Widgets.SurfaceCard(false, PaneWidth - 128, 80, true);
+                glassLit = Widgets.SurfaceCard(true, PaneWidth - 128, 80, true);
                 glass.Hide();
                 glassLit.Hide();
                 view.Add(glass);
@@ -234,11 +240,11 @@ namespace OmegaTube.Ui
 
         private void MakeRowView(Row r)
         {
-            if (glorious)
+            if (glassLook)
             {
                 r.View = new View { Size = new Size(ListW, RowH) };
-                r.View.Add(Widgets.GlassCard(false, ListW, RowH));
-                r.GlassLit = Widgets.GlassCard(true, ListW, RowH);
+                r.View.Add(Widgets.SurfaceCard(false, ListW, RowH));
+                r.GlassLit = Widgets.SurfaceCard(true, ListW, RowH);
                 r.GlassLit.Hide();
                 r.View.Add(r.GlassLit);
             }
@@ -364,28 +370,304 @@ namespace OmegaTube.Ui
             }
         }
 
-        private void BuildGeneral(List<Row> l)
+        // ---------------------------------------------------------------- interface and plugins
+
+        private void BuildInterface(List<Row> l)
         {
-            Row style = Choice(T("Interface"), T("Home screen style: Omega (classic) or Glorious (immersive)"),
-                         () => App.Config.UiStyle == "glorious" ? T("Glorious") : T("Omega"),
-                         d =>
-                         {
-                             App.Config.UiStyle = App.Config.UiStyle == "glorious" ? "omega" : "glorious";
-                             Theme.Glorious = App.Config.UiStyle == "glorious";
-                             App.Home.InvalidateRows();
-                             relabel = true;   // rebuild this screen in the new style
-                         });
+            List<PluginInfo> installed = PluginStore.Installed();
+            // What the interface row cycles through: Omega (built in), then the installed plugins this app can use.
+            var ids = new List<string> { "omega" };
+            var names = new List<string> { "Omega" };
+            foreach (PluginInfo p in installed)
+            {
+                if (p.Incompatible == null)
+                {
+                    ids.Add(p.Id);
+                    names.Add(p.Name);
+                }
+            }
+            // Hint: why Omega is back when it is (a plugin that broke the start, Glorious now being a plugin).
+            Row style = Choice(T("Interface"), App.PluginFallback != null
+                                   ? T("A plugin stopped the app from starting: back to Omega")
+                                   : App.Config.UiStyle == "glorious"
+                                   ? T("Glorious is now a plugin: install it from the list below")
+                                   : T("Omega (built in) or an installed plugin"),
+                               () => names[Math.Max(0, ids.IndexOf(Theme.Active))],
+                               d =>
+                               {
+                                   int i = Math.Max(0, ids.IndexOf(Theme.Active));
+                                   UseInterface(ids[(i + d + ids.Count) % ids.Count]);
+                               });
             style.Section = T("Interface");
             l.Add(style);
-            if (App.Config.UiStyle == "glorious")
+            if (Theme.Home.Hero != null)
             {
-                // Glorious options, shown right under the interface choice.
-                Row hero = Toggle(T("Home video preview"), T("Plays a muted video behind the first home row after a short rest"),
-                                  () => App.Config.HeroPreview, v => App.Config.HeroPreview = v);
-                l.Add(hero);
+                // Options of a home with a hero backdrop, shown right under the interface choice.
+                l.Add(Toggle(T("Home video preview"), T("Plays a muted video behind the first home row after a short rest"),
+                             () => App.Config.HeroPreview, v => App.Config.HeroPreview = v));
                 l.Add(Toggle(T("Card animated previews"), T("Animates the other cards with a short preview after a short rest"),
                              () => App.Config.CardPreview, v => App.Config.CardPreview = v));
             }
+
+            // Validated by the OmegaTube maintainer (the index on the project's site).
+            bool first = true;
+            foreach (OfficialPlugin o in PluginStore.Index)
+            {
+                PluginInfo p = installed.Find(i => i.Id == o.Id);
+                var actions = new List<KeyValuePair<string, Action>>();
+                string state;
+                if (p == null)
+                {
+                    state = o.Compatible ? "" : T("Needs a newer OmegaTube");
+                    if (o.Compatible)
+                    {
+                        actions.Add(Act(T("Install"), () => StartInstall(o.Url, o.Sha256)));
+                    }
+                }
+                else
+                {
+                    bool official = PluginStore.IsOfficial(p);
+                    state = official ? T("Installed") : T("Installed · not validated");
+                    OfficialPlugin update = PluginStore.OfficialUpdate(p);
+                    if (update != null)
+                    {
+                        actions.Add(Act(official ? T("Update to {0}", update.Version) : T("Install the validated version"),
+                                        () => StartInstall(update.Url, update.Sha256)));
+                    }
+                    actions.Add(Act(T("Remove"), () => AskRemove(p)));
+                }
+                Row r = ActionRow(o.Name, Describe(o.Description, o.Author, state), actions);
+                r.Section = first ? T("Official plugins") : null;
+                first = false;
+                l.Add(r);
+            }
+            if (first)
+            {
+                Row r = ActionRow(T("Official plugins"), T("The list could not be downloaded yet"),
+                                  new List<KeyValuePair<string, Action>> { Act(T("Retry"), () => UiGuard.Fire("SettingsScreen.Index", RefreshIndex)) });
+                r.Section = T("Official plugins");
+                l.Add(r);
+            }
+
+            // Installed from an address, not in the official list.
+            first = true;
+            foreach (PluginInfo p in installed)
+            {
+                if (PluginStore.Listed(p.Id))
+                {
+                    continue;   // listed above
+                }
+                var actions = new List<KeyValuePair<string, Action>>();
+                if (p.Update != null)
+                {
+                    actions.Add(Act(T("Update"), () => StartInstall(p.Update, null)));
+                }
+                actions.Add(Act(T("Remove"), () => AskRemove(p)));
+                string state = p.Incompatible != null ? T("Needs a newer OmegaTube") : T("Not validated");
+                Row r = ActionRow(p.Name, Describe(p.Description, p.Author, state + " · " + p.Version), actions);
+                r.Section = first ? T("Other plugins") : null;
+                first = false;
+                l.Add(r);
+            }
+            // The last install's outcome shows in place of the hint.
+            Row add = new Row
+            {
+                Title = T("Add a plugin by its address"),
+                Hint = pluginStatus.Length > 0 ? pluginStatus : T("The https:// address of the plugin's .zip file"),
+                Value = () => pluginBusy ? T("Working…") : "",
+                Activate = OpenUrlEntry,
+            };
+            add.Section = first ? T("Other plugins") : null;
+            l.Add(add);
+        }
+
+        private static KeyValuePair<string, Action> Act(string label, Action run) => new KeyValuePair<string, Action>(label, run);
+
+        // ◀ ▶ picks one of the actions (shown as the value), OK runs it.
+        private static Row ActionRow(string title, string hint, List<KeyValuePair<string, Action>> actions)
+        {
+            int selected = 0;
+            var row = new Row { Title = title, Hint = hint };
+            if (actions.Count == 0)
+            {
+                return row;
+            }
+            row.Value = () => actions[selected].Key;
+            if (actions.Count > 1)
+            {
+                row.Change = d => selected = (selected + d + actions.Count) % actions.Count;
+            }
+            row.Activate = () =>
+            {
+                if (!pluginBusy)
+                {
+                    actions[selected].Value();
+                }
+            };
+            return row;
+        }
+
+        private static string Describe(string description, string author, string state)
+        {
+            var parts = new List<string>();
+            foreach (string s in new[] { state, author, description })
+            {
+                if (!string.IsNullOrEmpty(s))
+                {
+                    parts.Add(s);
+                }
+            }
+            return string.Join("  ·  ", parts);
+        }
+
+        // Switches the interface now (the home and this screen are rebuilt in it).
+        private void UseInterface(string id)
+        {
+            Theme.Apply(id);
+            if (Theme.Active != id)
+            {
+                pluginStatus = T("This plugin could not be loaded");
+            }
+            App.Config.UiStyle = Theme.Active;
+            App.Home.InvalidateRows();
+            relabel = true;
+        }
+
+        private async Task RefreshIndex()
+        {
+            pluginBusy = true;
+            Refresh();
+            bool ok = await PluginStore.RefreshIndex();
+            pluginBusy = false;
+            pluginStatus = ok ? "" : T("Could not download the list");
+            Rebuilt();
+        }
+
+        // This screen again, at the same place (the lists changed, or the interface).
+        private void Rebuilt()
+        {
+            if (Root.HasBody())
+            {
+                App.ReplaceScreen(this, new SettingsScreen(App, category, inRows ? index : -1));
+            }
+        }
+
+        private void OpenUrlEntry()
+        {
+            if (pluginBusy)
+            {
+                return;
+            }
+            urlEntry = new TextEntry(T("Add a plugin by its address"), "https://…", "https://", 400);
+            urlEntry.Done = text => UiGuard.Run("SettingsScreen.UrlDone", () =>
+            {
+                CloseUrlEntry();
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    StartInstall(text.Trim(), null);
+                }
+            });
+            Window.Instance.Add(urlEntry);
+        }
+
+        private void CloseUrlEntry()
+        {
+            if (urlEntry == null)
+            {
+                return;
+            }
+            urlEntry.Unparent();
+            urlEntry.Dispose();
+            urlEntry = null;
+        }
+
+        private void StartInstall(string url, string sha256)
+        {
+            UiGuard.Fire("SettingsScreen.Install", () => Install(url, sha256));
+        }
+
+        // Download, unpack and check; a plugin that is not in the official list needs the user's go-ahead.
+        private async Task Install(string url, string sha256)
+        {
+            if (pluginBusy)
+            {
+                return;
+            }
+            pluginBusy = true;
+            pluginStatus = "";
+            Refresh();
+            StagedPlugin staged;
+            try
+            {
+                staged = await PluginStore.Download(url, sha256);
+            }
+            catch (Exception e)
+            {
+                NativeCore.Log("plugin install " + url + ": " + e.Message);
+                pluginBusy = false;
+                pluginStatus = e is PluginException ? e.Message : T("Could not install: {0}", e.Message);
+                Rebuilt();
+                return;
+            }
+            if (staged.Official)
+            {
+                FinishInstall(staged);
+                return;
+            }
+            App.Confirm(T("This plugin is not validated by OmegaTube"),
+                        () => UiGuard.Run("SettingsScreen.InstallYes", () => FinishInstall(staged)),
+                        T("It cannot access your accounts or your data, but it has not been checked and may look wrong or be slow. Install anyway?"),
+                        T("Install"), T("Cancel"),
+                        () =>
+                        {
+                            PluginStore.Discard(staged);
+                            pluginBusy = false;
+                            pluginStatus = "";
+                            Rebuilt();
+                        });
+        }
+
+        // Puts the plugin in place and switches to it (what it was installed for; an update reloads the one in use).
+        private void FinishInstall(StagedPlugin staged)
+        {
+            PluginInfo p;
+            try
+            {
+                p = PluginStore.Commit(staged);
+            }
+            catch (Exception e)
+            {
+                PluginStore.Discard(staged);
+                pluginBusy = false;
+                pluginStatus = T("Could not install: {0}", e.Message);
+                Rebuilt();
+                return;
+            }
+            pluginBusy = false;
+            pluginStatus = T("{0} {1} installed", p.Name, p.Version);
+            UseInterface(p.Id);
+            Save();
+            Rebuilt();
+        }
+
+        private void AskRemove(PluginInfo p)
+        {
+            App.Confirm(T("Remove {0}?", p.Name), () => UiGuard.Run("SettingsScreen.Remove", () =>
+            {
+                bool inUse = Theme.Active == p.Id;
+                PluginStore.Remove(p.Id);
+                pluginStatus = "";
+                if (inUse)
+                {
+                    UseInterface("omega");
+                    Save();
+                }
+                Rebuilt();
+            }));
+        }
+
+        private void BuildGeneral(List<Row> l)
+        {
             Row appLang = Choice(T("App language"), T("Language of the app's texts"),
                          () => I18n.Names[Math.Max(0, Array.IndexOf(I18n.Codes, App.Config.UiLanguage))],
                          d =>
@@ -536,6 +818,7 @@ namespace OmegaTube.Ui
 
         public override void OnHide()
         {
+            CloseUrlEntry();
             if (notesLayer != null)
             {
                 CloseNotes();
@@ -579,26 +862,26 @@ namespace OmegaTube.Ui
                 Category c = categories[i];
                 bool selected = i == category;
                 bool focused = selected && !inRows;
-                if (glorious)
+                if (glassLook)
                 {
                     // Glass pills: a resting one for the open category, a lit one while the categories have focus.
                     Widgets.SetVisible(c.Glass, selected);
                     Widgets.SetVisible(c.GlassLit, focused);
                     c.Label.TextColor = selected ? Theme.Text : Theme.TextDim;
-                    c.IconView.Color = selected ? Color.White : new Color(0.67f, 0.67f, 0.67f, 1f);
+                    c.IconView.Color = selected ? Theme.IconTint : Theme.IconDim;
                     continue;
                 }
                 c.View.BackgroundColor = focused ? Theme.CardInfoFocused : selected ? Theme.SurfaceHigh : Color.Transparent;
                 c.Label.TextColor = focused ? Theme.CardTextFocused : selected ? Theme.Text : Theme.TextDim;
-                c.IconView.Color = focused ? new Color(0.16f, 0.16f, 0.16f, 1f) : selected ? Color.White : new Color(0.67f, 0.67f, 0.67f, 1f);
+                c.IconView.Color = focused ? Theme.IconFocused : selected ? Theme.IconTint : Theme.IconDim;
             }
             for (int i = 0; i < rows.Count; i++)
             {
                 Row r = rows[i];
                 bool f = inRows && i == index;
                 bool lifted = r.Home != null && r.Home == moving;
-                bool dark = f && !lifted && !glorious;   // Omega: the focused row is light with dark text
-                if (glorious)
+                bool dark = f && !lifted && !glassLook;   // Omega: the focused row is light with dark text
+                if (glassLook)
                 {
                     // Brighter glass under the focused row (accent-tinted while a section is picked up); text stays light.
                     Widgets.SetVisible(r.GlassLit, f || lifted);
@@ -613,7 +896,8 @@ namespace OmegaTube.Ui
                 r.TitleLabel.TextColor = text;
                 if (r.HintLabel != null)
                 {
-                    r.HintLabel.TextColor = dark ? new Color(0.33f, 0.33f, 0.33f, 1f) : f && glorious ? new Color(0.85f, 0.85f, 0.85f, 1f) : Theme.TextDim;
+                    r.HintLabel.TextColor = dark ? Theme.TextFocusedDim
+                                          : f && glassLook ? new Color(Theme.Text.R, Theme.Text.G, Theme.Text.B, 0.85f) : Theme.TextDim;
                 }
                 if (r.SwitchView != null)
                 {
@@ -623,7 +907,7 @@ namespace OmegaTube.Ui
                 {
                     string v = r.Value();
                     r.ValueLabel.Text = f && r.Change != null && v.Length > 0 ? "‹   " + v + "   ›" : v;
-                    r.ValueLabel.TextColor = dark ? Theme.CardTextFocused : f && glorious ? Theme.Text : Theme.TextDim;
+                    r.ValueLabel.TextColor = dark ? Theme.CardTextFocused : f && glassLook ? Theme.Text : Theme.TextDim;
                 }
             }
             if (categories[category].CaptionPreview)
@@ -657,6 +941,11 @@ namespace OmegaTube.Ui
 
         public override bool OnKey(string key)
         {
+            if (urlEntry != null)
+            {
+                urlEntry.Key(key);
+                return true;
+            }
             if (notesLayer != null)
             {
                 NotesKey(key);

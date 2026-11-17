@@ -9,9 +9,15 @@ namespace OmegaTube.Util
     // Objects are Dictionary<string, object>, arrays List<object>, numbers double, plus string/bool/null.
     public static class Json
     {
+        // Nesting deeper than this is refused: the reader recurses, and a stack overflow cannot be caught (files from
+        // interface plugins are untrusted).
+        private const int MaxDepth = 128;
+        [ThreadStatic] private static int depth;
+
         public static object Parse(string text)
         {
             int i = 0;
+            depth = 0;
             object value = ReadValue(text, ref i);
             SkipWs(text, ref i);
             if (i != text.Length)
@@ -78,9 +84,14 @@ namespace OmegaTube.Util
             switch (c)
             {
                 case '{':
-                    return ReadObject(s, ref i);
                 case '[':
-                    return ReadArray(s, ref i);
+                    if (++depth > MaxDepth)
+                    {
+                        throw new FormatException("nested too deep at " + i);
+                    }
+                    object nested = c == '{' ? (object)ReadObject(s, ref i) : ReadArray(s, ref i);
+                    depth--;
+                    return nested;
                 case '"':
                     return ReadString(s, ref i);
                 case 't':

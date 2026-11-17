@@ -1,0 +1,55 @@
+# Linked from docs/plugins.md, the official plugins page (gh-pages plugins/index.html) and the example plugin's README.
+# The maintainer tries the release on a TV, then adds it with tools/plugin-index/add_plugin.py <zip URL>.
+name: Plugin validation request
+description: Ask for an interface plugin to be listed as official (in the app and on the website)
+title: "Plugin validation: "
+labels: [plugin]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Official plugins are listed in **Settings › Interface** and on the [official plugins page](https://iiyn.github.io/omegatube/plugins/), and install without the "not validated" warning.
+        A validation covers **one exact file**: each new version needs a new request (or a comment on this one with the new link).
+        The format is described in [docs/plugins.md](https://github.com/IIyn/omegatube/blob/main/docs/plugins.md); [Catppuccin Latte](https://github.com/IIyn/catppuccin-latte-omegatube-plugin) is a complete example.
+  - type: input
+    id: zip
+    attributes:
+      label: Release zip
+      description: The download link of this version's plugin.zip, not a `latest` link (it must keep pointing to the same file).
+      placeholder: https://github.com/<login>/<name>-omegatube-plugin/releases/download/v1.0.0/plugin.zip
+    validations:
+      required: true
+  - type: input
+    id: repository
+    attributes:
+      label: Repository
+      placeholder: https://github.com/<login>/<name>-omegatube-plugin
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What it looks like
+      description: A few words on the look, and at least one screenshot of the home on a TV (drag the image here). The first one goes on the official plugins page.
+    validations:
+      required: true
+  - type: textarea
+    id: tested
+    attributes:
+      label: Tested on
+      description: TV models and Tizen versions (Settings → Support → About This TV), and the OmegaTube version.
+      placeholder: |
+        UE65AU6905K, Tizen 6.0, OmegaTube 1.7.0
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: The plugin only contains its own JSON files and images, and I have the right to share them.
+          required: true
+        - label: I tried the home, the menu, Settings and the player with it, and nothing is unreadable or broken.
+          required: true
+        - label: The `id` in plugin.json is final (it will not change in later versions).
+          required: true

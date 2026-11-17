@@ -26,6 +26,7 @@ namespace OmegaTube.Ui
             Root.BackgroundColor = Theme.Background;
 
             var icon = Widgets.Icon("view_list", 64);
+            icon.Color = Theme.IconTint;
             icon.Position = new Position(80, 78);
             Root.Add(icon);
             titleLabel = Widgets.Label(list.Title ?? "", Theme.TitleSize + 10, Theme.Text, 1300, 64);

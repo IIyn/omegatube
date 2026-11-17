@@ -25,6 +25,9 @@ OMEGA_API int omega_report_available(void);
 // Network: posts a bug report text to the paste service of the remote config: {"url","partial"} or {"error"}
 // (partial: the service kept only the beginning).
 OMEGA_API char* omega_report_upload(const char* text);
+// Network: downloads an https URL (redirects followed) to out_path, written whole or not at all, up to max_bytes
+// (interface plugins and their index). {"size","sha256"} (lower-case hex of the file) or {"error"}.
+OMEGA_API char* omega_download(const char* url, const char* out_path, int max_bytes);
 
 // Sanity check run by the shell at startup: exercises the C++ runtime
 // (std::string, exceptions, threads) and returns 0 when everything works.

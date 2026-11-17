@@ -109,9 +109,9 @@ namespace OmegaTube.Config
         public List<HomeRow> HomeRows = new List<HomeRow>();
         public PlayerOptions Player = new PlayerOptions();
         public string UiLanguage = "en"; // app texts (I18n): en | fr | es
-        public string UiStyle = "omega"; // interface: omega (default) | glorious (immersive home)
-        public bool HeroPreview = true;  // Glorious: video preview behind the first home row after a short rest
-        public bool CardPreview = true;  // Glorious: animated preview inside the other cards after a short rest
+        public string UiStyle = "omega"; // interface: omega (built in) | an installed plugin's id ("glorious": the former built-in, see Settings)
+        public bool HeroPreview = true;  // homes with a hero: video preview behind the first home row after a short rest
+        public bool CardPreview = true;  // overlay cards: animated preview inside the cards after a short rest
         public string Language = "en";   // InnerTube hl
         public string Region = "US";     // InnerTube gl
         public bool CheckUpdates = true;
@@ -239,7 +239,12 @@ namespace OmegaTube.Config
                 UiLanguage = "en";
             }
             I18n.Lang = UiLanguage;
-            UiStyle = Json.Str(root, "uiStyle", UiStyle) == "glorious" ? "glorious" : "omega";
+            // A plugin id is kept even when that plugin is missing: Theme.Apply falls back to Omega.
+            UiStyle = Json.Str(root, "uiStyle", UiStyle);
+            if (UiStyle.Length == 0 || UiStyle.Length > 100)
+            {
+                UiStyle = "omega";
+            }
             HeroPreview = Json.Bool(root, "heroPreview", HeroPreview);
             CardPreview = Json.Bool(root, "cardPreview", CardPreview);
             Language = Json.Str(root, "language", Language);

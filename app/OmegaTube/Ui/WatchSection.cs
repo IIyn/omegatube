@@ -116,21 +116,21 @@ namespace OmegaTube.Ui
 
             descBox = Widgets.Rounded(new Color(1, 1, 1, 0.1f), SectionWidth, 100, 16);
             Add(descBox);
-            descMeta = Widgets.Bold(Widgets.Label("", Theme.BodySize, Theme.Text, SectionWidth - 2 * Pad, 36));
+            descMeta = Widgets.Bold(Widgets.Label("", Theme.Player.BodySize, Theme.Player.Text, SectionWidth - 2 * Pad, 36));
             descMeta.Position = new Position(Pad, 22);
             descBox.Add(descMeta);
-            descText = Widgets.Label("", Theme.BodySize, Theme.Text, SectionWidth - 2 * Pad, 10);
+            descText = Widgets.Label("", Theme.Player.BodySize, Theme.Player.Text, SectionWidth - 2 * Pad, 10);
             descText.MultiLine = true;
             descText.Ellipsis = false;
             descText.VerticalAlignment = VerticalAlignment.Top;
             descText.Position = new Position(Pad, 64);
             descBox.Add(descText);
-            descMore = Widgets.Bold(Widgets.Label("", Theme.BodySize, Theme.Text, 500, 36));
+            descMore = Widgets.Bold(Widgets.Label("", Theme.Player.BodySize, Theme.Player.Text, 500, 36));
             descBox.Add(descMore);
 
             header = new View { Size = new Size(SectionWidth, 64) };
             Add(header);
-            countLabel = Widgets.Bold(Widgets.Label(T("Comments"), Theme.TitleSize, Theme.Text, 900, 64));
+            countLabel = Widgets.Bold(Widgets.Label(T("Comments"), Theme.Player.TitleSize, Theme.Player.Text, 900, 64));
             countLabel.VerticalAlignment = VerticalAlignment.Center;
             header.Add(countLabel);
             sortButton = Widgets.Rounded(Color.Transparent, 460, 60, 30);
@@ -139,7 +139,7 @@ namespace OmegaTube.Ui
             sortIcon = Widgets.Icon("view_list", 36);
             sortIcon.Position = new Position(22, 12);
             sortButton.Add(sortIcon);
-            sortLabel = Widgets.Bold(Widgets.Label("", Theme.BodySize, Theme.Text, 380, 60));
+            sortLabel = Widgets.Bold(Widgets.Label("", Theme.Player.BodySize, Theme.Player.Text, 380, 60));
             sortLabel.VerticalAlignment = VerticalAlignment.Center;
             sortLabel.Position = new Position(72, 0);
             sortButton.Add(sortLabel);
@@ -147,18 +147,18 @@ namespace OmegaTube.Ui
 
             form = new View { Size = new Size(SectionWidth, 72) };
             Add(form);
-            formAvatar = Widgets.Round(new ImageView { Size = new Size(52, 52), Position = new Position(16, 10), BackgroundColor = Theme.SurfaceHigh }, 26);
+            formAvatar = Widgets.Round(new ImageView { Size = new Size(52, 52), Position = new Position(16, 10), BackgroundColor = Theme.Player.SurfaceHigh }, 26);
             form.Add(formAvatar);
-            formLabel = Widgets.Label(T("Add a comment…"), Theme.BodySize + 1, Theme.TextDim, SectionWidth - 140, 52);
+            formLabel = Widgets.Label(T("Add a comment…"), Theme.Player.BodySize + 1, Theme.Player.TextDim, SectionWidth - 140, 52);
             formLabel.VerticalAlignment = VerticalAlignment.Center;
             formLabel.Position = new Position(TextX, 6);
             form.Add(formLabel);
-            formLine = Widgets.Box(Theme.TextMuted, SectionWidth - TextX - 20, 2);
+            formLine = Widgets.Box(Theme.Player.TextMuted, SectionWidth - TextX - 20, 2);
             formLine.Position = new Position(TextX, 64);
             form.Add(formLine);
             form.Hide();
 
-            status = Widgets.Label("", Theme.BodySize, Theme.TextDim, SectionWidth - 2 * Pad, 50);
+            status = Widgets.Label("", Theme.Player.BodySize, Theme.Player.TextDim, SectionWidth - 2 * Pad, 50);
             status.PositionX = Pad;
             Add(status);
 
@@ -275,7 +275,7 @@ namespace OmegaTube.Ui
             {
                 createParams = page.CreateParams;
             }
-            sortButton.PositionX = Math.Min(900, EstimateWidth(countLabel.Text, Theme.TitleSize) + 40);
+            sortButton.PositionX = Math.Min(900, EstimateWidth(countLabel.Text, Theme.Player.TitleSize) + 40);
             continuation = page.Continuation;
             int top = 0;
             foreach (Entry e in entries)
@@ -373,7 +373,7 @@ namespace OmegaTube.Ui
             AddFrame(e);
 
             int avatarSize = parent != null ? 44 : 56;
-            var avatar = Widgets.Round(new ImageView { Size = new Size(avatarSize, avatarSize), Position = new Position(16 + left, 18), BackgroundColor = Theme.SurfaceHigh }, avatarSize / 2f);
+            var avatar = Widgets.Round(new ImageView { Size = new Size(avatarSize, avatarSize), Position = new Position(16 + left, 18), BackgroundColor = Theme.Player.SurfaceHigh }, avatarSize / 2f);
             if (c.Avatar.Length > 0)
             {
                 avatar.ResourceUrl = c.Avatar;
@@ -384,14 +384,14 @@ namespace OmegaTube.Ui
             int y = 16;
             if (c.Pinned)
             {
-                var pin = Widgets.Label(T("Pinned"), Theme.SmallSize, Theme.TextDim, 600, 28);
+                var pin = Widgets.Label(T("Pinned"), Theme.Player.SmallSize, Theme.Player.TextDim, 600, 28);
                 pin.Position = new Position(textX, y);
                 e.View.Add(pin);
                 y += 30;
             }
             string author = c.Author.Length > 0 ? c.Author : T("Unknown");
-            float authorW = EstimateWidth(author, Theme.SmallSize + 1);
-            var name = Widgets.Bold(Widgets.Label(c.Creator ? " " + author + " " : author, Theme.SmallSize + 1, Theme.Text, (int)Math.Min(900, authorW + 20), 32));
+            float authorW = EstimateWidth(author, Theme.Player.SmallSize + 1);
+            var name = Widgets.Bold(Widgets.Label(c.Creator ? " " + author + " " : author, Theme.Player.SmallSize + 1, Theme.Player.Text, (int)Math.Min(900, authorW + 20), 32));
             if (c.Creator)
             {
                 name.BackgroundColor = new Color(1, 1, 1, 0.2f);
@@ -400,19 +400,19 @@ namespace OmegaTube.Ui
             name.VerticalAlignment = VerticalAlignment.Center;
             name.Position = new Position(textX, y);
             e.View.Add(name);
-            var when = Widgets.Label(c.Published, Theme.SmallSize, Theme.TextDim, 500, 32);
+            var when = Widgets.Label(c.Published, Theme.Player.SmallSize, Theme.Player.TextDim, 500, 32);
             when.VerticalAlignment = VerticalAlignment.Center;
             when.Position = new Position(textX + Math.Min(900, authorW + 20) + 12, y);
             e.View.Add(when);
             y += 38;
 
-            e.Text = Widgets.Label("", Theme.BodySize, Theme.Text, SectionWidth - textX - 40, 10);
+            e.Text = Widgets.Label("", Theme.Player.BodySize, Theme.Player.Text, SectionWidth - textX - 40, 10);
             e.Text.MultiLine = true;
             e.Text.Ellipsis = false;
             e.Text.VerticalAlignment = VerticalAlignment.Top;
             e.Text.Position = new Position(textX, y);
             e.View.Add(e.Text);
-            e.More = Widgets.Bold(Widgets.Label("", Theme.SmallSize + 1, Theme.TextDim, 400, 32));
+            e.More = Widgets.Bold(Widgets.Label("", Theme.Player.SmallSize + 1, Theme.Player.TextDim, 400, 32));
             e.More.PositionX = textX;
             e.View.Add(e.More);
 
@@ -442,7 +442,7 @@ namespace OmegaTube.Ui
         {
             var e = new Entry { Parent = parent, MoreToken = token, Indent = ReplyIndent };
             AddFrame(e);
-            e.Text = Widgets.Bold(Widgets.Label(T("Show more replies"), Theme.SmallSize + 1, Theme.Text, 900, 44));
+            e.Text = Widgets.Bold(Widgets.Label(T("Show more replies"), Theme.Player.SmallSize + 1, Theme.Player.Text, 900, 44));
             e.Text.VerticalAlignment = VerticalAlignment.Center;
             e.Text.Position = new Position(TextX + e.Indent, 6);
             e.View.Add(e.Text);
@@ -473,7 +473,7 @@ namespace OmegaTube.Ui
             }
             if (c.Hearted)
             {
-                var heart = Widgets.Label("♥", Theme.BodySize, Theme.Accent, 40, ToolH);
+                var heart = Widgets.Label("♥", Theme.Player.BodySize, Theme.Player.Accent, 40, ToolH);
                 heart.VerticalAlignment = VerticalAlignment.Center;
                 heart.Position = new Position(x + 12, 0);
                 e.Toolbar.Add(heart);
@@ -505,8 +505,8 @@ namespace OmegaTube.Ui
             }
             if (text.Length > 0)
             {
-                int textW = (int)(EstimateWidth(text, Theme.SmallSize) * 1.15f) + 10;
-                t.Label = Widgets.Bold(Widgets.Label(text, Theme.SmallSize, Theme.Text, textW, ToolH));
+                int textW = (int)(EstimateWidth(text, Theme.Player.SmallSize) * 1.15f) + 10;
+                t.Label = Widgets.Bold(Widgets.Label(text, Theme.Player.SmallSize, Theme.Player.Text, textW, ToolH));
                 t.Label.VerticalAlignment = VerticalAlignment.Center;
                 t.Label.PositionX = w;
                 t.Pill.Add(t.Label);
@@ -525,14 +525,14 @@ namespace OmegaTube.Ui
                 ToolButton t = e.Tools[i];
                 bool on = i == selected;
                 bool active = t.Kind == Tool.Like ? e.Comment.Liked : t.Kind == Tool.Dislike && e.Comment.Disliked;
-                t.Pill.BackgroundColor = on ? Theme.CardInfoFocused : Color.Transparent;
+                t.Pill.BackgroundColor = on ? Theme.Player.CardInfoFocused : Color.Transparent;
                 if (t.Icon != null)
                 {
-                    t.Icon.Color = on ? new Color(0.16f, 0.16f, 0.16f, 1f) : active ? Theme.Accent : Color.White;
+                    t.Icon.Color = on ? new Color(0.16f, 0.16f, 0.16f, 1f) : active ? Theme.Player.Accent : Color.White;
                 }
                 if (t.Label != null)
                 {
-                    t.Label.TextColor = on ? Theme.CardTextFocused : Theme.Text;
+                    t.Label.TextColor = on ? Theme.Player.CardTextFocused : Theme.Player.Text;
                 }
             }
         }
@@ -541,12 +541,12 @@ namespace OmegaTube.Ui
         private void FillEntry(Entry e)
         {
             float textTop = e.Top;
-            int perLine = CharsPerLine(SectionWidth - TextX - e.Indent - 40, Theme.BodySize);
+            int perLine = CharsPerLine(SectionWidth - TextX - e.Indent - 40, Theme.Player.BodySize);
             List<string> lines = WrapLines(e.Comment.Text, perLine);
             e.Truncated = lines.Count > CommentLines;
             int shown = e.Expanded || !e.Truncated ? lines.Count : CommentLines;
             e.Text.Text = string.Join("\n", lines.GetRange(0, shown));
-            float textH = Math.Max(1, shown) * Theme.BodySize * LineFactor;
+            float textH = Math.Max(1, shown) * Theme.Player.BodySize * LineFactor;
             e.Text.SizeHeight = textH + 8;
             float y = textTop + textH + 6;
             if (e.Truncated)
@@ -572,14 +572,14 @@ namespace OmegaTube.Ui
         {
             descMeta.Text = meta;
             string text = description.Length > 0 ? description : T("No description.");
-            int perLine = CharsPerLine(SectionWidth - 2 * Pad, Theme.BodySize);
+            int perLine = CharsPerLine(SectionWidth - 2 * Pad, Theme.Player.BodySize);
             List<string> lines = WrapLines(text, perLine);
             descTruncated = lines.Count > DescLines;
             int shown = descExpanded || !descTruncated ? lines.Count : DescLines;
             string body = string.Join("\n", lines.GetRange(0, shown));
             descText.Text = descTruncated && !descExpanded ? body + "…" : body;
-            descText.TextColor = description.Length > 0 ? Theme.Text : Theme.TextDim;
-            float textH = Math.Max(1, shown) * Theme.BodySize * LineFactor;
+            descText.TextColor = description.Length > 0 ? Theme.Player.Text : Theme.Player.TextDim;
+            float textH = Math.Max(1, shown) * Theme.Player.BodySize * LineFactor;
             descText.SizeHeight = textH + 8;
             descText.PositionY = meta.Length > 0 ? 64 : 22;
             float y = descText.PositionY + textH + 8;
@@ -667,7 +667,7 @@ namespace OmegaTube.Ui
                 formAvatar.ResourceUrl = Theme.Icon("person");
             }
             formLabel.Text = draft.Length > 0 ? draft.Replace('\n', ' ') : T("Add a comment…");
-            formLabel.TextColor = draft.Length > 0 ? Theme.Text : Theme.TextDim;
+            formLabel.TextColor = draft.Length > 0 ? Theme.Player.Text : Theme.Player.TextDim;
         }
 
         private Entry FocusedEntry => focusIndex >= 3 && focusIndex - 3 < entries.Count ? entries[focusIndex - 3] : null;
@@ -719,11 +719,11 @@ namespace OmegaTube.Ui
             bool desc = focused && focusIndex == 0;
             descBox.BackgroundColor = desc ? new Color(1, 1, 1, 0.2f) : new Color(1, 1, 1, 0.1f);
             bool sort = focused && focusIndex == 1;
-            sortButton.BackgroundColor = sort ? Theme.CardInfoFocused : new Color(1, 1, 1, 0.1f);
-            sortLabel.TextColor = sort ? Theme.CardTextFocused : Theme.Text;
+            sortButton.BackgroundColor = sort ? Theme.Player.CardInfoFocused : new Color(1, 1, 1, 0.1f);
+            sortLabel.TextColor = sort ? Theme.Player.CardTextFocused : Theme.Player.Text;
             sortIcon.Color = sort ? new Color(0.16f, 0.16f, 0.16f, 1f) : Color.White;
             bool field = focused && focusIndex == 2;
-            formLine.BackgroundColor = field ? Theme.Text : Theme.TextMuted;
+            formLine.BackgroundColor = field ? Theme.Player.Text : Theme.Player.TextMuted;
             formLine.SizeHeight = field ? 3 : 2;
             form.BackgroundColor = field ? new Color(1, 1, 1, 0.08f) : Color.Transparent;
             Widgets.Round(form, 12);

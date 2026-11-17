@@ -7,7 +7,7 @@ using Tizen.NUI;
 
 namespace OmegaTube.Ui
 {
-    // Glorious: the focused card of the second row and below plays YouTube's animated preview (a short moving
+    // Overlay cards with previews (CardSpec.Preview): the focused card of the second row and below plays YouTube's animated preview (a short moving
     // thumbnail) over its thumbnail after a short rest. The Tizen 5.5 image loader shows an animated WebP as a
     // still, so the core decodes it into one BMP sprite sheet (all frames in a grid); the card loads that once and
     // this steps its visible PixelArea from cell to cell on a timer: one texture, no reloads, and no video decoder

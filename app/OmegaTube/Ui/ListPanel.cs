@@ -28,8 +28,8 @@ namespace OmegaTube.Ui
         public ListPanel()
         {
             BackgroundColor = new Color(0.09f, 0.09f, 0.09f, 0.96f);
-            Widgets.Round(this, Theme.PanelRadius);
-            title = Widgets.Label("", Theme.BodySize + 2, Theme.Text, 600, 60);
+            Widgets.Round(this, Theme.Player.PanelRadius);
+            title = Widgets.Label("", Theme.Player.BodySize + 2, Theme.Player.Text, 600, 60);
             title.VerticalAlignment = VerticalAlignment.Center;
             title.Position = new Position(32, 14);
             Add(title);
@@ -62,13 +62,13 @@ namespace OmegaTube.Ui
                 Widgets.SetVisible(check, list[i].Checked);
                 row.Add(check);
                 bool detail = !string.IsNullOrEmpty(list[i].Detail);
-                var text = Widgets.Label(list[i].Text, Theme.BodySize + 2, Theme.Text, width - 2 * Pad - 90, detail ? 36 : LineH - 6);
+                var text = Widgets.Label(list[i].Text, Theme.Player.BodySize + 2, Theme.Player.Text, width - 2 * Pad - 90, detail ? 36 : LineH - 6);
                 text.VerticalAlignment = detail ? VerticalAlignment.Bottom : VerticalAlignment.Center;
                 text.Position = new Position(68, detail ? 2 : 0);
                 row.Add(text);
                 if (detail)
                 {
-                    var d = Widgets.Label(list[i].Detail, Theme.SmallSize - 1, Theme.TextDim, width - 2 * Pad - 90, 24);
+                    var d = Widgets.Label(list[i].Detail, Theme.Player.SmallSize - 1, Theme.Player.TextDim, width - 2 * Pad - 90, 24);
                     d.Position = new Position(68, 36);
                     row.Add(d);
                 }
@@ -95,13 +95,13 @@ namespace OmegaTube.Ui
             for (int i = 0; i < rows.Count; i++)
             {
                 bool f = i == Index;
-                rows[i].BackgroundColor = f ? Theme.CardInfoFocused : Color.Transparent;
+                rows[i].BackgroundColor = f ? Theme.Player.CardInfoFocused : Color.Transparent;
                 var check = (ImageView)rows[i].GetChildAt(0);
                 check.Color = f ? new Color(0.16f, 0.16f, 0.16f, 1f) : Color.White;
-                ((TextLabel)rows[i].GetChildAt(1)).TextColor = f ? Theme.CardTextFocused : Theme.Text;
+                ((TextLabel)rows[i].GetChildAt(1)).TextColor = f ? Theme.Player.CardTextFocused : Theme.Player.Text;
                 if (rows[i].ChildCount > 2)
                 {
-                    ((TextLabel)rows[i].GetChildAt(2)).TextColor = f ? new Color(0.33f, 0.33f, 0.33f, 1f) : Theme.TextDim;
+                    ((TextLabel)rows[i].GetChildAt(2)).TextColor = f ? new Color(0.33f, 0.33f, 0.33f, 1f) : Theme.Player.TextDim;
                 }
             }
             // Keep the focused line inside the window, one line of context when possible.

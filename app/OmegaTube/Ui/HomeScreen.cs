@@ -28,11 +28,10 @@ namespace OmegaTube.Ui
             public Func<Screen> Embed;                    // a screen shown beside the rail
         }
 
-        private const int ContentX = Theme.RailWidth + 20;
-        private const int GridTop = 110;
+        private static int ContentX => Theme.Rail.Width + 20;
         private const int OpenDelayMs = 350;   // pause on a rail entry before it opens
-        // Hosted screens (Account, Settings) sit beside the rail; Glorious's nav is shifted in, so they start further right.
-        private int EmbedX => Glorious ? Theme.RailWidth + Theme.NavShift : Theme.RailWidth;
+        // Hosted screens (Account, Settings) sit beside the rail; a shifted nav (RailSpec.Shift) moves them further right.
+        private int EmbedX => Theme.Rail.Width + Theme.Rail.Shift;
         private float EmbedScale => (1920f - EmbedX) / 1920f;
         private static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(5);
         private const int PrewarmIdleMs = 1500;   // remote untouched that long: build one entry ahead
@@ -45,12 +44,14 @@ namespace OmegaTube.Ui
         private readonly View feedHost;
         private View feedView;     // feed on display, if any
         private readonly View embedHost;
-        private readonly View rowFadeLeft, rowFadeRight, rowFadeBottom;   // Glorious: edge fades over the rows band
-        private Hero hero;          // Glorious only, built on first use (Omega never pays for it)
+        private readonly ImageView rowFadeLeft, rowFadeRight, rowFadeBottom;   // edge fades over the rows band (HomeSpec)
+        private HomeSpec fadesFor;  // the home spec whose fade images are loaded
+        private HomeSpec heroFor;   // the home spec the hero was built for
+        private Hero hero;          // homes with a hero (HomeSpec.Hero), built on first use (Omega never pays for it)
         private bool heroShown;     // the backdrop is on screen (a managed mirror: no native read per key)
         private bool visible;       // this screen is the one on display (not under the player, not paused)
         private Rail rail;
-        private bool tinted;       // Glorious, second row or lower: the page shows the tint colour
+        private bool tinted;       // hero home, second row or lower (the page shows the tint colour if the spec says so)
         private TextLabel updateBanner;
         private Screen shown;      // hosted screen on display, if any
         private Timer openTimer, prewarmTimer;
@@ -68,15 +69,16 @@ namespace OmegaTube.Ui
             Root.Add(header);
             feedHost = new View { Size = new Size(1920, 1080) };   // under the rail, which is added last
             Root.Add(feedHost);
-            // Glorious: fades over the rows band (above the feed, under the nav) so the left cards tuck under the
+            // Hero homes: fades over the rows band (above the feed, under the nav) so the left cards tuck under the
             // nav and both ends of a row fade out instead of clipping hard at the screen edges. Pre-rendered PNG
             // scrims (feathered at the top, flush to the screen edges) — no visible rectangle and no TV banding.
-            rowFadeLeft = new ImageView { ResourceUrl = Theme.Image("scrim_left"), Size = new Size(90, 620),   // just feathers the screen edge: the nav is folded away, cards sit at the edge
+            // Their images come from the HomeSpec when first shown (SetFades).
+            rowFadeLeft = new ImageView { Size = new Size(90, 620),   // just feathers the screen edge: the nav is folded away, cards sit at the edge
                                           Position = new Position(0, 460), FittingMode = FittingModeType.ScaleToFill };
-            rowFadeRight = new ImageView { ResourceUrl = Theme.Image("scrim_right"), Size = new Size(260, 620),
+            rowFadeRight = new ImageView { Size = new Size(260, 620),
                                           Position = new Position(1660, 460), FittingMode = FittingModeType.ScaleToFill };
             // Bottom fade: while on the featured first row, the next row peeking at the bottom is faded out.
-            rowFadeBottom = new ImageView { ResourceUrl = Theme.Image("scrim_rowbottom"), Size = new Size(1920, 180),
+            rowFadeBottom = new ImageView { Size = new Size(1920, 180),
                                             Position = new Position(0, 900), FittingMode = FittingModeType.ScaleToFill };
             rowFadeLeft.Hide();
             rowFadeRight.Hide();
@@ -270,7 +272,7 @@ namespace OmegaTube.Ui
         {
             List<Section> next = BuildSections();
             var sig = new System.Text.StringBuilder();
-            sig.Append(App.Config.UiStyle).Append('\n');   // switching Omega/Glorious must rebuild the rail + feeds
+            sig.Append(Theme.Generation).Append('\n');   // another interface (or the same plugin updated): new rail + feeds
             foreach (Section s in next)
             {
                 sig.Append(s.Key).Append('|').Append(s.Title).Append('|').Append(s.Icon).Append('|').Append(s.Loader != null).Append('\n');
@@ -312,7 +314,7 @@ namespace OmegaTube.Ui
             {
                 entries.Add(new Rail.Entry { Icon = s.Icon, Label = s.Title });
             }
-            rail = new Rail(entries, Glorious);
+            rail = new Rail(entries);
             Root.Add(rail);  // last: the expanded rail draws over the content
             embedHost.Position = new Position(EmbedX, 0);
             embedHost.Size = new Size(1920 - EmbedX, 1080);
@@ -377,9 +379,8 @@ namespace OmegaTube.Ui
             }
             HideEmbedded();
             embedHost.Hide();
-            // Glorious shows the item info on the hero and gives each row its own title, so the big section
-            // header is only for Omega.
-            Widgets.SetVisible(header, !Glorious);
+            // A hero home shows the item info on the hero and gives each row its own title: no big section header.
+            Widgets.SetVisible(header, Theme.Home.Header);
             header.Text = s.Title;
             bool built = feeds.ContainsKey(s.Key);
             View v = FeedFor(s);
@@ -422,32 +423,28 @@ namespace OmegaTube.Ui
             {
                 return v;
             }
-            // Glorious puts the rows in the lower band (the hero fills the top); Omega keeps today's layout.
-            int shelfTop = Glorious ? Theme.GloriousRowsTop : GridTop - 20;
-            int gridTop = Glorious ? 600 : GridTop;
-            bool rows = s.Loader != null && (s.Shelves || Glorious);   // Glorious: every feed looks like Home
+            // The home spec places the feed: rows (Home, or every feed in a Rows home) or a grid.
+            HomeSpec home = Theme.Home;
+            bool rows = s.Loader != null && (s.Shelves || home.Feeds == FeedLayout.Rows);
             if (rows)
             {
-                // Full-width so cards scroll left under the translucent nav. Hero mode: row 0 is the large
-                // featured row shown over the hero backdrop; moving to a later row scrolls the list up to fill
-                // the screen and the hero is hidden (handled in UpdateHero via RowChanged).
-                ShelfList list;
-                if (Glorious)
+                // Under the rail: full width so cards scroll left under the translucent nav. Hero mode: row 0 is
+                // shown over the hero backdrop; moving to a later row scrolls the list up to fill the screen and the
+                // hero is hidden (handled in UpdateHero via RowChanged).
+                RowsSpec r = home.Rows;
+                int x = r.UnderRail ? 0 : ContentX;
+                var list = new ShelfList(1920 - x, 1080 - r.Top, r, heroMode: home.Hero != null) { Position = new Position(x, r.Top) };
+                if (home.Hero != null)
                 {
-                    list = new ShelfList(1920, 1080 - shelfTop, Theme.GloriousInset, bigFirst: true, heroMode: true)
-                           { Position = new Position(0, shelfTop) };
                     list.RowChanged = UpdateHero;
                 }
-                else
-                {
-                    list = new ShelfList(1920 - ContentX, 1080 - shelfTop) { Position = new Position(ContentX, shelfTop) };
-                }
-                list.Show(s.Shelves ? s.Loader : AsRows(s.Loader, s.Title), s.Shelves ? s.CacheKey : null);   // rows-from-a-flat-feed are not cached
+                list.Show(s.Shelves ? s.Loader : AsRows(s.Loader, s.Title, r), s.Shelves ? s.CacheKey : null);   // rows-from-a-flat-feed are not cached
                 v = list;
             }
             else
             {
-                int cx = Glorious ? Theme.GloriousInset - 30 : ContentX;   // the folded nav leaves the left edge free
+                int cx = home.GridLeft >= 0 ? home.GridLeft : ContentX;
+                int gridTop = home.GridTop;
                 var grid = new FeedGrid(1920 - cx, 1080 - gridTop) { Position = new Position(cx, gridTop) };
                 grid.Show(s.Loader, s.CacheKey, s.EmptyText);
                 v = grid;
@@ -459,13 +456,11 @@ namespace OmegaTube.Ui
             return v;
         }
 
-        // Glorious: a flat feed (history, a topic search...) shown like Home. The first ten videos are the featured
-        // row over the hero backdrop; the rest follow as a grid of five columns, loaded downward as you go (the feed's
-        // next pages add rows). Where the feed has its own groups (subscriptions' "most relevant" shelf) that group is
-        // the featured titled row, as on Home, and the latest videos follow as the grid.
-        private const int FeaturedCount = 10;
-
-        private static Func<string, Task<FeedPage>> AsRows(Func<string, Task<FeedPage>> flat, string title)
+        // Rows homes: a flat feed (history, a topic search...) shown like Home. The first videos (FlatFeatured) are the
+        // first row (over the hero backdrop when there is one); the rest follow as grid rows (GridColumns), loaded downward
+        // as you go (the feed's next pages add rows). Where the feed has its own groups (subscriptions' "most
+        // relevant" shelf) that group is the first titled row, as on Home, and the latest videos follow as the grid.
+        private static Func<string, Task<FeedPage>> AsRows(Func<string, Task<FeedPage>> flat, string title, RowsSpec spec)
         {
             var pool = new List<VideoItem>();   // videos not yet placed: rows are filled five at a time
             bool featured = false, headingPending = false;
@@ -494,15 +489,15 @@ namespace OmegaTube.Ui
                 pool.AddRange(page.Items);
                 if (!featured)
                 {
-                    int n = Math.Min(FeaturedCount, pool.Count);
+                    int n = Math.Min(spec.FlatFeatured, pool.Count);
                     shelves.Add(new Shelf { Title = title, Items = pool.GetRange(0, n) });
                     pool.RemoveRange(0, n);
                     featured = true;
                 }
                 bool end = string.IsNullOrEmpty(page.Continuation);
-                while (pool.Count >= Theme.GridColumns || (end && pool.Count > 0))
+                while (pool.Count >= spec.GridColumns || (end && pool.Count > 0))
                 {
-                    int n = Math.Min(Theme.GridColumns, pool.Count);
+                    int n = Math.Min(spec.GridColumns, pool.Count);
                     shelves.Add(new Shelf { Title = headingPending ? T("Latest") : "", Items = pool.GetRange(0, n), Grid = true });
                     pool.RemoveRange(0, n);
                     headingPending = false;
@@ -600,9 +595,7 @@ namespace OmegaTube.Ui
             return Feed != null && Feed.Count > 0;
         }
 
-        private static bool Glorious => Theme.Glorious;
-
-        // Glorious only: the focused item's artwork fills the backdrop; hidden for hosted screens and in Omega.
+        // Hero homes only: the focused item's artwork fills the backdrop; hidden for hosted screens and in Omega.
         private void UpdateHero()
         {
             // Not on display (a video is playing, the app is paused): a feed that finishes loading behind the player
@@ -611,13 +604,14 @@ namespace OmegaTube.Ui
             {
                 return;
             }
-            if (!Glorious && !tinted && !heroShown)
+            HomeSpec home = Theme.Home;
+            if (home.Hero == null && !tinted && !heroShown)
             {
-                return;   // Omega: nothing of the Glorious home to start or undo, whatever key this was
+                return;   // no hero (Omega): nothing to start or undo, whatever key this was
             }
             // The hero backdrop is for the first row only; on later rows (or Omega, or a hosted screen) it is
             // hidden and the rows scroll over the plain background like a normal list.
-            bool heroSection = Glorious && sections.Count > 0 && current < sections.Count && sections[current].Embed == null;
+            bool heroSection = home.Hero != null && sections.Count > 0 && current < sections.Count && sections[current].Embed == null;
             bool onFirstRow = heroSection && (Feed?.FocusedRow ?? 0) == 0;
             VideoItem item = onFirstRow ? Feed?.FocusedItem : null;
             if (item == null)
@@ -629,10 +623,11 @@ namespace OmegaTube.Ui
                     hero?.SetActive(false);   // stops a video preview
                     ShowHero(false);
                 }
-                // From the second row down the page turns a dark blue-slate, so the cards (with their shadows) lift off
-                // it. (Set after the preview stopped: that hands the window back its opaque background.)
+                // From the second row down the page may turn the tint (Theme.PageTint), so the cards (with
+                // their shadows) lift off it. (Set after the preview stopped: that hands the window back its opaque
+                // background.)
                 tinted = heroSection && !onFirstRow;
-                Root.BackgroundColor = tinted ? Theme.PageTint : Theme.Background;
+                Root.BackgroundColor = tinted && home.TintBelowFirstRow ? Theme.PageTint : Theme.Background;
                 // Rows 2+: the focused card plays its animated preview (setting on, content focused).
                 CardPreviews.Show(tinted && App.Config.CardPreview && !inRail && shown == null ? Feed?.FocusedCardView as Card : null);
                 return;
@@ -659,19 +654,42 @@ namespace OmegaTube.Ui
             {
                 Widgets.SetVisible(hero, show);
             }
-            Widgets.SetVisible(rowFadeLeft, show);
-            Widgets.SetVisible(rowFadeRight, show);
-            Widgets.SetVisible(rowFadeBottom, show);
+            HomeSpec home = Theme.Home;
+            if (show && fadesFor != home)
+            {
+                fadesFor = home;
+                SetFade(rowFadeLeft, home.FadeLeft);
+                SetFade(rowFadeRight, home.FadeRight);
+                SetFade(rowFadeBottom, home.FadeBottom);
+            }
+            Widgets.SetVisible(rowFadeLeft, show && home.FadeLeft != null);
+            Widgets.SetVisible(rowFadeRight, show && home.FadeRight != null);
+            Widgets.SetVisible(rowFadeBottom, show && home.FadeBottom != null);
         }
 
-        // Backmost layer of the home: built the first time the Glorious interface needs it.
+        private static void SetFade(ImageView fade, string image)
+        {
+            fade.ResourceUrl = image != null ? Theme.ImagePath(image) : "";
+        }
+
+        // Backmost layer of the home: built the first time a hero home needs it, for the HomeSpec in use. The
+        // built-in specs are shared instances, so switching between the built-in interfaces keeps it.
         private void EnsureHero()
         {
-            if (hero != null)
+            HomeSpec home = Theme.Home;
+            if (hero != null && heroFor == home)
             {
                 return;
             }
-            hero = new Hero(App);
+            if (hero != null)
+            {
+                // Another interface (a plugin) with its own hero geometry and images.
+                hero.Release();
+                Root.Remove(hero);
+                hero.Dispose();
+            }
+            heroFor = home;
+            hero = new Hero(App, home.Hero, home.Rows);
             // While its video preview plays, the TV's video plane (under the window) must show through.
             hero.SeeThrough = on =>
             {

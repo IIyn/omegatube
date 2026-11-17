@@ -7,13 +7,13 @@ using static OmegaTube.I18n;
 
 namespace OmegaTube.Ui
 {
-    // A video card in one of three looks:
-    //  - classic (Omega): rounded 16:9 thumbnail with an info box under it that lights up when focused;
-    //  - glass (Glorious rows 2+): a bare rounded thumbnail with a soft shadow. Focused, a dark panel with the title
-    //    (one line, scrolling when it is longer) appears on the thumbnail, the channel / views / age line under it,
-    //    and a hairline outline runs round the card. A short animated preview can play over the thumbnail;
-    //  - featured (thumbOnly, Glorious row 1): a bare rounded thumbnail with the same shadow and outline, no text:
-    //    the title and details live on the hero backdrop.
+    // A video card, drawn from a CardSpec (the theme's card looks). Its info style says where the texts go:
+    //  - Box (classic, Omega): rounded 16:9 thumbnail with an info box under it that lights up when focused;
+    //  - Overlay (glass, an immersive home's rows 2+): a bare rounded thumbnail. Focused, a dark panel with the title (one line,
+    //    scrolling when it is longer) appears on the thumbnail and the channel / views / age line under it. A short
+    //    animated preview can play over the thumbnail;
+    //  - None (featured, a hero home's row 1): a bare rounded thumbnail, no text: the title and details live on the hero.
+    // The spec adds a soft shadow and a hairline outline round the focused card (glass, featured).
     // Duration badge bottom right and a red progress bar for started videos in all of them.
     // Built in two steps for smooth scrolling: the constructor only makes the cheap frame (thumbnail, info box);
     // Fill() adds the texts and starts the thumbnail, when the card is about to be seen (UiWork). Parts a card may
@@ -24,13 +24,15 @@ namespace OmegaTube.Ui
         public bool Filled { get; private set; }
         public bool Shown { get; private set; } = true;   // managed mirror of Visibility (rows show / hide far cards)
 
-        private const int ShadowMargin = 36, ShadowDrop = 10;   // card_shadow9.9: the blur margin is baked into the image
-        private const int InfoInset = 8, InfoHeight = 54, MetaRowH = 44, TitlePad = 14;
+        public const int MetaRowH = 44;   // Overlay: the meta line under the thumbnail
+        private static readonly Color BadgeText = new Color(0.945f, 0.945f, 0.945f, 1f);   // Omega's text, on the dark badge
+        private const int InfoInset = 8, InfoHeight = 54, TitlePad = 14;
         private const int MarqueePauseMs = 1100, MarqueePxPerSec = 70;
 
         private readonly int width, thumbH;
-        private readonly bool thumbOnly;   // featured: no text at all
-        private readonly bool glass;       // glass or featured: shadow and outline
+        private readonly CardSpec spec;
+        private bool TextLess => spec.Info == CardInfoStyle.None;
+        private bool Boxed => spec.Info == CardInfoStyle.Box;
         private readonly ImageView thumb;
         private readonly ImageView info;   // classic: the box under the thumbnail; glass: the title panel on it
         private readonly View infoTopPatch;
@@ -43,16 +45,17 @@ namespace OmegaTube.Ui
         private bool noMarquee;            // the title fits: nothing to scroll
         private Animation fadeInfo, fadeAnim, marqueeAnim, zoom;
         private bool focused;
-        private bool Rich => glass && !thumbOnly;   // glass look with texts
+        private bool Rich => spec.Info == CardInfoStyle.Overlay;   // the title panel on the thumbnail
 
-        public Card(VideoItem item, int width = Theme.CardWidth, bool thumbOnly = false, bool glass = false)
+        // spec: the card look (null: the theme's classic one).
+        public Card(VideoItem item, int width = Theme.CardWidth, CardSpec spec = null)
         {
             Item = item;
             this.width = width;
-            this.thumbOnly = thumbOnly;
-            this.glass = glass;
+            this.spec = spec ?? Theme.Card("classic");
+            spec = this.spec;
             thumbH = Theme.ThumbHeight(width);
-            Size = new Size(width, thumbOnly ? thumbH : glass ? thumbH + MetaRowH : Theme.CardHeight(width));
+            Size = new Size(width, spec.Height(width));
             // Scale around the centre so neighbours are overlapped evenly.
             PivotPoint = Tizen.NUI.PivotPoint.Center;
             PositionUsesPivotPoint = false;  // positions stay top-left based
@@ -62,17 +65,17 @@ namespace OmegaTube.Ui
             // rounded-rect nine-patch tinted to the panel colour (fixed corners at any width). Without a classic info
             // box under it the thumbnail rounds all four corners; with one it extends a radius under the box (the
             // "glued" look) and a square patch hides the box's rounded top corners.
-            if (glass)
+            if (spec.Shadow != null)
             {
                 // Soft shadow under the thumbnail (no BoxShadow on 5.5: a pre-blurred nine-patch, drawn first = behind).
                 Add(new ImageView
                 {
-                    ResourceUrl = Theme.Image("card_shadow9.9"),
-                    Size = new Size(width + 2 * ShadowMargin, thumbH + 2 * ShadowMargin),
-                    Position = new Position(-ShadowMargin, -ShadowMargin + ShadowDrop),
+                    ResourceUrl = Theme.ImagePath(spec.Shadow),
+                    Size = new Size(width + 2 * spec.ShadowMargin, thumbH + 2 * spec.ShadowMargin),
+                    Position = new Position(-spec.ShadowMargin, -spec.ShadowMargin + spec.ShadowDrop),
                 });
             }
-            thumb = new ImageView { Size = new Size(width, thumbOnly || glass ? thumbH : thumbH + Theme.CardRadius) };
+            thumb = new ImageView { Size = new Size(width, Boxed ? thumbH + Theme.CardRadius : thumbH) };
             Add(thumb);
 
             if (Rich)
@@ -81,23 +84,23 @@ namespace OmegaTube.Ui
                 {
                     Position = new Position(InfoInset, thumbH - InfoHeight - InfoInset),
                     Size = new Size(width - 2 * InfoInset, InfoHeight),
-                    ResourceUrl = Theme.Image("card_info9.9"),
+                    ResourceUrl = Theme.ImagePath(spec.OverlayPanel),
                     Opacity = 0f,   // fades in while focused
                 };
                 info.Hide();
                 Add(info);
             }
-            else if (!thumbOnly)
+            else if (Boxed)
             {
                 info = new ImageView
                 {
                     Position = new Position(0, thumbH),
-                    Size = new Size(width, Theme.CardInfoHeight),
+                    Size = new Size(width, spec.BoxHeight),
                     ResourceUrl = Theme.Image("round9.9"),
-                    Color = Theme.CardInfo,
+                    Color = BoxColor(false),
                 };
                 Add(info);
-                infoTopPatch = Widgets.Box(Theme.CardInfo, width, Theme.CardRadius);
+                infoTopPatch = Widgets.Box(BoxColor(false), width, Theme.CardRadius);
                 info.Add(infoTopPatch);
             }
 
@@ -129,7 +132,7 @@ namespace OmegaTube.Ui
             string badge = Item.Live ? T("LIVE") : Item.Duration;
             if (!string.IsNullOrEmpty(badge))
             {
-                var duration = Widgets.Label(" " + badge + " ", Theme.SmallSize - 2, Theme.Text);
+                var duration = Widgets.Label(" " + badge + " ", Theme.SmallSize - 2, BadgeText);   // on a dark badge, any theme
                 duration.BackgroundColor = Item.Live ? Theme.Accent : new Color(0, 0, 0, 0.82f);
                 Widgets.Round(duration, 4);
                 duration.ParentOrigin = Tizen.NUI.ParentOrigin.TopLeft;
@@ -145,7 +148,7 @@ namespace OmegaTube.Ui
                 int titleW = width - 2 * InfoInset - 2 * TitlePad;
                 titleClip = new View { Position = new Position(TitlePad, 9), Size = new Size(titleW, 36),
                                        ClippingMode = ClippingModeType.ClipChildren };
-                title = Widgets.Label(Item.Title, Theme.BodySize, Theme.Text, titleW, 36);
+                title = Widgets.Label(Item.Title, Theme.BodySize, spec.OverlayTextColor ?? Theme.Text, titleW, 36);
                 titleClip.Add(title);
                 info.Add(titleClip);
                 // Channel, views and age on one line under the card.
@@ -159,7 +162,7 @@ namespace OmegaTube.Ui
                     FadeInfo(true);   // focused before it was filled (the first card of a row): show what it has now
                 }
             }
-            else if (!thumbOnly)
+            else if (Boxed)
             {
                 title = Widgets.Label(Item.Title, Theme.BodySize, Theme.Text, width - 24, 62);
                 title.MultiLine = true;
@@ -174,7 +177,7 @@ namespace OmegaTube.Ui
 
             if (!string.IsNullOrEmpty(Item.Thumbnail))
             {
-                Widgets.MaskedImage(thumb, Item.Thumbnail, Theme.Image("round_mask"));
+                Widgets.MaskedImage(thumb, Item.Thumbnail, Theme.ImagePath(spec.Mask));
             }
         }
 
@@ -182,7 +185,7 @@ namespace OmegaTube.Ui
         public void Rebind(VideoItem item)
         {
             Item = item;
-            if (Filled && !thumbOnly)
+            if (Filled && !TextLess)
             {
                 title.Text = item.Title;
                 meta.Text = MetaLine(item);
@@ -215,7 +218,7 @@ namespace OmegaTube.Ui
 
         // ------------------------------------------------------------------ animated preview (glass cards)
 
-        public bool CanAnimate => Rich && Filled;
+        public bool CanAnimate => Rich && spec.Preview && Filled;
 
         // Shows an animated preview over the thumbnail: the sheet is loaded unscaled (Desired size = its real size,
         // or the toolkit shrinks it to the view and the cells no longer line up); frames are picked with PixelArea.
@@ -356,18 +359,18 @@ namespace OmegaTube.Ui
                 return;   // grids refresh every card's state after a page: no animation for unchanged ones
             }
             this.focused = focused;
-            if (glass)
+            if (spec.Outline != null)
             {
                 ShowRing(focused);
-                if (Rich && Filled)
-                {
-                    FadeInfo(focused);
-                }
+            }
+            if (Rich && Filled)
+            {
+                FadeInfo(focused);
             }
             ApplyFocusColors();
             zoom?.Stop();
             zoom = new Animation(140);
-            float s = focused ? Theme.FocusScale : 1f;
+            float s = focused ? spec.FocusScale : 1f;
             zoom.AnimateTo(this, "Scale", new Vector3(s, s, 1f), Widgets.EaseOut);
             zoom.Play();
             if (focused)
@@ -385,7 +388,7 @@ namespace OmegaTube.Ui
                 {
                     return;
                 }
-                ring = new ImageView { ResourceUrl = Theme.Image("card_ring9.9"), Size = new Size(width, thumbH) };
+                ring = new ImageView { ResourceUrl = Theme.ImagePath(spec.Outline), Size = new Size(width, thumbH) };
                 Add(ring);   // last: over the thumbnail, the title panel and the progress bar
             }
             Widgets.SetVisible(ring, on);
@@ -424,19 +427,23 @@ namespace OmegaTube.Ui
 
         private void ApplyFocusColors()
         {
-            if (thumbOnly || glass)
+            if (!Boxed)
             {
-                return;   // featured: no info box. Glass: dark panel with fixed colours
+                return;   // featured: no info box. Overlay: dark panel with fixed colours
             }
-            Color infoColor = focused ? Theme.CardInfoFocused : Theme.CardInfo;
+            Color infoColor = BoxColor(focused);
             info.Color = infoColor;   // tints the white nine-patch
             infoTopPatch.BackgroundColor = infoColor;
             if (Filled)
             {
-                title.TextColor = focused ? Theme.CardTextFocused : Theme.Text;
-                meta.TextColor = focused ? Theme.CardTextFocused : Theme.TextDim;
+                Color focusedText = spec.TextFocusedColor ?? Theme.CardTextFocused;
+                title.TextColor = focused ? focusedText : Theme.Text;
+                meta.TextColor = focused ? focusedText : Theme.TextDim;
             }
         }
+
+        private Color BoxColor(bool focused) =>
+            focused ? spec.BoxFocusedColor ?? Theme.CardInfoFocused : spec.BoxColor ?? Theme.CardInfo;
 
         // The focus outline is a child: a card going away must not take the shared preview ring (Hero's) with it.
         protected override void Dispose(DisposeTypes type)

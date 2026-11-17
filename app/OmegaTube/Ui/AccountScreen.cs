@@ -39,7 +39,7 @@ namespace OmegaTube.Ui
 
         public AccountScreen(App app) : base(app)
         {
-            Root.BackgroundColor = Theme.Glorious ? Color.Transparent : Theme.Background;   // Glorious: glass cards over the page
+            Root.BackgroundColor = Theme.Current.GlassScreens ? Color.Transparent : Theme.Background;   // glass themes: glass cards over the page
             var title = Widgets.Label(T("Account"), Theme.TitleSize + 12, Theme.Text, 1200, 70);
             title.Position = new Position(CardX, 64);
             Root.Add(title);
@@ -119,6 +119,7 @@ namespace OmegaTube.Ui
             avatarBack.Position = new Position(50, 50);
             profile.Add(avatarBack);
             var person = Widgets.Icon("person", 120);
+            person.Color = Theme.IconTint;
             person.Position = new Position(35, 35);
             avatarBack.Add(person);
             avatar = Widgets.Round(new ImageView { Size = new Size(190, 190), Position = new Position(50, 50) }, 95);
@@ -165,6 +166,7 @@ namespace OmegaTube.Ui
         {
             int y = 34 + i * 96;
             var img = Widgets.Icon(icon, 48);
+            img.Color = Theme.IconTint;
             img.Position = new Position(56, y + 12);
             card.Add(img);
             var t = Widgets.Label(title, Theme.BodySize + 4, Theme.Text, 860, 40);
